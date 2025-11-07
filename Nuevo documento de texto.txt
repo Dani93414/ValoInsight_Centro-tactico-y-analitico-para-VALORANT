@@ -1,0 +1,52 @@
+mi_entorno\Scripts\activate
+deactivate
+
+
+1. Configurar la Base de Datos en Supabase
+✅ Crear la base de datos y definir las tablas:
+
+Usuarios (ID, email, rol, autenticación).
+
+Estadísticas (jugador, mapa, agente, kills, assists, winrate, etc.).
+
+Composición del equipo (agentes usados, mapa jugado, resultado).
+
+✅ Configurar autenticación con Supabase Auth + Google/Email.
+✅ Definir roles y permisos para restringir edición a ciertos usuarios.
+
+2. Construcción de la Interfaz con Streamlit
+✅ Pantalla principal con estadísticas del equipo y cada jugador.
+✅ Selección de mapa y visualización de gráficos de rendimiento.
+✅ Integración con Supabase para extraer y modificar datos.
+
+3. Implementación del OCR con Tesseract + OpenCV
+✅ Procesar imágenes de Tracker.gg.
+✅ Extraer texto con Tesseract OCR.
+✅ Preprocesar imágenes con OpenCV para mejorar la precisión.
+✅ Asociar los datos al mapa y composición del equipo.
+
+4. Integración con WhatsApp (Twilio API)
+✅ Recibir imágenes de estadísticas en WhatsApp.
+✅ Procesarlas con OCR y almacenar en Supabase.
+✅ Permitir comandos para modificar datos mediante mensajes de texto.
+
+5. Seguridad y Autenticación
+✅ Implementar MFA con Supabase Auth.
+✅ Autenticación con Google/Email solo para los 5 jugadores.
+✅ Definir roles en la base de datos para acceso restringido.
+
+
+Instalación de Tesseract OCR en Windows (separado)
+Como mencionamos antes, Tesseract es necesario para el OCR. Para instalarlo:
+
+Descarga Tesseract desde aquí: https://github.com/UB-Mannheim/tesseract/wiki (escoge la versión de Windows).
+
+Durante la instalación, asegúrate de seleccionar "Add to PATH".
+
+Después de la instalación, usa este código para configurar la ruta en tu proyecto:
+
+
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+Importación de estadísticas de jugadores profesionales -----> 5 proplayer por agente (5 partidas en ese mapa)
