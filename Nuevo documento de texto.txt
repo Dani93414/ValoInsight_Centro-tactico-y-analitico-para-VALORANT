@@ -50,3 +50,13 @@ import pytesseract
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 Importación de estadísticas de jugadores profesionales -----> 5 proplayer por agente (5 partidas en ese mapa)
+
+
+
+COPIAR LOS REQUERIMIENTOS:
+
+python -m venv mi_entorno
+mi_entorno\Scripts\activate
+pip install -r requirements.txt
+
+
