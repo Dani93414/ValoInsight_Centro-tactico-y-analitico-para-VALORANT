@@ -1,0 +1,19 @@
+Voy a hacer mi TFG para eso voy a utilizar la API de valorant en primer lugar la de development, mi TFG consiste en que yo pueda obtener las estadisiticas de los jugadores en cada partida e ir jugando con ellas para construir un sistema que te diga como de bueno eres. Para ello tambien añadire aparte de a cada jugador que se registre, multiples jugadores profesionales bien clasificados para poder medir de forma mas eficiente el rendimiento de un jugador. Por ello quiero que me digas que cosas necesito
+Ya tengo hecho lo siguiente:
+Python y el entorno
+Instalado MongoDB
+Algunas tablas creadas pero en un archivo.txt es decir no están en mongo porque no se ni como funcional
+Instalado lo siguiente:requests pandas numpy scikit-learn matplotlib plotly fastapi uvicorn pymongo python-dotenv
+Vs-code con Python, pylance, mongoDB for Vs Code
+Gitlens
+Un archivo .env con RIOT_API_KEY, DB_URI Y DB_NAME
+Archivo requirements
+
+
+🧠 main.py	Crear el punto de entrada con FastAPI para probar tus endpoints (por ejemplo /player/{name})	
+🗂️ data/	Carpeta para guardar partidas, JSON, o datasets intermedios	
+🧾 README.md	Explicar el propósito del proyecto, cómo correrlo, dependencias, etc. (te puedo dar una plantilla si quieres)	
+⚙️ init.py	En cada subcarpeta de src/, para que Python las trate como módulos importables	
+🧰 utils/	Aquí puedes tener funciones comunes (por ejemplo, logs, validaciones, etc.)	
+🧠 analysis/	Tu futuro módulo para crear el sistema que “evalúa qué tan bueno es un jugador”	
+🧪 tests/	Carpeta de pruebas unitarias con pytest (muy importante para tu TFG)
