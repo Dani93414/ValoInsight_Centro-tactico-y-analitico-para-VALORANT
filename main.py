@@ -205,7 +205,7 @@ def mostrar_agentes():
 
     print(f"\n====== AGENTES ({len(agents)}) ======\n")
     for ag in agents:
-        print(f"- {ag.get('name')} ({ag.get('id')})")
+        print(f"- {ag.get('name')}")
     print("\n===================\n")
 
 
@@ -218,12 +218,60 @@ def mostrar_mapas():
 
     maps = ultimo.get("maps", [])
 
-    print(f"\n====== MAPAS ({len(maps)}) ======\n")
+    # Listas clasificadas
+    core_maps = []
+    skirmish_maps = []
+    tdm_maps = []
+    training_maps = []
+
     for mp in maps:
         name = mp.get("name")
         asset = mp.get("assetName")
-        print(f"- {name}  | asset: {asset}")
-    print("\n===================\n")
+
+        # ❌ Saltar el mapa "Null UI Data!"
+        if name == "Null UI Data!":
+            continue
+
+        # Clasificación automática
+        if asset.startswith("Skirmish"):
+            skirmish_maps.append(mp)
+
+        elif asset.startswith("HURM"):
+            tdm_maps.append(mp)
+
+        elif asset in ["Range", "RangeV2", "NPEV2"]:
+            training_maps.append(mp)
+
+        else:
+            # Mapas normales del pool competitivo
+            core_maps.append(mp)
+
+    # ===============================
+    # IMPRESIÓN DE RESULTADOS
+    # ===============================
+    print("\n====== MAPAS (CLASIFICADOS) ======\n")
+
+    print("🌍 MODOS NORMALES / COMPETITIVO:")
+    for m in core_maps:
+        print(f"- {m['name']}")
+    print()
+
+    print("⚔️ ESCARAMUZA:")
+    for m in skirmish_maps:
+        print(f"- {m['name']}")
+    print()
+
+    print("🔫 COMBATE A MUERTE POR EQUIPOS (TDM):")
+    for m in tdm_maps:
+        print(f"- {m['name']}")
+    print()
+
+    print("🎯 ENTRENAMIENTO / CAMPO DE TIRO:")
+    for m in training_maps:
+        print(f"- {m['name']}")
+    print()
+
+    print("===================================\n")
 
 
 def mostrar_armas():
@@ -235,10 +283,107 @@ def mostrar_armas():
 
     weapons = ultimo.get("weapons", [])
 
-    print(f"\n====== ARMAS ({len(weapons)}) ======\n")
+    # ================================
+    # CATEGORÍAS DEFINIDAS POR TI
+    # ================================
+
+    armas_tienda = {
+        "Cuerpo a cuerpo",
+        "Classic",
+        "Odin",
+        "Ares",
+        "Vandal",
+        "Bulldog",
+        "Phantom",
+        "Judge",
+        "Bucky",
+        "Frenzy",
+        "Ghost",
+        "Sheriff",
+        "Shorty",
+        "Operator",
+        "Guardian",
+        "Outlaw",
+        "Marshal",
+        "Spectre",
+        "Stinger",
+    }
+
+    escudos = {
+        "Arm. ligera",
+        "Arm. pesada",
+        "Escudo regen."
+    }
+
+    habilidades_armas = {
+        "KAY/O núcleo",
+        "Sobrecarga",
+        "Flecha explosiva",
+        "Cierratelones",
+        "Fardo explosivo",
+        "Bot explosivo",
+        "Balas de pintura",
+        "Lanzabolas de nieve",
+        "Cazador de cabezas",
+        "Tour de force",
+        "CUCHILLO GRANDE",
+        "Arma dorada"
+    }
+
+    # ==================================
+    # LISTAS RESULTANTES
+    # ==================================
+    tienda = []
+    shields = []
+    habilidades = []
+    desconocidas = []
+
     for w in weapons:
-        print(f"- {w.get('name')} ({w.get('id')})")
-    print("\n===================\n")
+        nombre = w.get("name", "")
+        asset = w.get("id", "")
+
+        # Algunos nombres están duplicados (ej: Classic)
+        # → eliminamos duplicados manteniendo el primero
+        # Hacemos clasificación:
+        if nombre in armas_tienda:
+            tienda.append(w)
+
+        elif nombre in escudos:
+            shields.append(w)
+
+        elif nombre in habilidades_armas:
+            habilidades.append(w)
+
+        else:
+            # Todo lo demás (ej: SPIKE, Arma dorada…)
+            desconocidas.append(w)
+
+    # ==================================
+    # IMPRESIÓN
+    # ==================================
+    print("\n====== ARMAS CLASIFICADAS ======\n")
+
+    print("🟦 ARMAS DE TIENDA:")
+    for w in tienda:
+        print(f"- {w['name']} ({w['id']})")
+    print()
+
+    print("🟩 ESCUDOS:")
+    for w in shields:
+        print(f"- {w['name']} ({w['id']})")
+    print()
+
+    print("🟪 HABILIDADES / OBJETOS:")
+    for w in habilidades:
+        print(f"- {w['name']} ({w['id']})")
+    print()
+
+    print("⬜ Bomba:")
+    for w in desconocidas:
+        print(f"- {w['name']} ({w['id']})")
+    print()
+
+    print("================================\n")
 
 
 # ================================
