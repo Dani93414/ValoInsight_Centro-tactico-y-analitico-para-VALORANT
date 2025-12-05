@@ -27,15 +27,3 @@ except errors.ServerSelectionTimeoutError as e:
     print(f"❌ Error de conexión a MongoDB: {e}")
     client = None
     db = None
-
-def save_match(match_data):
-    """Guarda una partida en la colección 'matches' de MongoDB."""
-    if matches_collection is None:
-        print("❌ No hay conexión a MongoDB.")
-        return
-
-    try:
-        matches_collection.insert_one(match_data)
-        print(f"✅ Partida guardada correctamente en la base de datos.")
-    except Exception as e:
-        print(f"⚠️ Error al guardar la partida: {e}")

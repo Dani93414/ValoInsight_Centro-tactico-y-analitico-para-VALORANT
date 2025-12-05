@@ -13,6 +13,120 @@ from db.mongo_client import (
 import os
 import sys
 
+AGENT_ROLES = {
+    "Gekko": "Iniciador",
+    "Fade": "Iniciador",
+    "Breach": "Iniciador",
+    "Deadlock": "Centinela",
+    "Tejo": "Iniciador",
+    "Raze": "Duelista",
+    "Chamber": "Centinela",
+    "KAY/O": "Iniciador",
+    "Skye": "Iniciador",
+    "Cypher": "Centinela",
+    "Sova": "Iniciador",
+    "Killjoy": "Centinela",
+    "Harbor": "Controlador",
+    "Vyse": "Centinela",
+    "Viper": "Controlador",
+    "Phoenix": "Duelista",
+    "Veto": "Centinela",
+    "Astra": "Controlador",
+    "Brimstone": "Controlador",
+    "Iso": "Duelista",
+    "Clove": "Controlador",
+    "Neon": "Duelista",
+    "Yoru": "Duelista",
+    "Waylay": "Duelista",
+    "Sage": "Centinela",
+    "Reyna": "Duelista",
+    "Omen": "Controlador",
+    "Jett": "Duelista",
+}
+
+armas_tienda = {
+    "Cuerpo a cuerpo",
+    "Classic",
+    "Odin",
+    "Ares",
+    "Vandal",
+    "Bulldog",
+    "Phantom",
+    "Judge",
+    "Bucky",
+    "Frenzy",
+    "Ghost",
+    "Sheriff",
+    "Shorty",
+    "Operator",
+    "Guardian",
+    "Outlaw",
+    "Marshal",
+    "Spectre",
+    "Stinger",
+}
+
+escudos = {
+    "Arm. ligera",
+    "Arm. pesada",
+    "Escudo regen."
+}
+
+habilidades_armas = {
+    "KAY/O núcleo",
+    "Sobrecarga",
+    "Flecha explosiva",
+    "Cierratelones",
+    "Fardo explosivo",
+    "Bot explosivo",
+    "Balas de pintura",
+    "Lanzabolas de nieve",
+    "Cazador de cabezas",
+    "Tour de force",
+    "CUCHILLO GRANDE",
+    "Arma dorada"
+}
+
+spike = {"SPIKE"}
+
+# --- SUBCATEGORÍAS SOLO PARA ARMAS DE TIENDA ---
+armas_mano = {"Classic", "Shorty", "Frenzy", "Ghost", "Sheriff"}
+subfusiles = {"Spectre", "Stinger"}
+rifles = {"Vandal", "Phantom", "Bulldog", "Guardian"}
+ametralladoras = {"Ares", "Odin"}
+escopetas = {"Judge", "Bucky"}
+francotiradores = {"Operator", "Marshal", "Outlaw"}
+cuerpo_a_cuerpo = {"Cuerpo a cuerpo"}
+
+# --- PRECIOS DE LAS ARMAS
+WEAPON_PRICES = {
+    "Cuerpo a cuerpo": 0,
+    "Classic": 0,
+    "Shorty": 300,
+    "Frenzy": 450,
+    "Ghost": 500,
+    "Sheriff": 800,
+    "Stinger": 950,
+    "Bucky": 850,
+    "Judge": 1850,
+    "Spectre": 1600,
+    "Bulldog": 2050,
+    "Guardian": 2250,
+    "Phantom": 2900,
+    "Vandal": 2900,
+    "Marshal": 950,
+    "Outlaw": 2400,
+    "Operator": 4700,
+    "Ares": 1600,
+    "Odin": 3200,
+}
+
+SHIELD_PRICES = {
+    "Arm. ligera": 400,
+    "Arm. pesada": 1000,
+    "Escudo regen.": 600
+}
+
 
 # ================================
 #  OPCIÓN 1 → Obtener datos
@@ -44,17 +158,171 @@ def obtener_datos():
     print(f"✔ Armas: {len(weapons)}")
     print(f"✔ Actos: {len(acts)}")
 
+    # ==========================================
+    # CLASIFICACIÓN MANUAL DE AGENTES
+    # ==========================================
+
+    duelistas = []
+    controladores = []
+    iniciadores = []
+    centinelas = []
+
+    for ag in agents:
+        name = ag.get("name")
+        role = AGENT_ROLES.get(name, "Desconocido")  # asignación manual
+
+        ag["role"] = role  # añadimos el rol directamente
+
+        if role == "Duelista":
+            duelistas.append(ag)
+        elif role == "Controlador":
+            controladores.append(ag)
+        elif role == "Iniciador":
+            iniciadores.append(ag)
+        elif role == "Centinela":
+            centinelas.append(ag)
+
+    agents_data = {
+        "duelistas": duelistas,
+        "controladores": controladores,
+        "iniciadores": iniciadores,
+        "centinelas": centinelas,
+    }
+
+    # ==========================================
+    # CLASIFICACIÓN COMPLETA DE ARMAS
+    # ==========================================
+
+    tienda = []
+    shields = []
+    habilidades = []
+    spikes = []
+    otros = []
+
+    # subclasificación solo para armas de tienda
+    tienda_clasificacion = {
+        "armas_mano": [],
+        "subfusiles": [],
+        "rifles": [],
+        "ametralladoras": [],
+        "escopetas": [],
+        "francotiradores": [],
+        "cuerpo_a_cuerpo": [],
+    }
+
+    def asignar_precio(weapon):
+        nombre = weapon.get("name", "")
+        if nombre in WEAPON_PRICES:
+            weapon["price"] = WEAPON_PRICES[nombre]
+        elif nombre in SHIELD_PRICES:
+            weapon["price"] = SHIELD_PRICES[nombre]
+        else:
+            weapon["price"] = None  # o 0 si prefieres
+        return weapon
+
+    for w in weapons:
+        w = asignar_precio(w)
+        nombre = w.get("name", "")
+
+        # -- Armas de tienda
+        if nombre in armas_tienda:
+            tienda.append(w)
+
+            if nombre in armas_mano:
+                tienda_clasificacion["armas_mano"].append(w)
+            elif nombre in subfusiles:
+                tienda_clasificacion["subfusiles"].append(w)
+            elif nombre in rifles:
+                tienda_clasificacion["rifles"].append(w)
+            elif nombre in ametralladoras:
+                tienda_clasificacion["ametralladoras"].append(w)
+            elif nombre in escopetas:
+                tienda_clasificacion["escopetas"].append(w)
+            elif nombre in francotiradores:
+                tienda_clasificacion["francotiradores"].append(w)
+            elif nombre in cuerpo_a_cuerpo:
+                tienda_clasificacion["cuerpo_a_cuerpo"].append(w)
+
+        # -- Escudos
+        elif nombre in escudos:
+            shields.append(w)
+
+        # -- Habilidades / armas especiales
+        elif nombre in habilidades_armas:
+            habilidades.append(w)
+
+        # -- Spike
+        elif nombre in spike:
+            spikes.append(w)
+
+        # -- Otros
+        else:
+            otros.append(w)
+
+    # Objeto final que SÍ se guardará en MongoDB
+    weapons_data = {
+        "tienda": {
+            "todas": tienda,
+            "armas_mano": tienda_clasificacion["armas_mano"],
+            "subfusiles": tienda_clasificacion["subfusiles"],
+            "rifles": tienda_clasificacion["rifles"],
+            "ametralladoras": tienda_clasificacion["ametralladoras"],
+            "escopetas": tienda_clasificacion["escopetas"],
+            "francotiradores": tienda_clasificacion["francotiradores"],
+            "cuerpo_a_cuerpo": tienda_clasificacion["cuerpo_a_cuerpo"],
+        },
+        "escudos": shields,
+        "habilidades": habilidades,
+        "spike": spikes,
+        "otros": otros
+    }
+
+    # ==========================================
+    # CLASIFICACIÓN AUTOMÁTICA DE MAPAS
+    # ==========================================
+
+    core_maps = []
+    skirmish_maps = []
+    tdm_maps = []
+    training_maps = []
+
+    for mp in maps:
+        name = mp.get("name")
+        asset = mp.get("assetName")
+
+        # ❌ Saltar el mapa "Null UI Data!"
+        if name == "Null UI Data!":
+            continue
+
+        if asset.startswith("Skirmish"):
+            skirmish_maps.append(mp)
+
+        elif asset.startswith("HURM"):
+            tdm_maps.append(mp)
+
+        elif asset in ["Range", "RangeV2", "NPEV2"]:
+            training_maps.append(mp)
+
+        else:
+            core_maps.append(mp)
+
+    maps_data = {
+        "core": core_maps,
+        "skirmish": skirmish_maps,
+        "tdm": tdm_maps,
+        "training": training_maps
+    }
+
     content_collection.insert_one({
         "type": "valorant_content",
-        "agents": agents,
-        "maps": maps,
-        "weapons": weapons,
+        "agents": agents_data,
+        "maps": maps_data,
+        "weapons": weapons_data,
         "acts": acts,
         "raw": content
     })
 
     print("💾 Contenido guardado en 'content'.")
-
     # ---------------------------------------
     # 3. Guardar leaderboards
     # ---------------------------------------
@@ -138,11 +406,37 @@ def mostrar_contenido():
         print("⚠️ No hay contenido guardado.")
         return
 
+    agents_data = ultimo["agents"]
+    weapons_data = ultimo["weapons"]
+    maps = ultimo["maps"]
+    acts = ultimo["acts"]
+
+    # Contar agentes correctamente (sumar todas las listas)
+    total_agentes = (
+        len(agents_data.get("duelistas", [])) +
+        len(agents_data.get("controladores", [])) +
+        len(agents_data.get("iniciadores", [])) +
+        len(agents_data.get("centinelas", []))
+    )
+
+    # Contar armas correctamente
+    #  Todas = armas de tienda + escudos + habilidades + spike + otros
+    tienda = weapons_data.get("tienda", {})
+    armas_tienda = tienda.get("todas", [])
+
+    total_armas = (
+        len(armas_tienda) +
+        len(weapons_data.get("escudos", [])) +
+        len(weapons_data.get("habilidades", [])) +
+        len(weapons_data.get("spike", [])) +
+        len(weapons_data.get("otros", []))
+    )
+
     print("\n====== CONTENIDO ======")
-    print(f"Agentes: {len(ultimo['agents'])}")
-    print(f"Mapas: {len(ultimo['maps'])}")
-    print(f"Armas: {len(ultimo['weapons'])}")
-    print(f"Actos: {len(ultimo['acts'])}")
+    print(f"Agentes: {total_agentes}")
+    print(f"Mapas: {len(maps)}")
+    print(f"Armas: {total_armas}")
+    print(f"Actos: {len(acts)}")
     print("=======================\n")
 
 
@@ -201,12 +495,36 @@ def mostrar_agentes():
         print("⚠️ No hay contenido guardado.")
         return
 
-    agents = ultimo.get("agents", [])
+    agents_data = ultimo.get("agents", {})
 
-    print(f"\n====== AGENTES ({len(agents)}) ======\n")
-    for ag in agents:
+    duelistas = agents_data.get("duelistas", [])
+    controladores = agents_data.get("controladores", [])
+    iniciadores = agents_data.get("iniciadores", [])
+    centinelas = agents_data.get("centinelas", [])
+
+    print("\n====== AGENTES CLASIFICADOS ======\n")
+
+    print("🔥 DUELISTAS:")
+    for ag in duelistas:
         print(f"- {ag.get('name')}")
-    print("\n===================\n")
+    print()
+
+    print("🌫 CONTROLADORES:")
+    for ag in controladores:
+        print(f"- {ag.get('name')}")
+    print()
+
+    print("⚡ INICIADORES:")
+    for ag in iniciadores:
+        print(f"- {ag.get('name')}")
+    print()
+
+    print("🛡 CENTINELAS:")
+    for ag in centinelas:
+        print(f"- {ag.get('name')}")
+    print()
+
+    print("==================================\n")
 
 
 def mostrar_mapas():
@@ -216,35 +534,36 @@ def mostrar_mapas():
         print("⚠️ No hay contenido guardado.")
         return
 
-    maps = ultimo.get("maps", [])
+    maps = ultimo.get("maps", {})
 
-    # Listas clasificadas
-    core_maps = []
-    skirmish_maps = []
-    tdm_maps = []
-    training_maps = []
+    core_maps = maps.get("core", [])
+    skirmish_maps = maps.get("skirmish", [])
+    tdm_maps = maps.get("tdm", [])
+    training_maps = maps.get("training", [])
 
-    for mp in maps:
-        name = mp.get("name")
-        asset = mp.get("assetName")
+    print("\n====== MAPAS (CLASIFICADOS) ======\n")
 
-        # ❌ Saltar el mapa "Null UI Data!"
-        if name == "Null UI Data!":
-            continue
+    print("🌍 MODOS NORMALES / COMPETITIVO:")
+    for m in core_maps:
+        print(f"- {m['name']}")
+    print()
 
-        # Clasificación automática
-        if asset.startswith("Skirmish"):
-            skirmish_maps.append(mp)
+    print("⚔️ ESCARAMUZA:")
+    for m in skirmish_maps:
+        print(f"- {m['name']}")
+    print()
 
-        elif asset.startswith("HURM"):
-            tdm_maps.append(mp)
+    print("🔫 COMBATE A MUERTE POR EQUIPOS (TDM):")
+    for m in tdm_maps:
+        print(f"- {m['name']}")
+    print()
 
-        elif asset in ["Range", "RangeV2", "NPEV2"]:
-            training_maps.append(mp)
+    print("🎯 ENTRENAMIENTO / CAMPO DE TIRO:")
+    for m in training_maps:
+        print(f"- {m['name']}")
+    print()
 
-        else:
-            # Mapas normales del pool competitivo
-            core_maps.append(mp)
+    print("===================================\n")
 
     # ===============================
     # IMPRESIÓN DE RESULTADOS
@@ -281,110 +600,83 @@ def mostrar_armas():
         print("⚠️ No hay contenido guardado.")
         return
 
-    weapons = ultimo.get("weapons", [])
+    weapons = ultimo.get("weapons", {})
 
-    # ================================
-    # CATEGORÍAS DEFINIDAS POR TI
-    # ================================
+    tienda = weapons.get("tienda", {})
+    escudos = weapons.get("escudos", [])
+    habilidades = weapons.get("habilidades", [])
+    spike = weapons.get("spike", [])
+    otros = weapons.get("otros", [])
 
-    armas_tienda = {
-        "Cuerpo a cuerpo",
-        "Classic",
-        "Odin",
-        "Ares",
-        "Vandal",
-        "Bulldog",
-        "Phantom",
-        "Judge",
-        "Bucky",
-        "Frenzy",
-        "Ghost",
-        "Sheriff",
-        "Shorty",
-        "Operator",
-        "Guardian",
-        "Outlaw",
-        "Marshal",
-        "Spectre",
-        "Stinger",
-    }
-
-    escudos = {
-        "Arm. ligera",
-        "Arm. pesada",
-        "Escudo regen."
-    }
-
-    habilidades_armas = {
-        "KAY/O núcleo",
-        "Sobrecarga",
-        "Flecha explosiva",
-        "Cierratelones",
-        "Fardo explosivo",
-        "Bot explosivo",
-        "Balas de pintura",
-        "Lanzabolas de nieve",
-        "Cazador de cabezas",
-        "Tour de force",
-        "CUCHILLO GRANDE",
-        "Arma dorada"
-    }
-
-    # ==================================
-    # LISTAS RESULTANTES
-    # ==================================
-    tienda = []
-    shields = []
-    habilidades = []
-    desconocidas = []
-
-    for w in weapons:
-        nombre = w.get("name", "")
-        asset = w.get("id", "")
-
-        # Algunos nombres están duplicados (ej: Classic)
-        # → eliminamos duplicados manteniendo el primero
-        # Hacemos clasificación:
-        if nombre in armas_tienda:
-            tienda.append(w)
-
-        elif nombre in escudos:
-            shields.append(w)
-
-        elif nombre in habilidades_armas:
-            habilidades.append(w)
-
-        else:
-            # Todo lo demás (ej: SPIKE, Arma dorada…)
-            desconocidas.append(w)
-
-    # ==================================
-    # IMPRESIÓN
-    # ==================================
     print("\n====== ARMAS CLASIFICADAS ======\n")
 
+    # ------------------------------
+    # TIENDA — con subcategorías
+    # ------------------------------
     print("🟦 ARMAS DE TIENDA:")
-    for w in tienda:
-        print(f"- {w['name']} ({w['id']})")
-    print()
 
-    print("🟩 ESCUDOS:")
-    for w in shields:
-        print(f"- {w['name']} ({w['id']})")
-    print()
+    if "todas" in tienda:
+        print("\n  → TODAS:")
+        for w in tienda["todas"]:
+            price = w.get("price", None)
+            if price is not None:
+                print(f"   - {w['name']} ({w['id']}) — Precio: {price}")
+            else:
+                print(f"   - {w['name']} ({w['id']})")
 
-    print("🟪 HABILIDADES / OBJETOS:")
+    categorias = [
+        "armas_mano",
+        "subfusiles",
+        "rifles",
+        "ametralladoras",
+        "escopetas",
+        "francotiradores",
+        "cuerpo_a_cuerpo",
+    ]
+
+    for cat in categorias:
+        lista = tienda.get(cat, [])
+        print(f"\n  → {cat.replace('_',' ').title()}:")
+        for w in lista:
+            price = w.get("price", None)
+            if price is not None:
+                print(f"   - {w['name']} ({w['id']}) — Precio: {price}")
+            else:
+                print(f"   - {w['name']} ({w['id']})")
+
+    # ------------------------------
+    # ESCUDOS
+    # ------------------------------
+    print("\n🟩 ESCUDOS:")
+    for w in escudos:
+        price = w.get("price", None)
+        if price is not None:
+            print(f"- {w['name']} ({w['id']}) — Precio: {price}")
+        else:
+            print(f"- {w['name']} ({w['id']})")
+
+    # ------------------------------
+    # HABILIDADES / OBJETOS
+    # ------------------------------
+    print("\n🟪 HABILIDADES / OBJETOS:")
     for w in habilidades:
         print(f"- {w['name']} ({w['id']})")
-    print()
 
-    print("⬜ Bomba:")
-    for w in desconocidas:
+    # ------------------------------
+    # SPIKE
+    # ------------------------------
+    print("\n💣 SPIKE:")
+    for w in spike:
         print(f"- {w['name']} ({w['id']})")
-    print()
 
-    print("================================\n")
+    # ------------------------------
+    # OTROS
+    # ------------------------------
+    print("\n⬜ OTROS:")
+    for w in otros:
+        print(f"- {w['name']} ({w['id']})")
 
+    print("\n================================\n")
 
 # ================================
 #  MENÚ PRINCIPAL
