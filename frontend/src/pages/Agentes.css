@@ -1,0 +1,318 @@
+/* =====================================================
+   VALORANT AGENTS – MODERN DARK UI
+   ===================================================== */
+
+/* -------------------------
+   Variables globales
+-------------------------- */
+:root {
+  --valorant-red: #ff4655;
+  --bg-dark: #0f1115;
+  --bg-card: #1a1d23;
+  --bg-card-hover: #20242c;
+  --text-primary: #ffffff;
+  --text-secondary: #b5b5b5;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --radius: 14px;
+  --transition-fast: 0.2s ease;
+  --transition-medium: 0.35s ease;
+}
+
+/* -------------------------
+   Reset básico
+-------------------------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+/* -------------------------
+   Scroll personalizado
+-------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--valorant-red);
+  border-radius: 10px;
+}
+
+/* -------------------------
+   Contenedor principal
+-------------------------- */
+.agents-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* -------------------------
+   Título principal
+-------------------------- */
+.agents-title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+  border-left: 6px solid var(--valorant-red);
+  padding-left: 1rem;
+}
+
+/* -------------------------
+   Grid de agentes
+-------------------------- */
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+/* -------------------------
+   Card de agente
+-------------------------- */
+.agent-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform var(--transition-medium),
+    box-shadow var(--transition-medium),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+  animation: fadeUp 0.4s ease forwards;
+}
+
+.agent-card:hover {
+  transform: translateY(-6px);
+  background-color: var(--bg-card-hover);
+  border-color: var(--valorant-red);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Estado activo */
+.agent-card.active {
+  border-color: var(--valorant-red);
+  box-shadow: 0 0 0 2px rgba(255, 70, 85, 0.4);
+}
+
+/* Línea roja superior */
+.agent-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background-color: var(--valorant-red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition-medium);
+}
+
+.agent-card:hover::before,
+.agent-card.active::before {
+  transform: scaleX(1);
+}
+
+/* -------------------------
+   Imagen del agente (card)
+-------------------------- */
+.agent-image {
+  width: 100%;
+  height: 160px;
+  object-fit: contain;
+  margin-bottom: 0.75rem;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.45));
+}
+
+/* -------------------------
+   Info del agente
+-------------------------- */
+.agent-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.agent-role {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+/* -------------------------
+   Vista detallada (arriba)
+-------------------------- */
+.agent-detail {
+  position: relative;
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background-color: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  animation: expandFade 0.35s ease;
+}
+
+/* Botón cerrar */
+.agent-detail-close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.4rem;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.agent-detail-close:hover {
+  color: var(--valorant-red);
+  transform: scale(1.1);
+}
+
+/* Imagen grande del agente */
+.agent-detail-image {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  margin-bottom: 1.5rem;
+  filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.55));
+}
+
+/* Header detalle */
+.agent-detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.agent-detail-name {
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.agent-detail-role {
+  color: var(--valorant-red);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Descripción */
+.agent-description {
+  color: var(--text-secondary);
+  max-width: 900px;
+  margin-bottom: 2rem;
+}
+
+/* -------------------------
+   Habilidades
+-------------------------- */
+.abilities-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+
+.ability-card {
+  background-color: #15181e;
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  border: 1px solid var(--border-color);
+  transition:
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.ability-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--valorant-red);
+  background-color: #1c2028;
+}
+
+.ability-slot {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--valorant-red);
+  letter-spacing: 1px;
+  margin-bottom: 0.25rem;
+}
+
+.ability-name {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.ability-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* -------------------------
+   Responsive
+-------------------------- */
+@media (max-width: 768px) {
+  .agents-container {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .agent-detail {
+    padding: 1.5rem;
+  }
+
+  .agent-detail-name {
+    font-size: 1.6rem;
+  }
+
+  .agent-detail-image {
+    max-height: 220px;
+  }
+}
+
+/* -------------------------
+   Animaciones
+-------------------------- */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes expandFade {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
