@@ -1,0 +1,6525 @@
+{
+  "matchInfo": {
+    "matchId": "9e1ebd6e-5df1-4b1b-a6aa-2daeaeeb9c6d",
+    "mapId": "D960549E-485C-E861-8D71-AA9D1AED12A2",
+    "gameLengthMillis": 1943465,
+    "gameStartMillis": 1764933260838,
+    "provisioningFlowId": "Matchmaking",
+    "isCompleted": true,
+    "customGameName": "",
+    "queueId": "competitive",
+    "gameMode": "Bomb",
+    "isRanked": true,
+    "seasonId": "4c4b8cff-43eb-13d3-8f14-96b783c90cd2"
+  },
+  "players": [
+    {
+      "puuid": "test-puuid-13",
+      "gameName": "Player13",
+      "tagLine": "EU",
+      "partyId": "b1c68540-7cd8-46fc-968d-5caa8de72c0d",
+      "characterId": "DADE69B4-4F5A-8528-247B-219E5A1FACD6",
+      "stats": {
+        "score": 296,
+        "roundsPlayed": 16,
+        "kills": 12,
+        "deaths": 6,
+        "assists": 2,
+        "playtimeMillis": 966470,
+        "abilityCasts": {
+          "grenadeCasts": 16,
+          "ability1Casts": 14,
+          "ability2Casts": 26,
+          "ultimateCasts": 14
+        }
+      },
+      "competitiveTier": 6,
+      "playerCard": "9DE26CA3-4203-989D-5C3F-A883AF147AC7",
+      "playerTitle": "5B3510F1-49AC-DC6E-2158-BBBD09E071D1",
+      "teamId": "Blue"
+    },
+    {
+      "puuid": "test-puuid-16",
+      "gameName": "Player16",
+      "tagLine": "EU",
+      "partyId": "b1c68540-7cd8-46fc-968d-5caa8de72c0d",
+      "characterId": "DF1CB487-4902-002E-5C17-D28E83E78588",
+      "stats": {
+        "score": 223,
+        "roundsPlayed": 16,
+        "kills": 8,
+        "deaths": 5,
+        "assists": 2,
+        "playtimeMillis": 818494,
+        "abilityCasts": {
+          "grenadeCasts": 9,
+          "ability1Casts": 12,
+          "ability2Casts": 16,
+          "ultimateCasts": 5
+        }
+      },
+      "competitiveTier": 6,
+      "playerCard": "EAED8CE8-4D64-0758-3355-1EBF5643D1C0",
+      "playerTitle": "22478FE7-4724-DA26-CBBC-1D96134D2E93",
+      "teamId": "Blue"
+    },
+    {
+      "puuid": "test-puuid-1",
+      "gameName": "Player1",
+      "tagLine": "EU",
+      "partyId": "b1c68540-7cd8-46fc-968d-5caa8de72c0d",
+      "characterId": "F94C3B30-42BE-E959-889C-5AA313DBA261",
+      "stats": {
+        "score": 254,
+        "roundsPlayed": 16,
+        "kills": 11,
+        "deaths": 6,
+        "assists": 3,
+        "playtimeMillis": 862979,
+        "abilityCasts": {
+          "grenadeCasts": 11,
+          "ability1Casts": 24,
+          "ability2Casts": 19,
+          "ultimateCasts": 7
+        }
+      },
+      "competitiveTier": 6,
+      "playerCard": "612C2889-41BC-927C-69DC-EB89C871214E",
+      "playerTitle": "CB5CCE68-434B-7022-E18B-56BB5257B4F8",
+      "teamId": "Blue"
+    },
+    {
+      "puuid": "test-puuid-18",
+      "gameName": "Player18",
+      "tagLine": "EU",
+      "partyId": "08193149-128b-4b3b-b99c-71a469156551",
+      "characterId": "41FB69C1-4189-7B37-F117-BCAF1E96F1BF",
+      "stats": {
+        "score": 204,
+        "roundsPlayed": 16,
+        "kills": 7,
+        "deaths": 15,
+        "assists": 1,
+        "playtimeMillis": 1173060,
+        "abilityCasts": {
+          "grenadeCasts": 8,
+          "ability1Casts": 28,
+          "ability2Casts": 23,
+          "ultimateCasts": 8
+        }
+      },
+      "competitiveTier": 7,
+      "playerCard": "9DF9AA67-4FF7-988D-CF72-599A7D5FE2BF",
+      "playerTitle": "148F0317-4158-F2CB-D34C-4BB0725B6DAE",
+      "teamId": "Red"
+    },
+    {
+      "puuid": "test-puuid-5",
+      "gameName": "Player5",
+      "tagLine": "EU",
+      "partyId": "08193149-128b-4b3b-b99c-71a469156551",
+      "characterId": "A3BFB853-43B2-7238-A4F1-AD90E9E46BCC",
+      "stats": {
+        "score": 232,
+        "roundsPlayed": 16,
+        "kills": 9,
+        "deaths": 16,
+        "assists": 1,
+        "playtimeMillis": 1195235,
+        "abilityCasts": {
+          "grenadeCasts": 13,
+          "ability1Casts": 17,
+          "ability2Casts": 25,
+          "ultimateCasts": 14
+        }
+      },
+      "competitiveTier": 6,
+      "playerCard": "1AFB381E-430E-A3F3-E05A-9685DE69A2F3",
+      "playerTitle": "5F44DAB2-457A-66E0-9D14-C2B1D31A804F",
+      "teamId": "Red"
+    },
+    {
+      "puuid": "test-puuid-9",
+      "gameName": "Player9",
+      "tagLine": "EU",
+      "partyId": "08193149-128b-4b3b-b99c-71a469156551",
+      "characterId": "ADD6443A-41BD-E414-F6AD-E58D267F4E95",
+      "stats": {
+        "score": 150,
+        "roundsPlayed": 16,
+        "kills": 4,
+        "deaths": 15,
+        "assists": 1,
+        "playtimeMillis": 1066659,
+        "abilityCasts": {
+          "grenadeCasts": 10,
+          "ability1Casts": 19,
+          "ability2Casts": 13,
+          "ultimateCasts": 9
+        }
+      },
+      "competitiveTier": 5,
+      "playerCard": "8AB11FE4-4F84-B485-9243-EB8D9C6BF0DB",
+      "playerTitle": "4651CBB1-49BE-8E7E-0DF5-70990E9600B2",
+      "teamId": "Red"
+    },
+    {
+      "puuid": "test-puuid-6",
+      "gameName": "Player6",
+      "tagLine": "EU",
+      "partyId": "cb6923a9-7785-4225-8e7d-83dc7b8cef1e",
+      "characterId": "601DBBE7-43CE-BE57-2A40-4ABD24953621",
+      "stats": {
+        "score": 201,
+        "roundsPlayed": 16,
+        "kills": 8,
+        "deaths": 15,
+        "assists": 1,
+        "playtimeMillis": 857750,
+        "abilityCasts": {
+          "grenadeCasts": 6,
+          "ability1Casts": 23,
+          "ability2Casts": 22,
+          "ultimateCasts": 9
+        }
+      },
+      "competitiveTier": 7,
+      "playerCard": "06D90274-435F-3E32-9D57-26BC228AE2E5",
+      "playerTitle": "C4DE2E82-4288-92BB-ED42-E4AA12A657EF",
+      "teamId": "Red"
+    },
+    {
+      "puuid": "test-puuid-4",
+      "gameName": "Player4",
+      "tagLine": "EU",
+      "partyId": "2d4efcd7-7bdd-45d8-8450-5f0e7076ccfe",
+      "characterId": "EB93336A-449B-9C1B-0A54-A891F7921D69",
+      "stats": {
+        "score": 199,
+        "roundsPlayed": 16,
+        "kills": 8,
+        "deaths": 3,
+        "assists": 1,
+        "playtimeMillis": 918911,
+        "abilityCasts": {
+          "grenadeCasts": 9,
+          "ability1Casts": 25,
+          "ability2Casts": 27,
+          "ultimateCasts": 5
+        }
+      },
+      "competitiveTier": 8,
+      "playerCard": "6E5F15E8-4DFD-B739-4E6E-268B441DAA4B",
+      "playerTitle": "E3647F4C-40CE-6A9B-3BE7-3987CAC91AEB",
+      "teamId": "Blue"
+    },
+    {
+      "puuid": "test-puuid-26",
+      "gameName": "Player26",
+      "tagLine": "EU",
+      "partyId": "2d4efcd7-7bdd-45d8-8450-5f0e7076ccfe",
+      "characterId": "22697A3D-45BF-8DD7-4FEC-84A9E28C69D7",
+      "stats": {
+        "score": 246,
+        "roundsPlayed": 16,
+        "kills": 10,
+        "deaths": 5,
+        "assists": 3,
+        "playtimeMillis": 924272,
+        "abilityCasts": {
+          "grenadeCasts": 8,
+          "ability1Casts": 16,
+          "ability2Casts": 28,
+          "ultimateCasts": 11
+        }
+      },
+      "competitiveTier": 5,
+      "playerCard": "10E96429-45C2-BDFD-B8AF-738853690D63",
+      "playerTitle": "1B4E3BF6-4850-3D9B-A02E-8182CAF29B76",
+      "teamId": "Blue"
+    },
+    {
+      "puuid": "test-puuid-24",
+      "gameName": "Player24",
+      "tagLine": "EU",
+      "partyId": "2d4efcd7-7bdd-45d8-8450-5f0e7076ccfe",
+      "characterId": "E370FA57-4757-3604-3648-499E1F642D3F",
+      "stats": {
+        "score": 287,
+        "roundsPlayed": 16,
+        "kills": 12,
+        "deaths": 3,
+        "assists": 2,
+        "playtimeMillis": 962288,
+        "abilityCasts": {
+          "grenadeCasts": 11,
+          "ability1Casts": 21,
+          "ability2Casts": 24,
+          "ultimateCasts": 9
+        }
+      },
+      "competitiveTier": 9,
+      "playerCard": "5D56C40F-4798-9385-45BD-B9889854E3B5",
+      "playerTitle": "843EF6FF-42AE-2692-165C-D48160D8E668",
+      "teamId": "Blue"
+    }
+  ],
+  "coaches": [],
+  "teams": [
+    {
+      "teamId": "Red",
+      "won": true,
+      "roundsPlayed": 16,
+      "roundsWon": 13,
+      "numPoints": 13
+    },
+    {
+      "teamId": "Blue",
+      "won": false,
+      "roundsPlayed": 16,
+      "roundsWon": 3,
+      "numPoints": 3
+    }
+  ],
+  "roundResults": [
+    {
+      "roundNum": 1,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 50,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 50,
+          "economy": {
+            "loadoutValue": 2181,
+            "weapon": "2F59173C-4BED-B6C3-2191-DEA9B58BE9C7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 98,
+            "spent": 2087
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 58,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 58,
+          "economy": {
+            "loadoutValue": 3667,
+            "weapon": "EE8E8D15-496B-07AC-E5F6-8FAE5D4C7B1A",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 3569
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 36316,
+              "timeSinceRoundStartMillis": 36316,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": -619,
+                "y": -401
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Bucky",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 229,
+              "legshots": 4,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 379,
+          "economy": {
+            "loadoutValue": 2641,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 421,
+            "spent": 2539
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 35,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 35,
+          "economy": {
+            "loadoutValue": 1512,
+            "weapon": "EE8E8D15-496B-07AC-E5F6-8FAE5D4C7B1A",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1230
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 0,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 0,
+          "economy": {
+            "loadoutValue": 3910,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 3733
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 113,
+              "legshots": 1,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 113,
+          "economy": {
+            "loadoutValue": 2190,
+            "weapon": "29A0CFAB-485B-F5D5-779A-B59F85E204A8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1883
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 5,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 5,
+          "economy": {
+            "loadoutValue": 3399,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3198
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 31809,
+              "timeSinceRoundStartMillis": 31809,
+              "killer": "test-puuid-4",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": -92,
+                "y": -745
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Frenzy",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 116,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 266,
+          "economy": {
+            "loadoutValue": 2204,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 345,
+            "spent": 2110
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 42468,
+              "timeSinceRoundStartMillis": 42468,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-18",
+              "assistants": [
+                "test-puuid-9"
+              ],
+              "victimLocation": {
+                "x": 796,
+                "y": -510
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ares",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 71572,
+              "timeSinceRoundStartMillis": 71572,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": -880,
+                "y": 498
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Classic",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 298,
+              "legshots": 2,
+              "bodyshots": 5,
+              "headshots": 0
+            }
+          ],
+          "score": 628,
+          "economy": {
+            "loadoutValue": 3543,
+            "weapon": "EE8E8D15-496B-07AC-E5F6-8FAE5D4C7B1A",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3205
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 114,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 114,
+          "economy": {
+            "loadoutValue": 3150,
+            "weapon": "C5DE005C-4BDC-26A7-A47D-C295EAAAE9D8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3028
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 2,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Blue",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 108,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 108,
+          "economy": {
+            "loadoutValue": 2875,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 2711
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 111,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 111,
+          "economy": {
+            "loadoutValue": 1569,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1328
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 31,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 31,
+          "economy": {
+            "loadoutValue": 2123,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1950
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 107,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 107,
+          "economy": {
+            "loadoutValue": 2471,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2121
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 29204,
+              "timeSinceRoundStartMillis": 29204,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-1",
+              "assistants": [],
+              "victimLocation": {
+                "x": -853,
+                "y": -852
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Guardian",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 225,
+              "legshots": 4,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 375,
+          "economy": {
+            "loadoutValue": 2993,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2838
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 16289,
+              "timeSinceRoundStartMillis": 16289,
+              "killer": "test-puuid-9",
+              "victim": "test-puuid-26",
+              "assistants": [],
+              "victimLocation": {
+                "x": -661,
+                "y": 73
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Shorty",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 233,
+              "legshots": 2,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 383,
+          "economy": {
+            "loadoutValue": 725,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 560
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 44,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 44,
+          "economy": {
+            "loadoutValue": 472,
+            "weapon": "29A0CFAB-485B-F5D5-779A-B59F85E204A8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 69,
+            "spent": 228
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 40,
+              "legshots": 1,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 40,
+          "economy": {
+            "loadoutValue": 1748,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1488
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 75673,
+              "timeSinceRoundStartMillis": 75673,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 9,
+                "y": 335
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Odin",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 58843,
+              "timeSinceRoundStartMillis": 58843,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": -388,
+                "y": 354
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Operator",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 417,
+              "legshots": 0,
+              "bodyshots": 8,
+              "headshots": 0
+            }
+          ],
+          "score": 747,
+          "economy": {
+            "loadoutValue": 1564,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1298
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 32821,
+              "timeSinceRoundStartMillis": 32821,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": 360,
+                "y": -393
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Frenzy",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 46038,
+              "timeSinceRoundStartMillis": 46038,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": 653,
+                "y": 862
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Cuerpo a cuerpo",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 348,
+              "legshots": 0,
+              "bodyshots": 6,
+              "headshots": 2
+            }
+          ],
+          "score": 678,
+          "economy": {
+            "loadoutValue": 2296,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2043
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 3,
+      "roundResult": "BombExecution",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Blue",
+      "bombPlanter": "test-puuid-6",
+      "bombDefuser": "test-puuid-16",
+      "plantRoundTime": 48745,
+      "plantPlayerLocations": [],
+      "plantLocation": {
+        "x": 516,
+        "y": -788
+      },
+      "plantSite": "B",
+      "defuseRoundTime": 20936,
+      "defusePlayerLocations": [],
+      "defuseLocation": {
+        "x": -120,
+        "y": 481
+      },
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 93,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 93,
+          "economy": {
+            "loadoutValue": 1602,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1514
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 78,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 78,
+          "economy": {
+            "loadoutValue": 4700,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 4675
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 11055,
+              "timeSinceRoundStartMillis": 11055,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": -809,
+                "y": 136
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Spectre",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 79344,
+              "timeSinceRoundStartMillis": 79344,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-5",
+              "assistants": [
+                "test-puuid-16"
+              ],
+              "victimLocation": {
+                "x": -839,
+                "y": -730
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ghost",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 342,
+              "legshots": 5,
+              "bodyshots": 6,
+              "headshots": 0
+            }
+          ],
+          "score": 672,
+          "economy": {
+            "loadoutValue": 4436,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 4054
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 10,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 10,
+          "economy": {
+            "loadoutValue": 1582,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1560
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 7,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 7,
+          "economy": {
+            "loadoutValue": 1418,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1366
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 89,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 89,
+          "economy": {
+            "loadoutValue": 1030,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 677
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 97,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 97,
+          "economy": {
+            "loadoutValue": 842,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 831
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 46372,
+              "timeSinceRoundStartMillis": 46372,
+              "killer": "test-puuid-4",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 336,
+                "y": 175
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Frenzy",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 176,
+              "legshots": 0,
+              "bodyshots": 3,
+              "headshots": 1
+            }
+          ],
+          "score": 326,
+          "economy": {
+            "loadoutValue": 1823,
+            "weapon": "5F0AAF7A-4289-3998-D5FF-EB9A5CF7EF5C",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1637
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 74,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 74,
+          "economy": {
+            "loadoutValue": 4071,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 4069
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 35856,
+              "timeSinceRoundStartMillis": 35856,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": 356,
+                "y": 95
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Cuerpo a cuerpo",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 208,
+              "legshots": 5,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 358,
+          "economy": {
+            "loadoutValue": 3982,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 3727
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 4,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 46182,
+              "timeSinceRoundStartMillis": 46182,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": -296,
+                "y": -665
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Classic",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 64306,
+              "timeSinceRoundStartMillis": 64306,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": -381,
+                "y": -896
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Shorty",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 43752,
+              "timeSinceRoundStartMillis": 43752,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 750,
+                "y": 855
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ghost",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 413,
+              "legshots": 9,
+              "bodyshots": 8,
+              "headshots": 2
+            }
+          ],
+          "score": 903,
+          "economy": {
+            "loadoutValue": 1339,
+            "weapon": "5F0AAF7A-4289-3998-D5FF-EB9A5CF7EF5C",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1107
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 51,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 51,
+          "economy": {
+            "loadoutValue": 1064,
+            "weapon": "63E6C2B6-4A8E-869C-3D4C-E38355226584",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 854
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 53,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 53,
+          "economy": {
+            "loadoutValue": 233,
+            "weapon": "C5DE005C-4BDC-26A7-A47D-C295EAAAE9D8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 95
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 71888,
+              "timeSinceRoundStartMillis": 71888,
+              "killer": "test-puuid-18",
+              "victim": "test-puuid-1",
+              "assistants": [],
+              "victimLocation": {
+                "x": 222,
+                "y": -462
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Outlaw",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 41646,
+              "timeSinceRoundStartMillis": 41646,
+              "killer": "test-puuid-18",
+              "victim": "test-puuid-4",
+              "assistants": [],
+              "victimLocation": {
+                "x": 256,
+                "y": 862
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Sheriff",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 466,
+              "legshots": 1,
+              "bodyshots": 9,
+              "headshots": 1
+            }
+          ],
+          "score": 796,
+          "economy": {
+            "loadoutValue": 4700,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 4522
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 3282,
+              "timeSinceRoundStartMillis": 3282,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-13",
+              "assistants": [
+                "test-puuid-16"
+              ],
+              "victimLocation": {
+                "x": 660,
+                "y": -419
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Shorty",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 61515,
+              "timeSinceRoundStartMillis": 61515,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-16",
+              "assistants": [
+                "test-puuid-26"
+              ],
+              "victimLocation": {
+                "x": -400,
+                "y": -670
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Vandal",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 456,
+              "legshots": 8,
+              "bodyshots": 9,
+              "headshots": 2
+            }
+          ],
+          "score": 786,
+          "economy": {
+            "loadoutValue": 3542,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 3530
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 58,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 58,
+          "economy": {
+            "loadoutValue": 1510,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1350
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 85,
+              "legshots": 2,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 85,
+          "economy": {
+            "loadoutValue": 3774,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3674
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 16,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 16,
+          "economy": {
+            "loadoutValue": 2410,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2124
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 34,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 34,
+          "economy": {
+            "loadoutValue": 1223,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1191
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 33290,
+              "timeSinceRoundStartMillis": 33290,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": -24,
+                "y": -659
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Stinger",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 204,
+              "legshots": 2,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 354,
+          "economy": {
+            "loadoutValue": 3338,
+            "weapon": "5F0AAF7A-4289-3998-D5FF-EB9A5CF7EF5C",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2980
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 5,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 112,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 112,
+          "economy": {
+            "loadoutValue": 1042,
+            "weapon": "1BAA85B4-4C70-1284-64BB-6481DFC3BB4E",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1012
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 40758,
+              "timeSinceRoundStartMillis": 40758,
+              "killer": "test-puuid-16",
+              "victim": "test-puuid-5",
+              "assistants": [
+                "test-puuid-24"
+              ],
+              "victimLocation": {
+                "x": -820,
+                "y": -210
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Spectre",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 281,
+              "legshots": 1,
+              "bodyshots": 5,
+              "headshots": 0
+            }
+          ],
+          "score": 431,
+          "economy": {
+            "loadoutValue": 343,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 32,
+            "spent": 31
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 22,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 22,
+          "economy": {
+            "loadoutValue": 461,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 245
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 115,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 115,
+          "economy": {
+            "loadoutValue": 2286,
+            "weapon": "462080D1-4035-2937-7C09-27AA2A5C27A7",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 1903
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 116,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 116,
+          "economy": {
+            "loadoutValue": 4700,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 4547
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 37,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 37,
+          "economy": {
+            "loadoutValue": 1300,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1261
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 4,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 4,
+          "economy": {
+            "loadoutValue": 1856,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1787
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 66020,
+              "timeSinceRoundStartMillis": 66020,
+              "killer": "test-puuid-4",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 27,
+                "y": -143
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Outlaw",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 182,
+              "legshots": 0,
+              "bodyshots": 3,
+              "headshots": 1
+            }
+          ],
+          "score": 332,
+          "economy": {
+            "loadoutValue": 2296,
+            "weapon": "2F59173C-4BED-B6C3-2191-DEA9B58BE9C7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2136
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 27616,
+              "timeSinceRoundStartMillis": 27616,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": -568,
+                "y": 704
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Classic",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 176,
+              "legshots": 4,
+              "bodyshots": 3,
+              "headshots": 0
+            }
+          ],
+          "score": 326,
+          "economy": {
+            "loadoutValue": 1322,
+            "weapon": "462080D1-4035-2937-7C09-27AA2A5C27A7",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1189
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 76685,
+              "timeSinceRoundStartMillis": 76685,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": 494,
+                "y": -222
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Marshal",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 250,
+              "legshots": 4,
+              "bodyshots": 5,
+              "headshots": 0
+            }
+          ],
+          "score": 400,
+          "economy": {
+            "loadoutValue": 848,
+            "weapon": "910BE174-449B-C412-AB22-D0873436B21B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 761
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 6,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 27322,
+              "timeSinceRoundStartMillis": 27322,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 716,
+                "y": 202
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Phantom",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 290,
+              "legshots": 4,
+              "bodyshots": 5,
+              "headshots": 0
+            }
+          ],
+          "score": 440,
+          "economy": {
+            "loadoutValue": 1201,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 949
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 61816,
+              "timeSinceRoundStartMillis": 61816,
+              "killer": "test-puuid-16",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": 295,
+                "y": -491
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Vandal",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 207,
+              "legshots": 4,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 357,
+          "economy": {
+            "loadoutValue": 337,
+            "weapon": "29A0CFAB-485B-F5D5-779A-B59F85E204A8",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 242,
+            "spent": 155
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 57,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 57,
+          "economy": {
+            "loadoutValue": 2671,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2655
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 119,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 119,
+          "economy": {
+            "loadoutValue": 3372,
+            "weapon": "29A0CFAB-485B-F5D5-779A-B59F85E204A8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3220
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 1,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 1,
+          "economy": {
+            "loadoutValue": 4700,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 4433
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 111,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 111,
+          "economy": {
+            "loadoutValue": 2198,
+            "weapon": "5F0AAF7A-4289-3998-D5FF-EB9A5CF7EF5C",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2031
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 7758,
+              "timeSinceRoundStartMillis": 7758,
+              "killer": "test-puuid-6",
+              "victim": "test-puuid-13",
+              "assistants": [],
+              "victimLocation": {
+                "x": 238,
+                "y": 454
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Outlaw",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 124,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 274,
+          "economy": {
+            "loadoutValue": 1387,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1225
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 58234,
+              "timeSinceRoundStartMillis": 58234,
+              "killer": "test-puuid-4",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": -139,
+                "y": -516
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Odin",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 210,
+              "legshots": 4,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 360,
+          "economy": {
+            "loadoutValue": 1311,
+            "weapon": "5F0AAF7A-4289-3998-D5FF-EB9A5CF7EF5C",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1095
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 74,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 74,
+          "economy": {
+            "loadoutValue": 1032,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 671
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 43551,
+              "timeSinceRoundStartMillis": 43551,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-5",
+              "assistants": [
+                "test-puuid-1"
+              ],
+              "victimLocation": {
+                "x": 862,
+                "y": -722
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Judge",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 213,
+              "legshots": 3,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 363,
+          "economy": {
+            "loadoutValue": 2089,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2053
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 7,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 7341,
+              "timeSinceRoundStartMillis": 7341,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 898,
+                "y": 27
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Judge",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 274,
+              "legshots": 2,
+              "bodyshots": 5,
+              "headshots": 0
+            }
+          ],
+          "score": 424,
+          "economy": {
+            "loadoutValue": 2947,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2794
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 115,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 115,
+          "economy": {
+            "loadoutValue": 3842,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 3650
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 69,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 69,
+          "economy": {
+            "loadoutValue": 2955,
+            "weapon": "1BAA85B4-4C70-1284-64BB-6481DFC3BB4E",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2628
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 16525,
+              "timeSinceRoundStartMillis": 16525,
+              "killer": "test-puuid-18",
+              "victim": "test-puuid-26",
+              "assistants": [],
+              "victimLocation": {
+                "x": -344,
+                "y": 442
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Bulldog",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 98,
+              "legshots": 2,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 248,
+          "economy": {
+            "loadoutValue": 3086,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2855
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 35,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 35,
+          "economy": {
+            "loadoutValue": 3395,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 3329
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 106,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 106,
+          "economy": {
+            "loadoutValue": 2863,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2543
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 78382,
+              "timeSinceRoundStartMillis": 78382,
+              "killer": "test-puuid-6",
+              "victim": "test-puuid-16",
+              "assistants": [],
+              "victimLocation": {
+                "x": 412,
+                "y": -658
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ghost",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 257,
+              "legshots": 0,
+              "bodyshots": 5,
+              "headshots": 1
+            }
+          ],
+          "score": 407,
+          "economy": {
+            "loadoutValue": 3947,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3837
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 80582,
+              "timeSinceRoundStartMillis": 80582,
+              "killer": "test-puuid-4",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": 247,
+                "y": 848
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ares",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 298,
+              "legshots": 0,
+              "bodyshots": 5,
+              "headshots": 0
+            }
+          ],
+          "score": 448,
+          "economy": {
+            "loadoutValue": 1419,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1355
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 36072,
+              "timeSinceRoundStartMillis": 36072,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": 601,
+                "y": -272
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Spectre",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 229,
+              "legshots": 5,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 379,
+          "economy": {
+            "loadoutValue": 1907,
+            "weapon": "EE8E8D15-496B-07AC-E5F6-8FAE5D4C7B1A",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1516
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 83644,
+              "timeSinceRoundStartMillis": 83644,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": 215,
+                "y": 749
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Frenzy",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 249,
+              "legshots": 5,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 399,
+          "economy": {
+            "loadoutValue": 2544,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 2352
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 8,
+      "roundResult": "BombExecution",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "test-puuid-9",
+      "bombDefuser": "",
+      "plantRoundTime": 27033,
+      "plantPlayerLocations": [],
+      "plantLocation": {
+        "x": -600,
+        "y": 975
+      },
+      "plantSite": "C",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 45151,
+              "timeSinceRoundStartMillis": 45151,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": -449,
+                "y": -84
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Marshal",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 89317,
+              "timeSinceRoundStartMillis": 89317,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": -210,
+                "y": -322
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Marshal",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 44270,
+              "timeSinceRoundStartMillis": 44270,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": -867,
+                "y": 92
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Stinger",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 456,
+              "legshots": 11,
+              "bodyshots": 9,
+              "headshots": 1
+            }
+          ],
+          "score": 946,
+          "economy": {
+            "loadoutValue": 689,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 538
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 3,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 3,
+          "economy": {
+            "loadoutValue": 352,
+            "weapon": "29A0CFAB-485B-F5D5-779A-B59F85E204A8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 83,
+            "spent": 15
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 116,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 116,
+          "economy": {
+            "loadoutValue": 2917,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2683
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 107,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 107,
+          "economy": {
+            "loadoutValue": 4700,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 4548
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 7425,
+              "timeSinceRoundStartMillis": 7425,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-24",
+              "assistants": [],
+              "victimLocation": {
+                "x": 220,
+                "y": 637
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ghost",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 316,
+              "legshots": 0,
+              "bodyshots": 6,
+              "headshots": 0
+            }
+          ],
+          "score": 466,
+          "economy": {
+            "loadoutValue": 1912,
+            "weapon": "1BAA85B4-4C70-1284-64BB-6481DFC3BB4E",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1670
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 9268,
+              "timeSinceRoundStartMillis": 9268,
+              "killer": "test-puuid-9",
+              "victim": "test-puuid-16",
+              "assistants": [
+                "test-puuid-18"
+              ],
+              "victimLocation": {
+                "x": -14,
+                "y": 644
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Classic",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 45307,
+              "timeSinceRoundStartMillis": 45307,
+              "killer": "test-puuid-9",
+              "victim": "test-puuid-1",
+              "assistants": [],
+              "victimLocation": {
+                "x": 833,
+                "y": -272
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Guardian",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 454,
+              "legshots": 6,
+              "bodyshots": 9,
+              "headshots": 2
+            }
+          ],
+          "score": 784,
+          "economy": {
+            "loadoutValue": 4700,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 4620
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 9,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 9,
+          "economy": {
+            "loadoutValue": 3396,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 3353
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 107,
+              "legshots": 1,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 107,
+          "economy": {
+            "loadoutValue": 2765,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2764
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 63,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 63,
+          "economy": {
+            "loadoutValue": 2784,
+            "weapon": "1BAA85B4-4C70-1284-64BB-6481DFC3BB4E",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2533
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 77981,
+              "timeSinceRoundStartMillis": 77981,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": -521,
+                "y": 857
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Frenzy",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 224,
+              "legshots": 5,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 374,
+          "economy": {
+            "loadoutValue": 2902,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2794
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 9,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 5848,
+              "timeSinceRoundStartMillis": 5848,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": -90,
+                "y": -94
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Odin",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 199,
+              "legshots": 1,
+              "bodyshots": 3,
+              "headshots": 1
+            }
+          ],
+          "score": 349,
+          "economy": {
+            "loadoutValue": 2884,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 2801
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 31873,
+              "timeSinceRoundStartMillis": 31873,
+              "killer": "test-puuid-16",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 288,
+                "y": -568
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Bulldog",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 187,
+              "legshots": 2,
+              "bodyshots": 3,
+              "headshots": 1
+            }
+          ],
+          "score": 337,
+          "economy": {
+            "loadoutValue": 2607,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2380
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 59232,
+              "timeSinceRoundStartMillis": 59232,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": -11,
+                "y": -770
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Classic",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 75733,
+              "timeSinceRoundStartMillis": 75733,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": 699,
+                "y": 476
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ghost",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 288,
+              "legshots": 1,
+              "bodyshots": 5,
+              "headshots": 2
+            }
+          ],
+          "score": 618,
+          "economy": {
+            "loadoutValue": 690,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 376
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 72,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 72,
+          "economy": {
+            "loadoutValue": 2431,
+            "weapon": "63E6C2B6-4A8E-869C-3D4C-E38355226584",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2174
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 42994,
+              "timeSinceRoundStartMillis": 42994,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-26",
+              "assistants": [],
+              "victimLocation": {
+                "x": -668,
+                "y": -693
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Operator",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 202,
+              "legshots": 4,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 352,
+          "economy": {
+            "loadoutValue": 3732,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3516
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 81,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 81,
+          "economy": {
+            "loadoutValue": 2370,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2199
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 36,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 36,
+          "economy": {
+            "loadoutValue": 4056,
+            "weapon": "1BAA85B4-4C70-1284-64BB-6481DFC3BB4E",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 3931
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 103,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 103,
+          "economy": {
+            "loadoutValue": 1031,
+            "weapon": "910BE174-449B-C412-AB22-D0873436B21B",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 825
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 9,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 9,
+          "economy": {
+            "loadoutValue": 2131,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 2075
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 45,
+              "legshots": 1,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 45,
+          "economy": {
+            "loadoutValue": 2528,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 2512
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 10,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 70842,
+              "timeSinceRoundStartMillis": 70842,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": -644,
+                "y": -802
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Shorty",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 140,
+              "legshots": 3,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 290,
+          "economy": {
+            "loadoutValue": 2538,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2455
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 69,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 69,
+          "economy": {
+            "loadoutValue": 698,
+            "weapon": "1BAA85B4-4C70-1284-64BB-6481DFC3BB4E",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 521
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 24,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 24,
+          "economy": {
+            "loadoutValue": 1990,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1866
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 46,
+              "legshots": 1,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 46,
+          "economy": {
+            "loadoutValue": 2853,
+            "weapon": "462080D1-4035-2937-7C09-27AA2A5C27A7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2637
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 2,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 2,
+          "economy": {
+            "loadoutValue": 2306,
+            "weapon": "63E6C2B6-4A8E-869C-3D4C-E38355226584",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2007
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 102,
+              "legshots": 2,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 102,
+          "economy": {
+            "loadoutValue": 2571,
+            "weapon": "2F59173C-4BED-B6C3-2191-DEA9B58BE9C7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2359
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 6,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 6,
+          "economy": {
+            "loadoutValue": 1371,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1347
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 49622,
+              "timeSinceRoundStartMillis": 49622,
+              "killer": "test-puuid-4",
+              "victim": "test-puuid-9",
+              "assistants": [
+                "test-puuid-5"
+              ],
+              "victimLocation": {
+                "x": 255,
+                "y": -63
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Phantom",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 137,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 287,
+          "economy": {
+            "loadoutValue": 200,
+            "weapon": "C5DE005C-4BDC-26A7-A47D-C295EAAAE9D8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 288,
+            "spent": 75
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 116,
+              "legshots": 1,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 116,
+          "economy": {
+            "loadoutValue": 2773,
+            "weapon": "C4883E50-4494-202C-3EC3-6B8A9284F00B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2632
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 87884,
+              "timeSinceRoundStartMillis": 87884,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": -855,
+                "y": 617
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Spectre",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 13470,
+              "timeSinceRoundStartMillis": 13470,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-18",
+              "assistants": [
+                "test-puuid-13"
+              ],
+              "victimLocation": {
+                "x": 228,
+                "y": -340
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Sheriff",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 215,
+              "legshots": 3,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 545,
+          "economy": {
+            "loadoutValue": 936,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 705
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 11,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 103,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 103,
+          "economy": {
+            "loadoutValue": 2972,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 2879
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 36313,
+              "timeSinceRoundStartMillis": 36313,
+              "killer": "test-puuid-16",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": 361,
+                "y": -705
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ares",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 194,
+              "legshots": 1,
+              "bodyshots": 3,
+              "headshots": 0
+            }
+          ],
+          "score": 344,
+          "economy": {
+            "loadoutValue": 2010,
+            "weapon": "910BE174-449B-C412-AB22-D0873436B21B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1808
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 75657,
+              "timeSinceRoundStartMillis": 75657,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": 818,
+                "y": -831
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Marshal",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 213,
+              "legshots": 4,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 363,
+          "economy": {
+            "loadoutValue": 1095,
+            "weapon": "EE8E8D15-496B-07AC-E5F6-8FAE5D4C7B1A",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 790
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 4,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 4,
+          "economy": {
+            "loadoutValue": 4213,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 4057
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 116,
+              "legshots": 1,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 116,
+          "economy": {
+            "loadoutValue": 2595,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2335
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 10,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 10,
+          "economy": {
+            "loadoutValue": 3357,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 3228
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 34352,
+              "timeSinceRoundStartMillis": 34352,
+              "killer": "test-puuid-6",
+              "victim": "test-puuid-1",
+              "assistants": [],
+              "victimLocation": {
+                "x": -16,
+                "y": 875
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Judge",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 278,
+              "legshots": 0,
+              "bodyshots": 5,
+              "headshots": 1
+            }
+          ],
+          "score": 428,
+          "economy": {
+            "loadoutValue": 4217,
+            "weapon": "462080D1-4035-2937-7C09-27AA2A5C27A7",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 4208
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 48,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 48,
+          "economy": {
+            "loadoutValue": 1199,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1135
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 76575,
+              "timeSinceRoundStartMillis": 76575,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": -485,
+                "y": 232
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Spectre",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 226,
+              "legshots": 4,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 376,
+          "economy": {
+            "loadoutValue": 2144,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1929
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 71440,
+              "timeSinceRoundStartMillis": 71440,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 511,
+                "y": -880
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Bulldog",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 217,
+              "legshots": 5,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 367,
+          "economy": {
+            "loadoutValue": 2502,
+            "weapon": "C5DE005C-4BDC-26A7-A47D-C295EAAAE9D8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2418
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 12,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Blue",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 53,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 53,
+          "economy": {
+            "loadoutValue": 3952,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3922
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 37537,
+              "timeSinceRoundStartMillis": 37537,
+              "killer": "test-puuid-16",
+              "victim": "test-puuid-5",
+              "assistants": [
+                "test-puuid-6"
+              ],
+              "victimLocation": {
+                "x": -898,
+                "y": -93
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Bulldog",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 200,
+              "legshots": 1,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 350,
+          "economy": {
+            "loadoutValue": 1694,
+            "weapon": "C5DE005C-4BDC-26A7-A47D-C295EAAAE9D8",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1498
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 33,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 33,
+          "economy": {
+            "loadoutValue": 2419,
+            "weapon": "910BE174-449B-C412-AB22-D0873436B21B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2052
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 56006,
+              "timeSinceRoundStartMillis": 56006,
+              "killer": "test-puuid-18",
+              "victim": "test-puuid-26",
+              "assistants": [],
+              "victimLocation": {
+                "x": 8,
+                "y": -163
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Marshal",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 33603,
+              "timeSinceRoundStartMillis": 33603,
+              "killer": "test-puuid-18",
+              "victim": "test-puuid-24",
+              "assistants": [],
+              "victimLocation": {
+                "x": -169,
+                "y": -59
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Stinger",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 377,
+              "legshots": 2,
+              "bodyshots": 7,
+              "headshots": 0
+            }
+          ],
+          "score": 707,
+          "economy": {
+            "loadoutValue": 1850,
+            "weapon": "C5DE005C-4BDC-26A7-A47D-C295EAAAE9D8",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1645
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 86,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 86,
+          "economy": {
+            "loadoutValue": 1250,
+            "weapon": "462080D1-4035-2937-7C09-27AA2A5C27A7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 984
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 51,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 51,
+          "economy": {
+            "loadoutValue": 242,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 127,
+            "spent": 54
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 16079,
+              "timeSinceRoundStartMillis": 16079,
+              "killer": "test-puuid-6",
+              "victim": "test-puuid-1",
+              "assistants": [],
+              "victimLocation": {
+                "x": 876,
+                "y": -507
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Sheriff",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 68377,
+              "timeSinceRoundStartMillis": 68377,
+              "killer": "test-puuid-6",
+              "victim": "test-puuid-16",
+              "assistants": [
+                "test-puuid-13"
+              ],
+              "victimLocation": {
+                "x": 498,
+                "y": -701
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Cuerpo a cuerpo",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 33177,
+              "timeSinceRoundStartMillis": 33177,
+              "killer": "test-puuid-6",
+              "victim": "test-puuid-13",
+              "assistants": [],
+              "victimLocation": {
+                "x": 381,
+                "y": 405
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Stinger",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 513,
+              "legshots": 2,
+              "bodyshots": 10,
+              "headshots": 1
+            }
+          ],
+          "score": 1003,
+          "economy": {
+            "loadoutValue": 800,
+            "weapon": "42DA8CCC-40D5-AFFC-BEEC-15AA47B42EDA",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 446
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 96,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 96,
+          "economy": {
+            "loadoutValue": 4330,
+            "weapon": "1BAA85B4-4C70-1284-64BB-6481DFC3BB4E",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 4180
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 94,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 94,
+          "economy": {
+            "loadoutValue": 4252,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 4246
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 81,
+              "legshots": 2,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 81,
+          "economy": {
+            "loadoutValue": 1833,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1790
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 13,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 61141,
+              "timeSinceRoundStartMillis": 61141,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": 485,
+                "y": -89
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Cuerpo a cuerpo",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 187,
+              "legshots": 1,
+              "bodyshots": 3,
+              "headshots": 1
+            }
+          ],
+          "score": 337,
+          "economy": {
+            "loadoutValue": 2481,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2158
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 54,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 54,
+          "economy": {
+            "loadoutValue": 2124,
+            "weapon": "910BE174-449B-C412-AB22-D0873436B21B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2047
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 62702,
+              "timeSinceRoundStartMillis": 62702,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 233,
+                "y": -872
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Frenzy",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 35642,
+              "timeSinceRoundStartMillis": 35642,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-6",
+              "assistants": [
+                "test-puuid-26"
+              ],
+              "victimLocation": {
+                "x": 67,
+                "y": -320
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Odin",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 290,
+              "legshots": 2,
+              "bodyshots": 5,
+              "headshots": 2
+            }
+          ],
+          "score": 620,
+          "economy": {
+            "loadoutValue": 763,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 657
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 48,
+              "legshots": 1,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 48,
+          "economy": {
+            "loadoutValue": 2800,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2576
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 44971,
+              "timeSinceRoundStartMillis": 44971,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-16",
+              "assistants": [],
+              "victimLocation": {
+                "x": -37,
+                "y": -281
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Phantom",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 7418,
+              "timeSinceRoundStartMillis": 7418,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-13",
+              "assistants": [],
+              "victimLocation": {
+                "x": -532,
+                "y": -554
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Shorty",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 262,
+              "legshots": 5,
+              "bodyshots": 5,
+              "headshots": 2
+            }
+          ],
+          "score": 592,
+          "economy": {
+            "loadoutValue": 2318,
+            "weapon": "F7E1B454-4AD4-1063-EC0A-159E56B58941",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2212
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 21063,
+              "timeSinceRoundStartMillis": 21063,
+              "killer": "test-puuid-9",
+              "victim": "test-puuid-24",
+              "assistants": [],
+              "victimLocation": {
+                "x": -316,
+                "y": -711
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Spectre",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 283,
+              "legshots": 1,
+              "bodyshots": 5,
+              "headshots": 1
+            }
+          ],
+          "score": 433,
+          "economy": {
+            "loadoutValue": 3110,
+            "weapon": "9C82E19D-4575-0200-1A81-3EACF00CF872",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3067
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 12822,
+              "timeSinceRoundStartMillis": 12822,
+              "killer": "test-puuid-6",
+              "victim": "test-puuid-4",
+              "assistants": [],
+              "victimLocation": {
+                "x": -513,
+                "y": -575
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Outlaw",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 201,
+              "legshots": 1,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 351,
+          "economy": {
+            "loadoutValue": 1533,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1386
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 57,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 57,
+          "economy": {
+            "loadoutValue": 2131,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1827
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 70643,
+              "timeSinceRoundStartMillis": 70643,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-5",
+              "assistants": [
+                "test-puuid-1"
+              ],
+              "victimLocation": {
+                "x": 379,
+                "y": -537
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Spectre",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 191,
+              "legshots": 2,
+              "bodyshots": 3,
+              "headshots": 0
+            }
+          ],
+          "score": 341,
+          "economy": {
+            "loadoutValue": 1901,
+            "weapon": "910BE174-449B-C412-AB22-D0873436B21B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1715
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 93,
+              "legshots": 2,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 93,
+          "economy": {
+            "loadoutValue": 2503,
+            "weapon": "A03B24D3-4319-996D-0F8C-94BBFBA1DFC7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2211
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 14,
+      "roundResult": "BombExecution",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "test-puuid-1",
+      "bombDefuser": "test-puuid-9",
+      "plantRoundTime": 24436,
+      "plantPlayerLocations": [],
+      "plantLocation": {
+        "x": 463,
+        "y": -806
+      },
+      "plantSite": "B",
+      "defuseRoundTime": 20132,
+      "defusePlayerLocations": [],
+      "defuseLocation": {
+        "x": -580,
+        "y": -47
+      },
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 26084,
+              "timeSinceRoundStartMillis": 26084,
+              "killer": "test-puuid-13",
+              "victim": "test-puuid-9",
+              "assistants": [
+                "test-puuid-4"
+              ],
+              "victimLocation": {
+                "x": -363,
+                "y": 30
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Phantom",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-24",
+              "damage": 237,
+              "legshots": 2,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 387,
+          "economy": {
+            "loadoutValue": 1996,
+            "weapon": "462080D1-4035-2937-7C09-27AA2A5C27A7",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 1620
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 48879,
+              "timeSinceRoundStartMillis": 48879,
+              "killer": "test-puuid-16",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": -415,
+                "y": 637
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Odin",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 244,
+              "legshots": 3,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 394,
+          "economy": {
+            "loadoutValue": 2229,
+            "weapon": "910BE174-449B-C412-AB22-D0873436B21B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2165
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 42916,
+              "timeSinceRoundStartMillis": 42916,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-6",
+              "assistants": [],
+              "victimLocation": {
+                "x": -636,
+                "y": -538
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Odin",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 266,
+              "legshots": 1,
+              "bodyshots": 5,
+              "headshots": 1
+            }
+          ],
+          "score": 416,
+          "economy": {
+            "loadoutValue": 2951,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 2716
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 65797,
+              "timeSinceRoundStartMillis": 65797,
+              "killer": "test-puuid-18",
+              "victim": "test-puuid-13",
+              "assistants": [],
+              "victimLocation": {
+                "x": 473,
+                "y": -446
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Stinger",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 293,
+              "legshots": 6,
+              "bodyshots": 5,
+              "headshots": 1
+            }
+          ],
+          "score": 443,
+          "economy": {
+            "loadoutValue": 2818,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2472
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 95,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 95,
+          "economy": {
+            "loadoutValue": 2086,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1945
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 38,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 38,
+          "economy": {
+            "loadoutValue": 4491,
+            "weapon": "5F0AAF7A-4289-3998-D5FF-EB9A5CF7EF5C",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 4452
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 42400,
+              "timeSinceRoundStartMillis": 42400,
+              "killer": "test-puuid-6",
+              "victim": "test-puuid-4",
+              "assistants": [],
+              "victimLocation": {
+                "x": 701,
+                "y": 509
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Guardian",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 214,
+              "legshots": 4,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 364,
+          "economy": {
+            "loadoutValue": 2096,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 1932
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 58617,
+              "timeSinceRoundStartMillis": 58617,
+              "killer": "test-puuid-4",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": 285,
+                "y": 615
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Ares",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 161,
+              "legshots": 3,
+              "bodyshots": 3,
+              "headshots": 1
+            }
+          ],
+          "score": 311,
+          "economy": {
+            "loadoutValue": 2291,
+            "weapon": "E336C6B8-418D-9340-D77F-7A9E4CFE0702",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2196
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 50,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 50,
+          "economy": {
+            "loadoutValue": 471,
+            "weapon": "2F59173C-4BED-B6C3-2191-DEA9B58BE9C7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 296
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-5",
+              "damage": 104,
+              "legshots": 0,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 104,
+          "economy": {
+            "loadoutValue": 1359,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1037
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 15,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 58,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 58,
+          "economy": {
+            "loadoutValue": 3111,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2717
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 40104,
+              "timeSinceRoundStartMillis": 40104,
+              "killer": "test-puuid-16",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": -100,
+                "y": 530
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Phantom",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 211,
+              "legshots": 3,
+              "bodyshots": 4,
+              "headshots": 1
+            }
+          ],
+          "score": 361,
+          "economy": {
+            "loadoutValue": 808,
+            "weapon": "EE8E8D15-496B-07AC-E5F6-8FAE5D4C7B1A",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 639
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 56525,
+              "timeSinceRoundStartMillis": 56525,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-9",
+              "assistants": [
+                "test-puuid-26"
+              ],
+              "victimLocation": {
+                "x": 609,
+                "y": -72
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Guardian",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 208,
+              "legshots": 0,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 358,
+          "economy": {
+            "loadoutValue": 1175,
+            "weapon": "1BAA85B4-4C70-1284-64BB-6481DFC3BB4E",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 1086
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 28616,
+              "timeSinceRoundStartMillis": 28616,
+              "killer": "test-puuid-18",
+              "victim": "test-puuid-1",
+              "assistants": [],
+              "victimLocation": {
+                "x": -835,
+                "y": 404
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Frenzy",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 254,
+              "legshots": 5,
+              "bodyshots": 5,
+              "headshots": 1
+            }
+          ],
+          "score": 404,
+          "economy": {
+            "loadoutValue": 4700,
+            "weapon": "63E6C2B6-4A8E-869C-3D4C-E38355226584",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 4654
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 8016,
+              "timeSinceRoundStartMillis": 8016,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-26",
+              "assistants": [],
+              "victimLocation": {
+                "x": -71,
+                "y": -85
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Phantom",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 42063,
+              "timeSinceRoundStartMillis": 42063,
+              "killer": "test-puuid-5",
+              "victim": "test-puuid-13",
+              "assistants": [],
+              "victimLocation": {
+                "x": -576,
+                "y": -868
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Phantom",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 245,
+              "legshots": 1,
+              "bodyshots": 4,
+              "headshots": 2
+            }
+          ],
+          "score": 575,
+          "economy": {
+            "loadoutValue": 4439,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 4103
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-16",
+              "damage": 6,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 6,
+          "economy": {
+            "loadoutValue": 3609,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3355
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 33,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 33,
+          "economy": {
+            "loadoutValue": 3511,
+            "weapon": "55D8A0F4-4274-CA67-FE2C-06AB45EFDF58",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 3220
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 41628,
+              "timeSinceRoundStartMillis": 41628,
+              "killer": "test-puuid-4",
+              "victim": "test-puuid-6",
+              "assistants": [
+                "test-puuid-1"
+              ],
+              "victimLocation": {
+                "x": -568,
+                "y": 114
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Sheriff",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 223,
+              "legshots": 0,
+              "bodyshots": 4,
+              "headshots": 0
+            }
+          ],
+          "score": 373,
+          "economy": {
+            "loadoutValue": 2679,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2380
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-9",
+              "damage": 109,
+              "legshots": 1,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 109,
+          "economy": {
+            "loadoutValue": 2274,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2014
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 81399,
+              "timeSinceRoundStartMillis": 81399,
+              "killer": "test-puuid-24",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": -747,
+                "y": 150
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Outlaw",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 164,
+              "legshots": 3,
+              "bodyshots": 3,
+              "headshots": 1
+            }
+          ],
+          "score": 314,
+          "economy": {
+            "loadoutValue": 1541,
+            "weapon": "EC845BF4-4F79-DDDA-A3DA-0DB3774B2794",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1344
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    },
+    {
+      "roundNum": 16,
+      "roundResult": "Eliminations",
+      "roundCeremony": "RoundCeremonyDefault",
+      "winningTeam": "Red",
+      "bombPlanter": "",
+      "bombDefuser": "",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [],
+      "plantLocation": null,
+      "plantSite": "",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [],
+      "defuseLocation": null,
+      "playerStats": [
+        {
+          "puuid": "test-puuid-13",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-4",
+              "damage": 87,
+              "legshots": 0,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 87,
+          "economy": {
+            "loadoutValue": 1674,
+            "weapon": "462080D1-4035-2937-7C09-27AA2A5C27A7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1524
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-16",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 4012,
+              "timeSinceRoundStartMillis": 4012,
+              "killer": "test-puuid-16",
+              "victim": "test-puuid-18",
+              "assistants": [],
+              "victimLocation": {
+                "x": -816,
+                "y": 754
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Judge",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-13",
+              "damage": 307,
+              "legshots": 3,
+              "bodyshots": 6,
+              "headshots": 0
+            }
+          ],
+          "score": 457,
+          "economy": {
+            "loadoutValue": 826,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 809
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-1",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 26361,
+              "timeSinceRoundStartMillis": 26361,
+              "killer": "test-puuid-1",
+              "victim": "test-puuid-6",
+              "assistants": [
+                "test-puuid-24"
+              ],
+              "victimLocation": {
+                "x": 524,
+                "y": 237
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Stinger",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 97,
+              "legshots": 2,
+              "bodyshots": 1,
+              "headshots": 1
+            }
+          ],
+          "score": 247,
+          "economy": {
+            "loadoutValue": 1946,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1877
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-18",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 4,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 4,
+          "economy": {
+            "loadoutValue": 3248,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 2985
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-5",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-26",
+              "damage": 120,
+              "legshots": 1,
+              "bodyshots": 2,
+              "headshots": 0
+            }
+          ],
+          "score": 120,
+          "economy": {
+            "loadoutValue": 1691,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1302
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-9",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 7,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 7,
+          "economy": {
+            "loadoutValue": 4633,
+            "weapon": "910BE174-449B-C412-AB22-D0873436B21B",
+            "armor": "B1B9086D-41BD-A516-5D29-E3B34A6F1644",
+            "remaining": 0,
+            "spent": 4238
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-6",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 70,
+              "legshots": 1,
+              "bodyshots": 1,
+              "headshots": 0
+            }
+          ],
+          "score": 70,
+          "economy": {
+            "loadoutValue": 1812,
+            "weapon": "4ADE7FAA-4CF1-8376-95EF-39884480959B",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 1535
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-4",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-1",
+              "damage": 15,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 15,
+          "economy": {
+            "loadoutValue": 2130,
+            "weapon": "2F59173C-4BED-B6C3-2191-DEA9B58BE9C7",
+            "armor": "4DEC83D5-4902-9AB3-BED6-A7A390761157",
+            "remaining": 0,
+            "spent": 2006
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-26",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 57598,
+              "timeSinceRoundStartMillis": 57598,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-9",
+              "assistants": [],
+              "victimLocation": {
+                "x": -631,
+                "y": -147
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Operator",
+                "isSecondaryFireMode": false
+              }
+            },
+            {
+              "timeSinceGameStartMillis": 88517,
+              "timeSinceRoundStartMillis": 88517,
+              "killer": "test-puuid-26",
+              "victim": "test-puuid-5",
+              "assistants": [],
+              "victimLocation": {
+                "x": 761,
+                "y": -196
+              },
+              "playerLocations": [],
+              "finishingDamage": {
+                "damageType": "Weapon",
+                "damageItem": "Guardian",
+                "isSecondaryFireMode": false
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "test-puuid-6",
+              "damage": 188,
+              "legshots": 1,
+              "bodyshots": 3,
+              "headshots": 2
+            }
+          ],
+          "score": 518,
+          "economy": {
+            "loadoutValue": 1394,
+            "weapon": "44D4E95C-4157-0037-81B2-17841BF2E8E3",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1290
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        },
+        {
+          "puuid": "test-puuid-24",
+          "kills": [],
+          "damage": [
+            {
+              "receiver": "test-puuid-18",
+              "damage": 11,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 11,
+          "economy": {
+            "loadoutValue": 2165,
+            "weapon": "AE3DE142-4D85-2547-DD26-4E90BED35CF7",
+            "armor": "822BCAB2-40A2-324E-C137-E09195AD7692",
+            "remaining": 0,
+            "spent": 1879
+          },
+          "ability": {
+            "grenadeEffects": "",
+            "ability1Effects": "",
+            "ability2Effects": "",
+            "ultimateEffects": ""
+          }
+        }
+      ],
+      "roundResultCode": "Generic"
+    }
+  ]
+}
