@@ -45,8 +45,12 @@ dist/
 /.cache/
 
 # Env / secrets
+# Ignore real env files but keep example templates tracked
 .env
 .env.*
+!.env.example
+!frontend/.env.example
+!backend/.env.example
 backend/.env
 frontend/.env
 
