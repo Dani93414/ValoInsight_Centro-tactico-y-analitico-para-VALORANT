@@ -1,0 +1,162 @@
+{
+  "matchInfo": {
+    "matchId": "string",
+    "mapId": "string",
+    "gameVersion": "string",
+    "gameLengthMillis": 0,
+    "region": "string",
+    "gameStartMillis": 0,
+    "provisioningFlowId": "string",
+    "isCompleted": true,
+    "customGameName": "string",
+    "queueId": "string",
+    "gameMode": "string",
+    "isRanked": true,
+    "seasonId": "string",
+    "premierMatchInfo": List[empty]
+  },
+  "players": [
+    {
+      "puuid": "string",
+      "gameName": "string",
+      "tagLine": "string",
+      "teamId": "string",
+      "partyId": "string",
+      "characterId": "string",
+      "stats": {
+        "score": 0,
+        "roundsPlayed": 0,
+        "kills": 0,
+        "deaths": 0,
+        "assists": 0,
+        "playtimeMillis": 0,
+        "abilityCasts": {
+          "grenadeCasts": 0,
+          "ability1Casts": 0,
+          "ability2Casts": 0,
+          "ultimateCasts": 0
+        }
+      },
+      "competitiveTier": 0,
+      "playerCard": "string",
+      "playerTitle": "string",
+      "accountLevel": 0
+    }
+  ],
+  "coaches": [
+    {
+      "puuid": "string",
+      "teamId": "string"
+    }
+  ],
+  "teams": [
+    {
+      "teamId": "string",
+      "won": true,
+      "roundsPlayed": 0,
+      "roundsWon": 0,
+      "numPoints": 0
+    }
+  ],
+  "roundResults": [
+    {
+      "roundNum": 0,
+      "roundResult": "string",
+      "roundCeremony": "string",
+      "winningTeam": "string",
+      "winningTeamRole": "string",
+      "bombPlanter": "string",
+      "bombDefuser": "string",
+      "plantRoundTime": 0,
+      "plantPlayerLocations": [
+        {
+          "puuid": "string",
+          "viewRadians": 0.0,
+          "location": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ],
+      "plantLocation": {
+        "x": 0,
+        "y": 0
+      },
+      "plantSite": "string",
+      "defuseRoundTime": 0,
+      "defusePlayerLocations": [
+        {
+          "puuid": "string",
+          "viewRadians": 0.0,
+          "location": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ],
+      "defuseLocation": {
+        "x": 0,
+        "y": 0
+      },
+      "playerStats": [
+        {
+          "puuid": "string",
+          "kills": [
+            {
+              "timeSinceGameStartMillis": 0,
+              "timeSinceRoundStartMillis": 0,
+              "killer": "string",
+              "victim": "string",
+              "victimLocation": {
+                "x": 0,
+                "y": 0
+              },
+              "assistants": [
+                "string"
+              ],
+              "playerLocations": [
+                {
+                  "puuid": "string",
+                  "viewRadians": 0.0,
+                  "location": {
+                    "x": 0,
+                    "y": 0
+                  }
+                }
+              ],
+              "finishingDamage": {
+                "damageType": "string",
+                "damageItem": "string",
+                "isSecondaryFireMode": true
+              }
+            }
+          ],
+          "damage": [
+            {
+              "receiver": "string",
+              "damage": 0,
+              "legshots": 0,
+              "bodyshots": 0,
+              "headshots": 0
+            }
+          ],
+          "score": 0,
+          "economy": {
+            "loadoutValue": 0,
+            "weapon": "string",
+            "armor": "string",
+            "remaining": 0,
+            "spent": 0
+          },
+          "ability": {
+            "grenadeEffects": "string",
+            "ability1Effects": "string",
+            "ability2Effects": "string",
+            "ultimateEffects": "string"
+          }
+        }
+      ],
+      "roundResultCode": "string"
+    }
+  ]
+}

@@ -1,0 +1,575 @@
+/* =====================================================
+   VALORANT WEAPONS – MODERN DARK UI
+   ===================================================== */
+
+/* -------------------------
+   Variables globales
+-------------------------- */
+:root {
+  --valorant-red: #ff4655;
+  --bg-dark: #0f1115;
+  --bg-card: #1a1d23;
+  --bg-card-hover: #20242c;
+  --text-primary: #ffffff;
+  --text-secondary: #b5b5b5;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --radius: 14px;
+  --transition-fast: 0.2s ease;
+  --transition-medium: 0.35s ease;
+
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-reading: "Manrope", "Segoe UI Variable", system-ui, sans-serif;
+}
+
+/* -------------------------
+   Reset básico
+-------------------------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  line-height: 1.5;
+}
+
+/* -------------------------
+   Scroll personalizado
+-------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--valorant-red);
+  border-radius: 10px;
+}
+
+/* =====================================================
+   CONTENEDOR PRINCIPAL
+   ===================================================== */
+
+.weapons-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* =====================================================
+   HEADER
+   ===================================================== */
+
+.weapons-header {
+  margin-bottom: 2.8rem;
+}
+
+.weapons-eyebrow {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--valorant-red);
+  margin-bottom: 0.4rem;
+}
+
+.weapons-title {
+  font-size: clamp(2.6rem, 5vw, 3.6rem);
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.weapons-divider {
+  margin-top: 1.2rem;
+  height: 3px;
+  width: 160px;
+  background: linear-gradient(
+    to right,
+    var(--valorant-red),
+    transparent
+  );
+}
+
+/* =====================================================
+   SECCIONES DE CATEGORÍA
+   ===================================================== */
+
+.weapons-category {
+  margin-bottom: 3.5rem;
+}
+
+.weapons-category-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.6rem;
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.weapons-category-title::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    var(--valorant-red),
+    transparent
+  );
+}
+
+/* =====================================================
+   GRID DE ARMAS
+   ===================================================== */
+
+.weapons-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.2rem;
+}
+
+/* =====================================================
+   CARD DE ARMA
+   ===================================================== */
+
+.weapon-card {
+  background: linear-gradient(
+    180deg,
+    #1a1d23 0%,
+    #14171c 100%
+  );
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.2rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--transition-medium),
+    box-shadow var(--transition-medium),
+    border-color var(--transition-fast);
+  animation: fadeUp 0.4s ease forwards;
+}
+
+.weapon-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(255, 70, 85, 0.28),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.weapon-card:hover::after {
+  opacity: 1;
+}
+
+.weapon-card:hover {
+  transform: translateY(-8px);
+  border-color: var(--valorant-red);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+}
+
+.weapon-card.active {
+  border-color: var(--valorant-red);
+  box-shadow: 0 0 0 2px rgba(255, 70, 85, 0.4);
+}
+
+.weapon-card::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 3px;
+  background-color: var(--valorant-red);
+  transition: width 0.3s ease, left 0.3s ease;
+}
+
+.weapon-card:hover::before,
+.weapon-card.active::before {
+  width: 100%;
+  left: 0;
+}
+
+/* -------------------------
+   Imagen de arma
+-------------------------- */
+.weapon-image {
+  width: 100%;
+  height: 90px;
+  object-fit: contain;
+  margin-bottom: 0.75rem;
+  transition: transform 0.4s ease;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
+  position: relative;
+  z-index: 1;
+}
+
+.weapon-card:hover .weapon-image {
+  transform: scale(1.08);
+}
+
+/* -------------------------
+   Texto card
+-------------------------- */
+.weapon-card-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+  position: relative;
+  z-index: 1;
+}
+
+.weapon-card-category {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  position: relative;
+  z-index: 1;
+}
+
+/* =====================================================
+   VISTA DETALLADA
+   ===================================================== */
+
+.weapon-detail {
+  position: relative;
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background-color: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  animation: expandFade 0.35s ease;
+}
+
+.weapon-detail-close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.weapon-detail-close:hover {
+  color: var(--valorant-red);
+}
+
+.weapon-detail-content {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 2.5rem;
+}
+
+/* =====================================================
+   COLUMNA IZQUIERDA
+   ===================================================== */
+
+.weapon-name {
+  font-size: 2.4rem;
+  font-weight: 900;
+}
+
+.weapon-badges {
+  display: flex;
+  gap: 0.8rem;
+  margin: 0.8rem 0 1.8rem;
+}
+
+.weapon-category,
+.weapon-cost {
+  background: rgba(255, 70, 85, 0.15);
+  color: var(--valorant-red);
+  border: 1px solid rgba(255, 70, 85, 0.35);
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* -------------------------
+   Secciones
+-------------------------- */
+.weapon-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 2.2rem 0 1.2rem;
+  font-size: 1.4rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.weapon-section-title::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    var(--valorant-red),
+    transparent
+  );
+}
+
+/* -------------------------
+   Stats
+-------------------------- */
+.weapon-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.9rem;
+}
+
+.weapon-stat {
+  background: linear-gradient(145deg, #161a22, #11141a);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.weapon-stat span {
+  color: var(--text-secondary);
+}
+
+.weapon-stat strong {
+  font-weight: 800;
+}
+
+/* -------------------------
+   Daño
+-------------------------- */
+.damage-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.damage-header,
+.damage-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+}
+
+/* HEADER */
+.damage-header {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--valorant-red);
+}
+
+/* FILAS */
+.damage-row {
+  background: linear-gradient(145deg, #161a22, #11141a);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  font-size: 0.85rem;
+}
+
+/* Alineación perfecta por columna */
+.damage-header span:first-child,
+.damage-row span:first-child {
+  text-align: left;
+}
+
+.damage-header span:not(:first-child),
+.damage-row span:not(:first-child) {
+  text-align: center;
+}
+
+/* =====================================================
+   COLUMNA DERECHA
+   ===================================================== */
+
+.weapon-detail-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.weapon-image-large {
+  max-width: 100%;
+  max-height: 420px;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.6));
+  animation: fadeUp 0.4s ease;
+}
+
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+
+@media (max-width: 1200px) {
+  .weapons-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .weapons-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .weapon-detail-content {
+    grid-template-columns: 1fr;
+  }
+
+  .weapon-image-large {
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 600px) {
+  .weapons-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* =====================================================
+   LOADING SCREEN
+   ===================================================== */
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(255, 70, 85, 0.08),
+      transparent 60%
+    ),
+    var(--bg-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.loading-card {
+  background: linear-gradient(145deg, #1a1d23, #13161b);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 2.5rem 3rem;
+  text-align: center;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+  animation: expandFade 0.35s ease;
+}
+
+.loading-card h2 {
+  margin-top: 1.2rem;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.loading-card p {
+  margin-top: 0.4rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--valorant-red);
+  animation: spin 0.9s linear infinite;
+}
+
+/* =====================================================
+   BUSCADOR DE ARMAS
+   ===================================================== */
+
+.weapons-search {
+  margin: 2rem 0 3rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.weapons-search input {
+  width: 100%;
+  max-width: 420px;
+  padding: 0.8rem 1.1rem;
+  background: linear-gradient(145deg, #1a1d23, #14171c);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.weapons-search input::placeholder {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.weapons-search input:focus {
+  outline: none;
+  border-color: var(--valorant-red);
+  box-shadow: 0 0 0 2px rgba(255, 70, 85, 0.3);
+}
+
+/* =====================================================
+   ANIMACIONES
+   ===================================================== */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes expandFade {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

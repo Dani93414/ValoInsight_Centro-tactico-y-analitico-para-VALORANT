@@ -16,6 +16,9 @@
   --radius: 14px;
   --transition-fast: 0.2s ease;
   --transition-medium: 0.35s ease;
+
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-reading: "Manrope", "Segoe UI Variable", system-ui, sans-serif;
 }
 
 /* -------------------------
@@ -30,7 +33,7 @@
 body {
   background-color: var(--bg-dark);
   color: var(--text-primary);
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-ui);
   line-height: 1.5;
 }
 
@@ -59,109 +62,185 @@ body {
   padding: 2rem 1.5rem 4rem;
 }
 
-/* -------------------------
-   Título principal
--------------------------- */
-.agents-title {
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  margin-bottom: 1.5rem;
-  border-left: 6px solid var(--valorant-red);
-  padding-left: 1rem;
+/* =====================================================
+   HEADER DE PÁGINA – AGENTES
+   ===================================================== */
+
+.agents-header {
+  margin-bottom: 2.8rem;
 }
+
+.agents-eyebrow {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--valorant-red);
+  margin-bottom: 0.4rem;
+}
+
+.agents-title {
+  font-size: clamp(2.6rem, 5vw, 3.6rem);
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.agents-divider {
+  margin-top: 1.2rem;
+  height: 3px;
+  width: 160px;
+  background: linear-gradient(
+    to right,
+    var(--valorant-red),
+    transparent
+  );
+}
+
 
 /* -------------------------
    Grid de agentes
 -------------------------- */
 .agents-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.2rem;
 }
 
-/* -------------------------
-   Card de agente
--------------------------- */
+
+/* =====================================================
+   CARDS DE AGENTES (PRO)
+   ===================================================== */
+
 .agent-card {
-  background-color: var(--bg-card);
+  background: linear-gradient(
+    180deg,
+    #1a1d23 0%,
+    #14171c 100%
+  );
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   padding: 1.25rem;
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition:
-    transform var(--transition-medium),
+  transition: transform var(--transition-medium),
     box-shadow var(--transition-medium),
-    border-color var(--transition-fast),
-    background-color var(--transition-fast);
+    border-color var(--transition-fast);
   animation: fadeUp 0.4s ease forwards;
+  padding: 1rem;
+}
+
+/* Overlay hover */
+.agent-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(255, 70, 85, 0.28),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.agent-card:hover::after {
+  opacity: 1;
 }
 
 .agent-card:hover {
-  transform: translateY(-6px);
-  background-color: var(--bg-card-hover);
+  transform: translateY(-8px);
   border-color: var(--valorant-red);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
 }
 
-/* Estado activo */
 .agent-card.active {
   border-color: var(--valorant-red);
   box-shadow: 0 0 0 2px rgba(255, 70, 85, 0.4);
 }
 
-/* Línea roja superior */
+/* Línea inferior animada */
 .agent-card::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 4px;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 3px;
   background-color: var(--valorant-red);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform var(--transition-medium);
+  transition: width 0.3s ease, left 0.3s ease;
 }
 
 .agent-card:hover::before,
 .agent-card.active::before {
-  transform: scaleX(1);
+  width: 100%;
+  left: 0;
 }
 
 /* -------------------------
-   Imagen del agente (card)
+   Imagen card
 -------------------------- */
 .agent-image {
   width: 100%;
-  height: 160px;
+  height: 140px;
   object-fit: contain;
   margin-bottom: 0.75rem;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.45));
+  transition: transform 0.4s ease;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
+  position: relative;
+  z-index: 1;
+}
+
+.agent-card:hover .agent-image {
+  transform: scale(1.06);
 }
 
 /* -------------------------
-   Info del agente
+   Texto card
 -------------------------- */
 .agent-name {
-  font-size: 1.2rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   margin-bottom: 0.25rem;
+  position: relative;
+  z-index: 1;
 }
 
 .agent-role {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  position: relative;
+  z-index: 1;
 }
 
 /* -------------------------
-   Vista detallada (arriba)
+   Badge mini del rol
 -------------------------- */
+.agent-role-badge-mini {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(15, 17, 21, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  z-index: 2;
+}
+
+/* =====================================================
+   VISTA DETALLADA
+   ===================================================== */
+
 .agent-detail {
   position: relative;
   margin-bottom: 3rem;
@@ -172,7 +251,6 @@ body {
   animation: expandFade 0.35s ease;
 }
 
-/* Botón cerrar */
 .agent-detail-close {
   position: absolute;
   top: 1.25rem;
@@ -182,119 +260,401 @@ body {
   color: var(--text-secondary);
   font-size: 1.4rem;
   cursor: pointer;
-  transition: color 0.2s ease, transform 0.2s ease;
 }
 
 .agent-detail-close:hover {
   color: var(--valorant-red);
-  transform: scale(1.1);
 }
 
-/* Imagen grande del agente */
-.agent-detail-image {
-  width: 100%;
-  max-height: 280px;
-  object-fit: contain;
-  margin-bottom: 1.5rem;
-  filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.55));
+.agent-detail-content {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 2.5rem;
+  align-items: flex-start;
 }
 
-/* Header detalle */
-.agent-detail-header {
+.agent-detail-left {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
 }
 
 .agent-detail-name {
-  font-size: 2rem;
-  font-weight: 800;
+  font-size: 2.4rem;
+  font-weight: 900;
 }
 
-.agent-detail-role {
+/* -------------------------
+   Badge del rol
+-------------------------- */
+.agent-role-badge {
+  margin-top: 0.6rem;
+  margin-bottom: 0.8rem;
+  align-self: flex-start;
+  background: rgba(255, 70, 85, 0.15);
   color: var(--valorant-red);
-  font-weight: 600;
+  border: 1px solid rgba(255, 70, 85, 0.4);
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.agent-role-badge:hover {
+  background: rgba(255, 70, 85, 0.25);
+  transform: translateY(-1px);
+}
+
+/* -------------------------
+   Info desplegable del rol
+-------------------------- */
+.agent-role-info {
+  margin-bottom: 1.6rem;
+  padding: 1rem 1.2rem;
+  background: rgba(15, 17, 21, 0.8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  animation: fadeUp 0.25s ease;
+}
+
+.agent-role-info img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.agent-role-info p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* -------------------------
+   Descripción
+-------------------------- */
+.agent-description {
+  margin-bottom: 2.5rem;
+  font-family: var(--font-reading);
+  font-size: 1.05rem;
+  line-height: 1.8;
+  color: #e0e0e0;
+}
+
+/* =====================================================
+   HABILIDADES
+   ===================================================== */
+
+.abilities-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+  font-size: 1.5rem;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
-/* Descripción */
-.agent-description {
-  color: var(--text-secondary);
-  max-width: 900px;
-  margin-bottom: 2rem;
+.abilities-title::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    var(--valorant-red),
+    transparent
+  );
 }
 
-/* -------------------------
-   Habilidades
--------------------------- */
 .abilities-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .ability-card {
-  background-color: #15181e;
+  position: relative;
+  background: linear-gradient(145deg, #161a22, #11141a);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  padding: 1.4rem 1.6rem;
   border: 1px solid var(--border-color);
-  transition:
-    transform var(--transition-fast),
-    border-color var(--transition-fast),
-    background-color var(--transition-fast);
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.ability-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  background-color: var(--valorant-red);
+  opacity: 0.6;
 }
 
 .ability-card:hover {
   transform: translateY(-4px);
-  border-color: var(--valorant-red);
-  background-color: #1c2028;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.ability-header {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.ability-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  padding: 4px;
+  border-radius: 6px;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6));
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 70, 85, 0.18),
+    transparent 70%
+  );
 }
 
 .ability-slot {
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.7rem;
+  font-weight: 900;
   color: var(--valorant-red);
+  background: rgba(255, 70, 85, 0.15);
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
   letter-spacing: 1px;
-  margin-bottom: 0.25rem;
 }
 
 .ability-name {
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
 }
 
 .ability-description {
-  font-size: 0.9rem;
+  font-family: var(--font-reading);
+  font-size: 1rem;
+  line-height: 1.8;
+  color: #d8d8d8;
+}
+
+/* =====================================================
+   COLUMNA DERECHA
+   ===================================================== */
+
+.agent-detail-right {
+  position: relative;
+  width: 100%;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.agent-background {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.25;
+  border-radius: var(--radius);
+  transform: translateY(50px);
+}
+
+.agent-fullportrait {
+  position: absolute;
+  bottom: -10px;
+  right: 50%;
+  transform: translateX(50%);
+  max-height: 520px;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+
+@media (max-width: 900px) {
+  .agent-detail-content {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-detail-right {
+    margin-top: 2rem;
+    min-height: 300px;
+  }
+
+  .agent-fullportrait {
+    max-height: 360px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .agents-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .agents-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .agents-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* =====================================================
+   LOADING SCREEN
+   ===================================================== */
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(255, 70, 85, 0.08),
+      transparent 60%
+    ),
+    var(--bg-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.loading-card {
+  background: linear-gradient(145deg, #1a1d23, #13161b);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 2.5rem 3rem;
+  text-align: center;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+  animation: expandFade 0.35s ease;
+}
+
+.loading-card h2 {
+  margin-top: 1.2rem;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.loading-card p {
+  margin-top: 0.4rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-family: var(--font-reading);
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--valorant-red);
+  animation: spin 0.9s linear infinite;
+}
+
+/* =====================================================
+   FILTROS Y BUSCADOR
+   ===================================================== */
+
+.agents-filters {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.roles-filter {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.role-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.9rem;
+  background: rgba(15, 17, 21, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.role-filter-btn img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
+}
+
+.role-filter-btn:hover {
+  border-color: var(--valorant-red);
+  color: var(--text-primary);
+}
+
+.role-filter-btn.active {
+  background: rgba(255, 70, 85, 0.15);
+  border-color: var(--valorant-red);
+  color: var(--valorant-red);
+}
+
+.role-filter-btn.reset {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+/* -------------------------
+   Buscador
+-------------------------- */
+.agents-search {
+  min-width: 220px;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(15, 17, 21, 0.85);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font-ui);
+}
+
+.agents-search::placeholder {
   color: var(--text-secondary);
 }
 
-/* -------------------------
-   Responsive
--------------------------- */
-@media (max-width: 768px) {
-  .agents-container {
-    padding: 1.5rem 1rem 3rem;
-  }
-
-  .agent-detail {
-    padding: 1.5rem;
-  }
-
-  .agent-detail-name {
-    font-size: 1.6rem;
-  }
-
-  .agent-detail-image {
-    max-height: 220px;
-  }
+.agents-search:focus {
+  outline: none;
+  border-color: var(--valorant-red);
 }
 
-/* -------------------------
-   Animaciones
--------------------------- */
+/* =====================================================
+   ANIMACIONES
+   ===================================================== */
+
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -314,5 +674,11 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }

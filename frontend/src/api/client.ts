@@ -1,7 +1,7 @@
-const BASE_URL = "http://localhost:8000";
+import { apiUrl } from "./config.ts";
 
 export async function getRoot() {
-  const res = await fetch(`${BASE_URL}/`);
+  const res = await fetch(apiUrl("/"));
   if (!res.ok) throw new Error("Error backend");
   return res.json();
 }
