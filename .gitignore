@@ -1,2 +1,81 @@
-# Created by venv; see https://docs.python.org/3/library/venv.html
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.python-version
+.pytest_cache/
+.mypy_cache/
+__pypackages__/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Logs
+logs/
+*.log
+
+# Editor/IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+/.cache/
+
+# Env / secrets
 .env
+.env.*
+backend/.env
+frontend/.env
+
+# Python bytecode
+*.pyc
+*.pyo
+*.pyd
+
+# Test / coverage
+.coverage
+coverage.xml
+htmlcov/
+*.cover
+coverage/
+
+# Database / data dumps (don't publish large dataset backups)
+data/
+data/**
+*.backup
+*.dump
+*.sql
+db_cluster*.backup
+
+# Temporary files
+*.tmp
+*.temp
+*~
+*.swp
+
+# Others
+.cache/
+.ipynb_checkpoints/
