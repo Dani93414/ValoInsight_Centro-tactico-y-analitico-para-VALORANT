@@ -1,11 +1,12 @@
 import os
 import requests
 import time
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
-
-API_KEY = os.getenv("RIOT_API_KEY")
+# Carga .env desde la raiz del proyecto (TFG/.env), sin depender del cwd.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(PROJECT_ROOT / ".env")
 
 # ===========================
 # REGIONES POR DEFECTO
@@ -16,7 +17,31 @@ VAL_REGION = "eu"
 ACCOUNT_BASE = f"https://{ACCOUNT_REGION}.api.riotgames.com"
 VAL_BASE = f"https://{VAL_REGION}.api.riotgames.com"
 
-HEADERS = {"X-Riot-Token": API_KEY}
+
+def _get_headers() -> dict:
+    api_key = (os.getenv("RIOT_API_KEY") or "").strip().strip('"').strip("'")
+
+    if not api_key:
+        raise RuntimeError(
+            "❌ RIOT_API_KEY no esta definida en .env. Agrega una clave valida de Riot Developer Portal."
+        )
+
+    if not api_key.startswith("RGAPI-"):
+        raise RuntimeError(
+            "❌ RIOT_API_KEY tiene formato invalido. Debe comenzar por 'RGAPI-'."
+        )
+
+    return {"X-Riot-Token": api_key}
+
+
+def _raise_riot_error(prefix: str, response: requests.Response) -> None:
+    if response.status_code == 401:
+        raise Exception(
+            f"❌ {prefix}: 401 — API key invalida o expirada. "
+            "Genera una nueva clave en Riot Developer Portal y actualiza RIOT_API_KEY en .env."
+        )
+
+    raise Exception(f"❌ {prefix}: {response.status_code} — {response.text}")
 
 
 # ============================================================
@@ -24,14 +49,12 @@ HEADERS = {"X-Riot-Token": API_KEY}
 # ============================================================
 def get_puuid(game_name: str, tag_line: str) -> str:
     url = f"{ACCOUNT_BASE}/riot/account/v1/accounts/by-riot-id/{game_name}/{tag_line}"
-    response = requests.get(url, headers=HEADERS)
+    response = requests.get(url, headers=_get_headers())
 
     if response.status_code == 200:
         return response.json()["puuid"]
 
-    raise Exception(
-        f"❌ Error al obtener PUUID: {response.status_code} — {response.text}"
-    )
+    _raise_riot_error("Error al obtener PUUID", response)
 
 
 # ============================================================
@@ -39,14 +62,12 @@ def get_puuid(game_name: str, tag_line: str) -> str:
 # ============================================================
 def get_valorant_content(locale: str = "es-ES") -> dict:
     url = f"{VAL_BASE}/val/content/v1/contents?locale={locale}"
-    response = requests.get(url, headers=HEADERS)
+    response = requests.get(url, headers=_get_headers())
 
     if response.status_code == 200:
         return response.json()
 
-    raise Exception(
-        f"❌ Error al obtener contenido de Valorant: {response.status_code} — {response.text}"
-    )
+    _raise_riot_error("Error al obtener contenido de Valorant", response)
 
 
 # ============================================================
@@ -85,7 +106,7 @@ def get_leaderboard(act_id, region="eu", size=200, start_index=0):
     retries = 5
 
     for i in range(retries):
-        response = requests.get(url, headers=HEADERS)
+        response = requests.get(url, headers=_get_headers())
 
         if response.status_code == 200:
             return response.json()
@@ -96,9 +117,7 @@ def get_leaderboard(act_id, region="eu", size=200, start_index=0):
             time.sleep(wait)
             continue
 
-        raise Exception(
-            f"❌ Error al obtener leaderboard ({region.upper()}): {response.status_code} — {response.text}"
-        )
+        _raise_riot_error(f"Error al obtener leaderboard ({region.upper()})", response)
 
     raise Exception(f"🚫 No se pudo obtener leaderboard para {region.upper()} tras varios intentos.")
 
@@ -108,11 +127,9 @@ def get_leaderboard(act_id, region="eu", size=200, start_index=0):
 # ============================================================
 def get_platform_status() -> dict:
     url = f"{VAL_BASE}/val/status/v1/platform-data"
-    response = requests.get(url, headers=HEADERS)
+    response = requests.get(url, headers=_get_headers())
 
     if response.status_code == 200:
         return response.json()
 
-    raise Exception(
-        f"❌ Error al obtener el estado de la plataforma: {response.status_code} — {response.text}"
-    )
+    _raise_riot_error("Error al obtener el estado de la plataforma", response)

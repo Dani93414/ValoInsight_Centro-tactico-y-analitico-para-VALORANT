@@ -125,9 +125,12 @@ def main() -> None:
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parents[1]
-    root_dir = project_root / "src" / "obtener_partidas"
+    root_dir = project_root / "backend" / "src" / "obtener_partidas"
     output_dir = project_root / "data" / "BaseDatos_Partidas"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if not root_dir.exists() or not root_dir.is_dir():
+        raise RuntimeError(f"No existe el directorio de scripts de partidas: {root_dir}")
 
     python_exe = sys.executable
 

@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 from typing import Dict, Iterable, List, Optional
 
-from db.mongo_client import matches_collection
+from backend.db.mongo_client import matches_collection
 
 from .extractor import build_player_match_analytics_docs
 from .rating import combine_role_scores, score_role_block
@@ -92,7 +92,6 @@ def _finalize_aggregate(scope: dict) -> dict:
 
 def _merge_scope_into(target: dict, source: dict) -> None:
     for key in (
-        "matches",
         "rounds",
         "wins",
         "kills",
@@ -187,18 +186,35 @@ def _docs_cursor_to_list(cursor) -> List[dict]:
     return list(cursor)
 
 
+def _index_exists(collection, key_spec: list[tuple[str, int]], unique: Optional[bool] = None) -> bool:
+    desired_key = dict(key_spec)
+    for idx in collection.list_indexes():
+        if dict(idx.get("key", {})) != desired_key:
+            continue
+        if unique is None:
+            return True
+        if bool(idx.get("unique", False)) == bool(unique):
+            return True
+    return False
+
+
 def ensure_indexes() -> None:
-    player_match_analytics_collection.create_index(
-        [("match_id", 1), ("puuid", 1)],
-        unique=True,
-        name="uniq_match_player_analytics",
-    )
-    player_match_analytics_collection.create_index([("puuid", 1)], name="idx_puuid")
-    player_match_analytics_collection.create_index([("is_ranked", 1)], name="idx_is_ranked")
-    player_match_analytics_collection.create_index([("map_id", 1)], name="idx_map_id")
-    player_match_analytics_collection.create_index([("agent_id", 1)], name="idx_agent_id")
-    player_match_analytics_collection.create_index([("season_id", 1)], name="idx_season_id")
-    player_match_analytics_collection.create_index([("role", 1)], name="idx_role")
+    if not _index_exists(player_match_analytics_collection, [("match_id", 1), ("puuid", 1)], unique=True):
+        player_match_analytics_collection.create_index(
+            [("match_id", 1), ("puuid", 1)],
+            unique=True,
+        )
+
+    for key_spec in (
+        [("puuid", 1)],
+        [("is_ranked", 1)],
+        [("map_id", 1)],
+        [("agent_id", 1)],
+        [("season_id", 1)],
+        [("role", 1)],
+    ):
+        if not _index_exists(player_match_analytics_collection, key_spec):
+            player_match_analytics_collection.create_index(key_spec)
 
 
 def rebuild_match_player_analytics(match_obj: dict) -> int:

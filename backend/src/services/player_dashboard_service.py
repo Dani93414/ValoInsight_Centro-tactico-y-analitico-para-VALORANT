@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import time
+import unicodedata
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -17,16 +19,35 @@ _DASHBOARD_CONTENT_PROJECTION = {
     "agents.id": 1,
     "agents.displayName": 1,
     "agents.name": 1,
+    "agents.displayIcon": 1,
     "agents.fullPortrait": 1,
     "agents.bustPortrait": 1,
-    "agents.displayIcon": 1,
+    "maps.uuid": 1,
+    "maps.id": 1,
+    "maps.displayName": 1,
+    "maps.name": 1,
+    "maps.splash": 1,
+    "maps.listViewIcon": 1,
+    "maps.listViewIconTall": 1,
+    "maps.displayIcon": 1,
+    "weapons.uuid": 1,
+    "weapons.id": 1,
+    "weapons.displayName": 1,
+    "weapons.displayIcon": 1,
     "acts.id": 1,
     "acts.name": 1,
     "acts.parentId": 1,
     "acts.parent_id": 1,
     "acts.parentName": 1,
     "acts.parent.name": 1,
+    "acts.type": 1,
+    "acts.isActive": 1,
+    "competitiveTiers.uuid": 1,
+    "competitiveTiers.id": 1,
     "competitiveTiers.tiers": 1,
+    "competitive_tiers.uuid": 1,
+    "competitive_tiers.id": 1,
+    "competitive_tiers.tiers": 1,
 }
 _DASHBOARD_CONTENT_CACHE: dict[str, Any] | None = None
 _DASHBOARD_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -105,6 +126,24 @@ def _format_tier_name(tier: int | None) -> str:
     return names.get(tier, f"Tier {tier}")
 
 
+def _normalize_rank_label(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFD", text)
+    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    return " ".join(normalized.split())
+
+
+def _sanitize_segment(value: Any) -> str:
+    text = str(value if value is not None else "item").strip()
+    text = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", text)
+    text = re.sub(r"\s+", "_", text)
+    text = re.sub(r"_+", "_", text)
+    text = text.strip("._")
+    return text[:120] if text else "item"
+
+
 def _normalize_weapon_stats(
     weapon_stats: dict[str, dict[str, Any]] | list[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:
@@ -137,7 +176,19 @@ def _build_competitive_tier_maps(
     tier_by_number: dict[int, str] = {}
     tier_by_name: dict[str, str] = {}
 
-    for doc in content_doc.get("competitiveTiers", []) or []:
+    tier_docs = (
+        content_doc.get("competitiveTiers")
+        or content_doc.get("competitive_tiers")
+        or []
+    )
+
+    docs_to_process: list[dict[str, Any]] = []
+    if isinstance(tier_docs, list) and tier_docs:
+        docs_to_process = [tier_docs[-1]]
+    elif isinstance(tier_docs, dict):
+        docs_to_process = [tier_docs]
+
+    for doc in docs_to_process:
         tiers = doc.get("tiers") or {}
         entries: list[dict[str, Any]]
         if isinstance(tiers, list):
@@ -148,20 +199,47 @@ def _build_competitive_tier_maps(
             entries = []
 
         for entry in entries:
-            tier = entry.get("tier")
-            icon = (
-                entry.get("smallIcon")
-                or entry.get("largeIcon")
-                or entry.get("rankTriangleUpIcon")
-                or entry.get("rankTriangleDownIcon")
-            )
-            tier_name = (entry.get("tierName") or "").strip().lower()
+            tier_raw = entry.get("tier")
+            tier = None
+            if isinstance(tier_raw, bool):
+                tier = None
+            elif isinstance(tier_raw, int):
+                tier = tier_raw if tier_raw >= 0 else None
+            elif isinstance(tier_raw, float):
+                tier_value = int(tier_raw)
+                tier = tier_value if tier_value >= 0 else None
+            elif isinstance(tier_raw, str):
+                try:
+                    tier_value = int(float(tier_raw.strip()))
+                    tier = tier_value if tier_value >= 0 else None
+                except (TypeError, ValueError):
+                    tier = None
 
-            if isinstance(tier, int) and icon and tier not in tier_by_number:
-                tier_by_number[tier] = icon
-
+            tier_set_uuid = doc.get("uuid") or doc.get("id")
+            tier_name_sanitized = _sanitize_segment(entry.get("tierName"))
+            icon = None
+            if tier_set_uuid and tier_name_sanitized:
+                icon = (
+                    f"/content/competitive_tiers/{tier_set_uuid}/tiers/"
+                    f"{tier_name_sanitized}/smallIcon.png"
+                )
+            tier_name = _normalize_rank_label(entry.get("tierName"))
+            division_name = _normalize_rank_label(entry.get("divisionName"))
             if tier_name and icon and tier_name not in tier_by_name:
                 tier_by_name[tier_name] = icon
+
+            if tier is not None and icon and tier not in tier_by_number:
+                tier_by_number[tier] = icon
+
+            if tier is not None and division_name and icon and tier >= 3:
+                division_level = ((tier - 3) % 3) + 1
+                division_key = f"{division_name} {division_level}"
+                if division_key not in tier_by_name:
+                    tier_by_name[division_key] = icon
+
+                english_key = _normalize_rank_label(_format_tier_name(tier))
+                if english_key and english_key not in tier_by_name:
+                    tier_by_name[english_key] = icon
 
     return tier_by_number, tier_by_name
 
@@ -205,6 +283,54 @@ def _build_act_label_map(content_doc: dict[str, Any]) -> dict[str, str]:
     return label_map
 
 
+def _resolve_current_act_id(content_doc: dict[str, Any]) -> str | None:
+    acts = content_doc.get("acts", []) or []
+    if not acts:
+        return None
+
+    active_act = next(
+        (
+            act
+            for act in acts
+            if str(act.get("type") or "").strip().lower() == "act"
+            and bool(act.get("isActive"))
+        ),
+        None,
+    )
+    if active_act and active_act.get("id"):
+        return str(active_act["id"])
+
+    active_episode = next(
+        (
+            act
+            for act in acts
+            if str(act.get("type") or "").strip().lower() == "episode"
+            and bool(act.get("isActive"))
+        ),
+        None,
+    )
+    if not active_episode:
+        return None
+
+    parent_id = active_episode.get("id")
+    if not parent_id:
+        return None
+
+    episode_acts = [
+        act
+        for act in acts
+        if str(act.get("type") or "").strip().lower() == "act"
+        and (act.get("parentId") or act.get("parent_id")) == parent_id
+    ]
+
+    if not episode_acts:
+        return None
+
+    # Se asume que el contenido viene ordenado del acto más reciente al más antiguo
+    first_act = episode_acts[0]
+    return str(first_act.get("id")) if first_act.get("id") else None
+
+
 def _build_agent_maps(
     content_doc: dict[str, Any],
 ) -> tuple[dict[str, str], dict[str, dict[str, str | None]]]:
@@ -222,16 +348,37 @@ def _build_agent_maps(
 
         media_map[agent_id] = {
             "name": agent_name or "Agente desconocido",
-            "image": agent.get("fullPortrait")
-            or agent.get("bustPortrait")
-            or agent.get("displayIcon"),
+            "image": f"/content/agents/{agent_id}/fullPortrait.png",
         }
 
     return name_map, media_map
 
 
+def _build_map_icon_map(content_doc: dict[str, Any]) -> dict[str, str]:
+    map_icon_by_name: dict[str, str] = {}
+    for map_entry in content_doc.get("maps", []) or []:
+        map_name = _normalize_rank_label(
+            map_entry.get("displayName") or map_entry.get("name")
+        )
+        map_uuid = map_entry.get("uuid") or map_entry.get("id")
+        icon = f"/content/maps/{map_uuid}/splash.png" if map_uuid else None
+        if map_name and icon and map_name not in map_icon_by_name:
+            map_icon_by_name[map_name] = icon
+    return map_icon_by_name
+
+
+def _build_weapon_icon_map(content_doc: dict[str, Any]) -> dict[str, str]:
+    weapon_icon_by_name: dict[str, str] = {}
+    for weapon_entry in content_doc.get("weapons", []) or []:
+        weapon_name = _normalize_rank_label(weapon_entry.get("displayName"))
+        weapon_uuid = weapon_entry.get("uuid") or weapon_entry.get("id")
+        icon = f"/content/weapons/{weapon_uuid}/displayIcon.png" if weapon_uuid else None
+        if weapon_name and icon and weapon_name not in weapon_icon_by_name:
+            weapon_icon_by_name[weapon_name] = icon
+    return weapon_icon_by_name
+
+
 def _latest_rank_from_matches(puuid: str) -> dict[str, Any]:
-    """Fallback de rango desde la colección de matches cuando analytics no trae tier."""
     if not puuid:
         return {}
 
@@ -240,8 +387,6 @@ def _latest_rank_from_matches(puuid: str) -> dict[str, Any]:
         "players.puuid": 1,
         "players.competitiveTier": 1,
         "players.competitive_tier": 1,
-        "players.competitiveTierImage": 1,
-        "players.competitive_tier_image": 1,
         "matchInfo.gameStartMillis": 1,
     }
 
@@ -260,13 +405,51 @@ def _latest_rank_from_matches(puuid: str) -> dict[str, Any]:
                 player.get("competitiveTier", player.get("competitive_tier"))
             )
             if tier is not None:
-                return {
-                    "tier": tier,
-                    "image": player.get("competitiveTierImage")
-                    or player.get("competitive_tier_image"),
-                }
+                return {"tier": tier}
 
     return {}
+
+
+def _load_match_duration_map(match_ids: list[str]) -> dict[str, int]:
+    clean_ids = [mid for mid in match_ids if mid]
+    if not clean_ids:
+        return {}
+
+    duration_map: dict[str, int] = {}
+    cursor = matches_collection.find(
+        {
+            "$or": [
+                {"metadata.match_id": {"$in": clean_ids}},
+                {"matchInfo.matchId": {"$in": clean_ids}},
+            ]
+        },
+        {
+            "_id": 0,
+            "metadata.match_id": 1,
+            "matchInfo.matchId": 1,
+            "matchInfo.gameLengthMillis": 1,
+        },
+    )
+
+    for doc in cursor:
+        match_info = doc.get("matchInfo") or {}
+        raw_duration = match_info.get("gameLengthMillis")
+        try:
+            duration = int(raw_duration or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration <= 0:
+            continue
+
+        match_id_candidates = [
+            str((doc.get("metadata") or {}).get("match_id") or "").strip(),
+            str(match_info.get("matchId") or "").strip(),
+        ]
+        for match_id in match_id_candidates:
+            if match_id and match_id not in duration_map:
+                duration_map[match_id] = duration
+
+    return duration_map
 
 
 def _build_match_card_id(doc: dict[str, Any]) -> str:
@@ -284,7 +467,6 @@ def _build_match_card_id(doc: dict[str, Any]) -> str:
 def _build_light_analytics_list(
     analytics_docs: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Recorta analytics para frontend y evita transferir bloques pesados."""
     light_docs: list[dict[str, Any]] = []
 
     for doc in analytics_docs:
@@ -310,6 +492,10 @@ def _build_light_analytics_list(
                     "headshot_pct": overview.get("headshot_pct"),
                     "rounds": overview.get("rounds"),
                     "wins": overview.get("wins"),
+                    "headshots": overview.get("headshots"),
+                    "bodyshots": overview.get("bodyshots"),
+                    "legshots": overview.get("legshots"),
+                    "weapon_stats": _normalize_weapon_stats(overview.get("weapon_stats")),
                 },
                 "player_totals_from_match": {
                     "kills": player_totals.get("kills"),
@@ -327,6 +513,7 @@ def _build_light_analytics_list(
 def _map_analytics_to_match_card(
     doc: dict[str, Any],
     agent_name_map: dict[str, str],
+    duration_by_match_id: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     totals = doc.get("player_totals_from_match") or {}
     overview = doc.get("overview") or {}
@@ -335,17 +522,32 @@ def _map_analytics_to_match_card(
     deaths = int(totals.get("deaths") or overview.get("deaths") or 0)
     assists = int(totals.get("assists") or overview.get("assists") or 0)
     rounds = int(totals.get("rounds_played") or overview.get("rounds") or 0)
+    match_id = str(doc.get("match_id") or "").strip()
+
+    stored_duration_millis = int(totals.get("match_duration_millis") or 0)
+    fallback_duration_millis = 0
+    if duration_by_match_id and match_id:
+        fallback_duration_millis = int(duration_by_match_id.get(match_id) or 0)
+
+    # Prefer total match duration; keep legacy playtime as last fallback.
+    playtime_millis = (
+        stored_duration_millis
+        or fallback_duration_millis
+        or int(totals.get("playtime_millis") or 0)
+    )
     score = int(totals.get("score") or overview.get("score") or 0)
     acs = float(overview.get("acs") or _safe_div(score, max(rounds, 1)))
     adr = float(overview.get("adr") or 0)
 
+    headshots = int(overview.get("headshots") or 0)
+    bodyshots = int(overview.get("bodyshots") or 0)
+    legshots = int(overview.get("legshots") or 0)
+
     hs = overview.get("headshot_pct")
     if hs is None:
         hs = _safe_div(
-            float(overview.get("headshots") or 0) * 100.0,
-            float(overview.get("headshots") or 0)
-            + float(overview.get("bodyshots") or 0)
-            + float(overview.get("legshots") or 0),
+            headshots * 100.0,
+            headshots + bodyshots + legshots,
         )
 
     timestamp = int(doc.get("game_start_millis") or 0)
@@ -356,6 +558,7 @@ def _map_analytics_to_match_card(
         ).strftime("%d/%m/%Y %H:%M UTC")
 
     agent_id = doc.get("agent_id")
+    weapon_stats = _normalize_weapon_stats(overview.get("weapon_stats"))
 
     return {
         "id": _build_match_card_id(doc),
@@ -375,11 +578,28 @@ def _map_analytics_to_match_card(
         "deaths": deaths,
         "assists": assists,
         "rounds": rounds,
+        "playtimeMillis": playtime_millis,
         "score": score,
         "acs": round(acs, 2),
         "adr": round(adr, 2),
         "hs": round(float(hs or 0), 2),
         "kd": round(_safe_div(kills, max(deaths, 1)), 3),
+        "headshots": headshots,
+        "bodyshots": bodyshots,
+        "legshots": legshots,
+        "weaponStats": [
+            {
+                "weaponId": item.get("weapon_id") or item.get("key") or "unknown",
+                "weaponName": item.get("weapon_name") or "Arma desconocida",
+                "kills": int(float(item.get("kills") or 0)),
+                "deaths": int(float(item.get("deaths") or 0)),
+                "kdRatio": float(item.get("kd_ratio") or 0),
+            }
+            for item in weapon_stats
+        ],
+        "competitiveTier": _coerce_positive_int(doc.get("competitive_tier") or doc.get("competitiveTier")),
+        "competitiveTierImage": None,
+        "accountLevel": _coerce_positive_int(doc.get("account_level")) or 0,
     }
 
 
@@ -412,7 +632,10 @@ def build_player_dashboard(
     content_doc = _get_dashboard_content()
 
     agent_name_map, agent_media_map = _build_agent_maps(content_doc)
+    map_icon_by_name = _build_map_icon_map(content_doc)
+    weapon_icon_by_name = _build_weapon_icon_map(content_doc)
     act_label_map = _build_act_label_map(content_doc)
+    current_act_id_from_content = _resolve_current_act_id(content_doc)
     rank_icon_map, rank_icon_by_name_map = _build_competitive_tier_maps(content_doc)
 
     analytics_sorted = sorted(
@@ -421,8 +644,12 @@ def build_player_dashboard(
         reverse=True,
     )
 
+    match_ids = [str(doc.get("match_id") or "").strip() for doc in analytics_sorted]
+    duration_by_match_id = _load_match_duration_map(match_ids)
+
     mapped_matches = [
-        _map_analytics_to_match_card(doc, agent_name_map) for doc in analytics_sorted
+        _map_analytics_to_match_card(doc, agent_name_map, duration_by_match_id)
+        for doc in analytics_sorted
     ]
 
     matches_by_act: dict[str, list[dict[str, Any]]] = {}
@@ -466,16 +693,40 @@ def build_player_dashboard(
         {"id": option["id"], "label": option["label"]} for option in act_options
     ]
 
-    total_matches = int(player.get("totalMatches") or 0)
-    total_wins = int(player.get("totalWins") or 0)
-    total_kills = int(player.get("totalKills") or 0)
-    total_deaths = int(player.get("totalDeaths") or 0)
-    total_assists = int(player.get("totalAssists") or 0)
-    total_score = int(player.get("totalScore") or 0)
-    total_rounds = int(player.get("totalRoundsPlayed") or 0)
-    total_headshots = int(player.get("totalHeadshots") or 0)
-    total_bodyshots = int(player.get("totalBodyshots") or 0)
-    total_legshots = int(player.get("totalLegshots") or 0)
+    current_act_id = (
+        current_act_id_from_content
+        if current_act_id_from_content and current_act_id_from_content in act_sections
+        else (act_options_public[0]["id"] if act_options_public else None)
+    )
+
+    current_act_matches = (
+        act_sections.get(current_act_id, {}).get("matches", []) if current_act_id else []
+    )
+    if not current_act_matches:
+        current_act_matches = mapped_matches
+
+    current_act_docs = (
+        [
+            doc
+            for doc in analytics_sorted
+            if (doc.get("season_id") or "unknown") == current_act_id
+        ]
+        if current_act_id
+        else []
+    )
+    if not current_act_docs:
+        current_act_docs = analytics_sorted
+
+    total_matches = len(current_act_matches)
+    total_wins = sum(1 for match in current_act_matches if match.get("result") == "Victoria")
+    total_kills = sum(int(match.get("kills") or 0) for match in current_act_matches)
+    total_deaths = sum(int(match.get("deaths") or 0) for match in current_act_matches)
+    total_assists = sum(int(match.get("assists") or 0) for match in current_act_matches)
+    total_score = sum(int(match.get("score") or 0) for match in current_act_matches)
+    total_rounds = sum(int(match.get("rounds") or 0) for match in current_act_matches)
+    total_headshots = sum(int(match.get("headshots") or 0) for match in current_act_matches)
+    total_bodyshots = sum(int(match.get("bodyshots") or 0) for match in current_act_matches)
+    total_legshots = sum(int(match.get("legshots") or 0) for match in current_act_matches)
 
     global_win_rate = _safe_div(total_wins * 100.0, max(total_matches, 1))
     global_kd = _safe_div(total_kills, max(total_deaths, 1))
@@ -494,22 +745,33 @@ def build_player_dashboard(
     else:
         primary_insight = "Progresion constante"
 
-    most_played_agents = []
-    for item in (player.get("mostPlayedAgents") or [])[:5]:
-        agent_id = item.get("agentId")
-        matches = int(item.get("matches") or 0)
-        most_played_agents.append(
+    agent_buckets: dict[str, dict[str, Any]] = {}
+    for match in current_act_matches:
+        agent_id = str(match.get("agentId") or "unknown")
+        bucket = agent_buckets.setdefault(
+            agent_id,
             {
                 "id": agent_id,
-                "name": agent_name_map.get(agent_id, "Agente desconocido"),
-                "matches": matches,
-                "image": (agent_media_map.get(agent_id) or {}).get("image"),
-            }
+                "name": match.get("agent")
+                or agent_name_map.get(agent_id, "Agente desconocido"),
+                "matches": 0,
+            },
         )
+        bucket["matches"] = int(bucket["matches"]) + 1
+
+    most_played_agents = sorted(
+        agent_buckets.values(),
+        key=lambda item: int(item.get("matches") or 0),
+        reverse=True,
+    )[:5]
+
+    for agent in most_played_agents:
+        agent_id = str(agent.get("id") or "")
+        agent["image"] = (agent_media_map.get(agent_id) or {}).get("image")
 
     best_map: dict[str, Any] | None = None
     map_buckets: dict[str, dict[str, int]] = {}
-    for match in mapped_matches:
+    for match in current_act_matches:
         map_name = str(match.get("map") or "").strip()
         if not map_name or map_name == "-":
             continue
@@ -518,11 +780,7 @@ def build_player_dashboard(
         if match.get("result") == "Victoria":
             bucket["wins"] += 1
 
-    min_samples_for_best_map = 3
     for map_name, bucket in map_buckets.items():
-        if bucket["matches"] < min_samples_for_best_map:
-            continue
-
         win_rate = _safe_div(bucket["wins"] * 100.0, max(bucket["matches"], 1))
         candidate = {
             "map": map_name,
@@ -539,131 +797,110 @@ def build_player_dashboard(
         ):
             best_map = candidate
 
-    if best_map is None and map_buckets:
-        for map_name, bucket in map_buckets.items():
-            win_rate = _safe_div(bucket["wins"] * 100.0, max(bucket["matches"], 1))
-            candidate = {
-                "map": map_name,
-                "matches": bucket["matches"],
-                "wins": bucket["wins"],
-                "winRate": round(win_rate, 2),
-            }
-            if not best_map:
-                best_map = candidate
-                continue
-            if candidate["winRate"] > best_map["winRate"] or (
-                candidate["winRate"] == best_map["winRate"]
-                and candidate["matches"] > best_map["matches"]
-            ):
-                best_map = candidate
-
     best_weapon: dict[str, Any] | None = None
     weapon_buckets: dict[str, dict[str, int | str]] = {}
-    for doc in analytics_sorted:
-        overview = doc.get("overview") or {}
-        weapon_stats = _normalize_weapon_stats(overview.get("weapon_stats"))
-        for weapon in weapon_stats:
+    for match in current_act_matches:
+        for weapon in match.get("weaponStats") or []:
             has_usage = (
-                float(weapon.get("kills") or 0) > 0
-                or float(weapon.get("deaths") or 0) > 0
-                or float(weapon.get("kd_ratio") or 0) > 0
+                int(weapon.get("kills") or 0) > 0
+                or int(weapon.get("deaths") or 0) > 0
+                or float(weapon.get("kdRatio") or 0) > 0
             )
             if not has_usage:
                 continue
 
-            key = str(weapon.get("weapon_id") or weapon.get("key") or "unknown")
-            name = str(weapon.get("weapon_name") or "Arma desconocida")
-            bucket = weapon_buckets.setdefault(key, {"name": name, "matches": 0, "wins": 0})
+            key = str(weapon.get("weaponId") or "unknown")
+            name = str(weapon.get("weaponName") or "Arma desconocida")
+            bucket = weapon_buckets.setdefault(
+                key,
+                {"name": name, "matches": 0, "wins": 0, "kills": 0},
+            )
             bucket["matches"] = int(bucket["matches"]) + 1
-            if doc.get("won_match"):
+            bucket["kills"] = int(bucket["kills"]) + int(weapon.get("kills") or 0)
+            if match.get("result") == "Victoria":
                 bucket["wins"] = int(bucket["wins"]) + 1
 
-    min_samples_for_best_weapon = 3
     for bucket in weapon_buckets.values():
         matches = int(bucket["matches"])
-        if matches < min_samples_for_best_weapon:
-            continue
-
         wins = int(bucket["wins"])
+        kills = int(bucket["kills"])
         win_rate = _safe_div(wins * 100.0, max(matches, 1))
         candidate = {
             "name": str(bucket["name"]),
             "matches": matches,
             "wins": wins,
+            "kills": kills,
             "winRate": round(win_rate, 2),
         }
         if not best_weapon:
             best_weapon = candidate
             continue
-        if candidate["winRate"] > best_weapon["winRate"] or (
-            candidate["winRate"] == best_weapon["winRate"]
+        if candidate["kills"] > best_weapon["kills"] or (
+            candidate["kills"] == best_weapon["kills"]
             and candidate["matches"] > best_weapon["matches"]
         ):
             best_weapon = candidate
 
-    if best_weapon is None and weapon_buckets:
-        for bucket in weapon_buckets.values():
-            matches = int(bucket["matches"])
-            wins = int(bucket["wins"])
-            win_rate = _safe_div(wins * 100.0, max(matches, 1))
-            candidate = {
-                "name": str(bucket["name"]),
-                "matches": matches,
-                "wins": wins,
-                "winRate": round(win_rate, 2),
-            }
-            if not best_weapon:
-                best_weapon = candidate
-                continue
-            if candidate["winRate"] > best_weapon["winRate"] or (
-                candidate["winRate"] == best_weapon["winRate"]
-                and candidate["matches"] > best_weapon["matches"]
-            ):
-                best_weapon = candidate
-
-    latest_match = mapped_matches[0] if mapped_matches else None
     latest_analytics = analytics_sorted[0] if analytics_sorted else {}
 
     tier = _coerce_positive_int(latest_analytics.get("competitive_tier"))
     latest_raw_rank = _latest_rank_from_matches(str(player.get("puuid") or ""))
     if tier is None:
         tier = _coerce_positive_int(latest_raw_rank.get("tier"))
+    if tier is None:
+        tier = _coerce_positive_int(
+            player.get("competitiveTier", player.get("competitive_tier"))
+        )
 
     rank_name = _format_tier_name(tier)
+    rank_name_candidates = [
+        rank_name,
+        player.get("competitiveTierName"),
+        player.get("competitive_tier_name"),
+        latest_analytics.get("competitive_tier_name"),
+        latest_analytics.get("competitiveTierName"),
+    ]
+    rank_icon_by_name = None
+    for candidate in rank_name_candidates:
+        normalized_candidate = _normalize_rank_label(candidate)
+        if not normalized_candidate:
+            continue
+        rank_icon_by_name = rank_icon_by_name_map.get(normalized_candidate)
+        if rank_icon_by_name:
+            break
+
     rank_image = (
         (rank_icon_map.get(tier) if tier is not None else None)
-        or rank_icon_by_name_map.get(rank_name.lower())
+        or rank_icon_by_name
         or latest_raw_rank.get("image")
+        or player.get("competitiveTierImage")
+        or player.get("competitive_tier_image")
         or latest_analytics.get("competitive_tier_image")
         or latest_analytics.get("competitiveTierImage")
         or latest_analytics.get("rankImage")
     )
+    rank_small_icon = (rank_icon_map.get(tier) if tier is not None else None) or rank_icon_by_name
 
     top_agent = most_played_agents[0] if most_played_agents else None
-    latest_match_agent_id = (latest_match or {}).get("agentId")
+    best_map_name = (best_map or {}).get("map")
+    best_weapon_name = (best_weapon or {}).get("name")
+    best_map_image = map_icon_by_name.get(_normalize_rank_label(best_map_name))
+    best_weapon_image = weapon_icon_by_name.get(_normalize_rank_label(best_weapon_name))
     header_showcase = [
         {
-            "title": (latest_match or {}).get("agent")
-            or (top_agent or {}).get("name")
-            or "Agente",
-            "subtitle": "Agente destacado",
-            "image": (
-                (agent_media_map.get(latest_match_agent_id) or {}).get("image")
-                if latest_match_agent_id
-                else (top_agent or {}).get("image")
-            ),
+            "title": (top_agent or {}).get("name") or "Agente",
+            "subtitle": "Agente mas jugado",
+            "image": (top_agent or {}).get("image"),
         },
         {
-            "title": (best_map or {}).get("map")
-            or (latest_match or {}).get("map")
-            or "Mapa destacado",
-            "subtitle": "Mapa referencia",
-            "image": None,
+            "title": best_map_name or "Mapa destacado",
+            "subtitle": "Mapa con mejor winrate",
+            "image": best_map_image,
         },
         {
-            "title": (best_weapon or {}).get("name") or "Arma destacada",
-            "subtitle": "Arma con mejor WR",
-            "image": None,
+            "title": best_weapon_name or "Arma destacada",
+            "subtitle": "Arma con mas kills",
+            "image": best_weapon_image,
         },
     ]
 
@@ -756,11 +993,14 @@ def build_player_dashboard(
         "player": player,
         "agentNameMap": agent_name_map,
         "agentMediaMap": agent_media_map,
+        "mapMediaMap": map_icon_by_name,
         "analyticsList": _build_light_analytics_list(analytics_sorted),
+        "currentActId": current_act_id,
         "currentRank": {
             "tier": tier,
             "name": rank_name,
             "image": rank_image,
+            "smallIcon": rank_small_icon,
         },
         "headerShowcase": header_showcase,
         "mostPlayedAgents": most_played_agents,
@@ -815,7 +1055,6 @@ def get_player_dashboard(
     if cached and (now - cached[0]) <= _DASHBOARD_RESPONSE_CACHE_TTL_SECONDS:
         return cached[1]
 
-    # Keep cache bounded and drop expired entries opportunistically.
     if len(_DASHBOARD_RESPONSE_CACHE) > 500:
         _DASHBOARD_RESPONSE_CACHE.clear()
 

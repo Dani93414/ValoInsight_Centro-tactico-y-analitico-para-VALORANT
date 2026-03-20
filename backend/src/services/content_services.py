@@ -1,4 +1,49 @@
+import re
+
 from db.mongo_client import db, content_collection, leaderboards_collection, players_collection, matches_collection
+
+
+def _sanitize_segment(value):
+    text = str(value if value is not None else "item").strip()
+    text = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", text)
+    text = re.sub(r"\s+", "_", text)
+    text = re.sub(r"_+", "_", text)
+    text = text.strip("._")
+    return text[:120] if text else "item"
+
+
+def _local_agent_image(agent_uuid, field_name):
+    if not agent_uuid or not field_name:
+        return None
+    return f"/content/agents/{agent_uuid}/{field_name}.png"
+
+
+def _local_agent_role_icon(agent_uuid):
+    if not agent_uuid:
+        return None
+    return f"/content/agents/{agent_uuid}/role/displayIcon.png"
+
+
+def _local_agent_ability_icon(agent_uuid, ability_display_name):
+    if not agent_uuid or not ability_display_name:
+        return None
+    sanitized = _sanitize_segment(ability_display_name)
+    return f"/content/agents/{agent_uuid}/abilities/{sanitized}/displayIcon.png"
+
+
+def _local_weapon_image(weapon_uuid):
+    if not weapon_uuid:
+        return None
+    return f"/content/weapons/{weapon_uuid}/displayIcon.png"
+
+
+def _local_competitive_tier_icon(tier_set_uuid, tier_name_sanitized, icon_field):
+    if not tier_set_uuid or not tier_name_sanitized or not icon_field:
+        return None
+    return (
+        f"/content/competitive_tiers/{tier_set_uuid}/tiers/"
+        f"{tier_name_sanitized}/{icon_field}.png"
+    )
 
 def get_contenido_resumen():
     ultimo = content_collection.find_one({}, sort=[("_id", -1)])
@@ -134,23 +179,26 @@ def get_agentes():
     agentes_response = []
 
     for ag in ultimo.get("agents", []):
+        agent_uuid = ag.get("uuid") or ag.get("id")
         agente = {
             # Identificadores para mapear partidas/analytics con el nombre del agente.
-            "uuid": ag.get("uuid") or ag.get("id"),
+            "uuid": agent_uuid,
             "id": ag.get("id") or ag.get("uuid"),
             "displayName": ag.get("displayName", "—"),
             "description": ag.get("description", "—"),
 
-            # 🔹 Imágenes del agente
-            "displayIcon": ag.get("displayIcon"),
-            "fullPortrait": ag.get("fullPortrait"),
-            "background": ag.get("background"),
+            # Local image paths under frontend/public/content.
+            "displayIcon": _local_agent_image(agent_uuid, "displayIcon"),
+            "displayIconSmall": _local_agent_image(agent_uuid, "displayIconSmall"),
+            "fullPortrait": _local_agent_image(agent_uuid, "fullPortrait"),
+            "background": _local_agent_image(agent_uuid, "background"),
+            "bustPortrait": _local_agent_image(agent_uuid, "bustPortrait"),
 
             # 🔹 Rol del agente
             "role": {
                 "displayName": ag.get("role", {}).get("displayName", "—"),
                 "description": ag.get("role", {}).get("description", "—"),
-                "displayIcon": ag.get("role", {}).get("displayIcon")
+                "displayIcon": _local_agent_role_icon(agent_uuid)
             },
 
             # 🔹 Habilidades
@@ -158,11 +206,12 @@ def get_agentes():
         }
 
         for hab in ag.get("abilities", []):
+            ability_name = hab.get("displayName", "—")
             agente["abilities"].append({
                 "slot": hab.get("slot", "—"),
-                "displayName": hab.get("displayName", "—"),
+                "displayName": ability_name,
                 "description": hab.get("description", "—"),
-                "displayIcon": hab.get("displayIcon")
+                "displayIcon": _local_agent_ability_icon(agent_uuid, ability_name)
             })
 
         agentes_response.append(agente)
@@ -222,7 +271,22 @@ def get_armas_detalladas():
 
     armas = []
 
+    def _normalizar_categoria_arma(w: dict, shop: dict) -> str:
+        # For melee weapons, shopData is usually missing. Fall back to top-level category.
+        raw = shop.get("categoryText") or w.get("category") or ""
+        raw_str = str(raw).strip()
+
+        if not raw_str or raw_str in {"-", "--", "---", "-", "—", "–"}:
+            return "CUERPO A CUERPO"
+
+        low = raw_str.lower()
+        if "melee" in low:
+            return "CUERPO A CUERPO"
+
+        return raw_str
+
     for w in ultimo.get("weapons", []):
+        weapon_uuid = w.get("uuid") or w.get("id")
         shop = w.get("shopData") or {}
         stats = w.get("weaponStats") or {}
         ads = stats.get("adsStats") or {}
@@ -230,8 +294,8 @@ def get_armas_detalladas():
 
         armas.append({
             "displayName": w.get("displayName", "—"),
-            "displayIcon": w.get("displayIcon", "—"),
-            "category": shop.get("categoryText", "—"),
+            "displayIcon": _local_weapon_image(weapon_uuid),
+            "category": _normalizar_categoria_arma(w, shop),
             "cost": shop.get("cost", "—"),
             "stats": {
                 "fireRate": stats.get("fireRate"),
@@ -333,6 +397,7 @@ def get_competitive_tiers():
         return []
 
     ultimo_tier = comp[-1]
+    tier_set_uuid = ultimo_tier.get("uuid") or ultimo_tier.get("id")
     tiers = ultimo_tier.get("tiers", [])
 
     resultado = []
@@ -341,14 +406,33 @@ def get_competitive_tiers():
         if division and "unused" in division.lower():
             continue
 
+        tier_name = t.get("tierName", "—")
+        sanitized_tier_name = _sanitize_segment(tier_name)
+
         resultado.append({
             "tier": t.get("tier"),
-            "tierName": t.get("tierName", "—"),
+            "tierName": tier_name,
             "divisionName": division,
-            "smallIcon": t.get("smallIcon"),
-            "largeIcon": t.get("largeIcon"),
-            "rankTriangleUpIcon": t.get("rankTriangleUpIcon"),
-            "rankTriangleDownIcon": t.get("rankTriangleDownIcon"),
+            "smallIcon": _local_competitive_tier_icon(
+                tier_set_uuid,
+                sanitized_tier_name,
+                "smallIcon",
+            ),
+            "largeIcon": _local_competitive_tier_icon(
+                tier_set_uuid,
+                sanitized_tier_name,
+                "largeIcon",
+            ),
+            "rankTriangleUpIcon": _local_competitive_tier_icon(
+                tier_set_uuid,
+                sanitized_tier_name,
+                "rankTriangleUpIcon",
+            ),
+            "rankTriangleDownIcon": _local_competitive_tier_icon(
+                tier_set_uuid,
+                sanitized_tier_name,
+                "rankTriangleDownIcon",
+            ),
         })
 
     return resultado

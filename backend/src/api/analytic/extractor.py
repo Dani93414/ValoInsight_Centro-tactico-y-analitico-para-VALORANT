@@ -162,24 +162,56 @@ def _player_stats_map(round_obj: dict) -> Dict[str, dict]:
     }
 
 
-def _infer_winning_side(round_obj: dict, pstats_map: Dict[str, dict], winning_team_id: Optional[str]) -> str:
+def _infer_winning_side(
+    round_obj: dict,
+    pstats_map: Dict[str, dict],
+    winning_team_id: Optional[str],
+    player_team_map: Optional[Dict[str, str]] = None,
+    round_num: Optional[int] = None,
+    starting_attack_team: Optional[str] = None,
+) -> str:
     role = normalize_side(round_obj.get("winningTeamRole"))
     if role in {SIDE_ATTACK, SIDE_DEFENSE}:
         return role
 
+    ptmap = player_team_map or {}
+
     bomb_planter = round_obj.get("bombPlanter")
-    if bomb_planter and bomb_planter in pstats_map:
-        planter_team_id = pstats_map[bomb_planter].get("teamId")
+    if bomb_planter:
+        planter_team_id = ptmap.get(bomb_planter) or (pstats_map.get(bomb_planter) or {}).get("teamId")
         if planter_team_id and winning_team_id:
             return SIDE_ATTACK if planter_team_id == winning_team_id else SIDE_DEFENSE
 
     bomb_defuser = round_obj.get("bombDefuser")
-    if bomb_defuser and bomb_defuser in pstats_map:
-        defuser_team_id = pstats_map[bomb_defuser].get("teamId")
+    if bomb_defuser:
+        defuser_team_id = ptmap.get(bomb_defuser) or (pstats_map.get(bomb_defuser) or {}).get("teamId")
         if defuser_team_id and winning_team_id:
             return SIDE_DEFENSE if defuser_team_id == winning_team_id else SIDE_ATTACK
 
+    if round_num is not None and starting_attack_team and winning_team_id:
+        attacking_team = _attacking_team_for_round(round_num, starting_attack_team, set(ptmap.values()))
+        if attacking_team:
+            return SIDE_ATTACK if winning_team_id == attacking_team else SIDE_DEFENSE
+
     return SIDE_UNKNOWN
+
+
+def _attacking_team_for_round(
+    round_num: int,
+    starting_attack_team: str,
+    all_team_ids: set,
+) -> Optional[str]:
+    other_teams = all_team_ids - {starting_attack_team}
+    other_team = next(iter(other_teams), None)
+    if not other_team:
+        return None
+
+    if round_num < 12:
+        return starting_attack_team
+    if round_num < 24:
+        return other_team
+    # Overtime: sides alternate every round (AB, AB, AB...)
+    return starting_attack_team if (round_num - 24) % 2 == 0 else other_team
 
 
 def _get_player_damage_dealt_and_shots(round_pstat: dict) -> tuple[int, int, int, int]:
@@ -493,6 +525,21 @@ def _finalize_weapon_block(stats: dict) -> dict:
     return stats
 
 
+def _detect_starting_attack_team(
+    round_results: List[dict],
+    player_team_map: Dict[str, str],
+) -> Optional[str]:
+    """Scan rounds 0-11 for a bombPlanter to determine which team started on attack."""
+    for r in round_results:
+        rnum = r.get("roundNum")
+        if not isinstance(rnum, int) or rnum >= 12:
+            continue
+        planter = r.get("bombPlanter")
+        if planter and planter in player_team_map:
+            return player_team_map[planter]
+    return None
+
+
 def build_player_match_analytics_docs(match_obj: dict) -> List[dict]:
     match_info = match_obj.get("matchInfo") or {}
     if not match_info.get("isRanked"):
@@ -516,6 +563,8 @@ def build_player_match_analytics_docs(match_obj: dict) -> List[dict]:
         team_id = player.get("teamId")
         if puuid and team_id:
             team_members[team_id].add(puuid)
+
+    starting_attack_team = _detect_starting_attack_team(round_results, player_team)
 
     docs = []
 
@@ -547,11 +596,18 @@ def build_player_match_analytics_docs(match_obj: dict) -> List[dict]:
             round_pstat = pstats_map.get(puuid, {})
             all_kills = _collect_round_kills(round_obj)
 
+            round_num = round_obj.get("roundNum")
+            if not isinstance(round_num, int):
+                round_num = None
+
             own_team_won_round = round_obj.get("winningTeam") == team_id
             winning_team_role = _infer_winning_side(
                 round_obj=round_obj,
                 pstats_map=pstats_map,
                 winning_team_id=round_obj.get("winningTeam"),
+                player_team_map=player_team,
+                round_num=round_num,
+                starting_attack_team=starting_attack_team,
             )
             if own_team_won_round:
                 round_side = winning_team_role
@@ -680,6 +736,7 @@ def build_player_match_analytics_docs(match_obj: dict) -> List[dict]:
             "agent_name": resolve_agent_name(agent_id),
             "role": role,
             "competitive_tier": player.get("competitiveTier"),
+            "competitive_tier_image": player.get("competitiveTierImage"),
             "account_level": player.get("accountLevel"),
             "player_totals_from_match": {
                 "kills": int(player_stats.get("kills", 0) or 0),
@@ -687,6 +744,7 @@ def build_player_match_analytics_docs(match_obj: dict) -> List[dict]:
                 "assists": int(player_stats.get("assists", 0) or 0),
                 "score": int(player_stats.get("score", 0) or 0),
                 "rounds_played": int(player_stats.get("roundsPlayed", 0) or 0),
+                "match_duration_millis": int(match_info.get("gameLengthMillis", 0) or 0),
                 "playtime_millis": int(player_stats.get("playtimeMillis", 0) or 0),
             },
             "overview": overview,

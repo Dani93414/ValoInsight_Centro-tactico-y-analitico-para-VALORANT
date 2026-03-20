@@ -2,9 +2,9 @@ import copy
 import logging
 from collections import Counter
 
-from db.mongo_client import players_collection, matches_collection
+from backend.db.mongo_client import players_collection, matches_collection
 from scripts.regions_update import update_region_from_match, update_regions
-from src.api.analytic.service import rebuild_match_player_analytics
+from backend.src.api.analytic.service import rebuild_match_player_analytics
 
 logger = logging.getLogger(__name__)
 
