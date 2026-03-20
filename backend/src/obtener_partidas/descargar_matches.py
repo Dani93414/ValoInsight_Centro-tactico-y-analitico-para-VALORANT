@@ -7,11 +7,19 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
+from dotenv import load_dotenv
 
 # =======================
 # CONFIG
 # =======================
-API_KEY = os.getenv("HENRY_API_KEY")
+load_dotenv()
+
+# Accept common env var names to avoid hardcoding the key in source code.
+API_KEY = (
+    os.getenv("HENRY_API_KEY")
+    or os.getenv("HENRIK_API_KEY")
+    or os.getenv("API_KEY")
+)
 REGION = "eu"
 PLATFORM = "pc"
 
@@ -25,7 +33,7 @@ PLAYERS = [
     ("No Reason", "GFS")
 ]
 
-MATCHES_PER_PLAYER = 300
+MATCHES_PER_PLAYER = 400
 PAGE_SIZE = 10  # max 10
 COMPETITIVE_QUEUE_ID = "competitive"
 
@@ -223,7 +231,9 @@ def collect_existing_match_ids(directory: Path) -> set[str]:
 
 def main():
     if not API_KEY or "PON_AQUI" in API_KEY:
-        raise SystemExit("Edita el script y pega tu API_KEY en la variable API_KEY.")
+        raise SystemExit(
+            "Falta API key. Define HENRY_API_KEY (o HENRIK_API_KEY/API_KEY) en el archivo .env."
+        )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     existing_match_ids = collect_existing_match_ids(OUT_DIR)

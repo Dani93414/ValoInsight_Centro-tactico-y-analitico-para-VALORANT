@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any, Dict
 
-from db.mongo_client import content_collection
+from backend.db.mongo_client import content_collection
 
 
 UNKNOWN_NAME = "Unknown"

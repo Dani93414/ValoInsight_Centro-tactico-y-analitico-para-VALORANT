@@ -51,11 +51,16 @@ type Arma = {
 ============================== */
 
 const normalizarCategoria = (category?: string) => {
-  if (!category) return "Cuchillo";
-  
-  const catLower = category.toLowerCase();
+  const categoryLimpia = category?.trim() ?? "";
+  if (!categoryLimpia || /^[-\u2013\u2014]+$/u.test(categoryLimpia)) {
+    return "CUERPO A CUERPO";
+  }
 
-  if (catLower.includes("melee")) return "Cuchillo";
+  const catLower = categoryLimpia.toLowerCase();
+
+  if (catLower.includes("melee") || catLower.includes("cuchillo")) {
+    return "CUERPO A CUERPO";
+  }
   if (catLower.includes("sidearm")) return "Pistolas";
   if (catLower.includes("smg")) return "Subfusiles";
   if (catLower.includes("shotgun")) return "Escopetas";
@@ -63,9 +68,18 @@ const normalizarCategoria = (category?: string) => {
   if (catLower.includes("sniper")) return "Francotiradores";
   if (catLower.includes("heavy")) return "Ametralladoras";
 
-  if (category.includes("::")) return category.split("::")[1];
+  if (categoryLimpia.includes("::")) {
+    const valor = categoryLimpia.split("::").pop()?.trim() ?? "";
+    if (!valor || /^[-\u2013\u2014]+$/u.test(valor)) {
+      return "CUERPO A CUERPO";
+    }
+    if (valor.toLowerCase().includes("melee")) {
+      return "CUERPO A CUERPO";
+    }
+    return valor;
+  }
 
-  return category;
+  return categoryLimpia;
 };
 
 const traduccionesStats: Record<string, string> = {
@@ -81,7 +95,7 @@ const traduccionesStats: Record<string, string> = {
   fireMode: "Modo de disparo",
   altFireType: "Modo alternativo",
   zoomMultiplier: "Multiplicador de zoom",
-  burstCount: "Disparos por ráfaga"
+  burstCount: "Disparos por ráfaga",
 };
 
 const formatearValor = (valor: any) => {
@@ -109,7 +123,7 @@ export default function Armas() {
   useEffect(() => {
     getArmas().then((data: Arma[]) => {
       const armasOrdenadas = data.sort((a, b) =>
-        a.displayName.localeCompare(b.displayName)
+        a.displayName.localeCompare(b.displayName),
       );
       setArmas(armasOrdenadas);
       setLoading(false);
@@ -120,7 +134,7 @@ export default function Armas() {
      FILTRADO POR BÚSQUEDA
   ============================== */
   const armasFiltradas = armas.filter((arma) =>
-    arma.displayName.toLowerCase().includes(busqueda.toLowerCase())
+    arma.displayName.toLowerCase().includes(busqueda.toLowerCase()),
   );
 
   /* =============================
@@ -137,7 +151,7 @@ export default function Armas() {
       acc[categoria].push(arma);
       return acc;
     },
-    {}
+    {},
   );
 
   /* =============================
@@ -208,86 +222,91 @@ export default function Armas() {
                COLUMNA IZQUIERDA
             ============================== */}
             <div className="weapon-detail-left">
-              <h2 className="weapon-name">
-                {armaSeleccionada.displayName}
-              </h2>
+              <h2 className="weapon-name">{armaSeleccionada.displayName}</h2>
 
               <div className="weapon-badges">
                 <span className="weapon-category">
                   {normalizarCategoria(armaSeleccionada.category)}
                 </span>
                 <span className="weapon-cost">
-                  {armaSeleccionada.cost ? `${armaSeleccionada.cost} créditos` : "Gratis"}
+                  {armaSeleccionada.cost
+                    ? `${armaSeleccionada.cost} créditos`
+                    : "Gratis"}
                 </span>
               </div>
 
               {/* =============================
                  ESTADÍSTICAS
               ============================== */}
-              {armaSeleccionada.stats && Object.keys(armaSeleccionada.stats).length > 0 && (
-                <>
-                  <h3 className="weapon-section-title">Estadísticas</h3>
-                  <div className="weapon-stats">
-                    {Object.entries(armaSeleccionada.stats || {}).map(
-                      ([key, value]) =>
-                        value !== undefined && value !== null && (
-                          <div key={key} className="weapon-stat">
-                            <span>{traduccionesStats[key] || key}</span>
-                            <strong>{formatearValor(value)}</strong>
-                          </div>
-                        )
-                    )}
-                  </div>
-                </>
-              )}
+              {armaSeleccionada.stats &&
+                Object.keys(armaSeleccionada.stats).length > 0 && (
+                  <>
+                    <h3 className="weapon-section-title">Estadísticas</h3>
+                    <div className="weapon-stats">
+                      {Object.entries(armaSeleccionada.stats || {}).map(
+                        ([key, value]) =>
+                          value !== undefined &&
+                          value !== null && (
+                            <div key={key} className="weapon-stat">
+                              <span>{traduccionesStats[key] || key}</span>
+                              <strong>{formatearValor(value)}</strong>
+                            </div>
+                          ),
+                      )}
+                    </div>
+                  </>
+                )}
 
               {/* =============================
                  MIRA (ADS)
               ============================== */}
-              {armaSeleccionada.adsStats && Object.keys(armaSeleccionada.adsStats).length > 0 && (
-                <>
-                  <h3 className="weapon-section-title">Apuntar con mira</h3>
-                  <div className="weapon-stats">
-                    {Object.entries(armaSeleccionada.adsStats || {}).map(
-                      ([key, value]) =>
-                        value !== undefined && value !== null && (
-                          <div key={key} className="weapon-stat">
-                            <span>{traduccionesStats[key] || key}</span>
-                            <strong>{formatearValor(value)}</strong>
-                          </div>
-                        )
-                    )}
-                  </div>
-                </>
-              )}
+              {armaSeleccionada.adsStats &&
+                Object.keys(armaSeleccionada.adsStats).length > 0 && (
+                  <>
+                    <h3 className="weapon-section-title">Apuntar con mira</h3>
+                    <div className="weapon-stats">
+                      {Object.entries(armaSeleccionada.adsStats || {}).map(
+                        ([key, value]) =>
+                          value !== undefined &&
+                          value !== null && (
+                            <div key={key} className="weapon-stat">
+                              <span>{traduccionesStats[key] || key}</span>
+                              <strong>{formatearValor(value)}</strong>
+                            </div>
+                          ),
+                      )}
+                    </div>
+                  </>
+                )}
 
               {/* =============================
                  DAÑO
               ============================== */}
-              {armaSeleccionada.damageRanges && armaSeleccionada.damageRanges.length > 0 && (
-                <>
-                  <h3 className="weapon-section-title">Daño por distancia</h3>
-                  <div className="damage-table">
-                    <div className="damage-header">
-                      <span>Distancia</span>
-                      <span>Cabeza</span>
-                      <span>Cuerpo</span>
-                      <span>Piernas</span>
-                    </div>
-
-                    {(armaSeleccionada.damageRanges || []).map((dmg, idx) => (
-                      <div key={idx} className="damage-row">
-                        <span>
-                          {dmg.rangeStartMeters}–{dmg.rangeEndMeters}m
-                        </span>
-                        <span>{dmg.headDamage}</span>
-                        <span>{dmg.bodyDamage}</span>
-                        <span>{dmg.legDamage}</span>
+              {armaSeleccionada.damageRanges &&
+                armaSeleccionada.damageRanges.length > 0 && (
+                  <>
+                    <h3 className="weapon-section-title">Daño por distancia</h3>
+                    <div className="damage-table">
+                      <div className="damage-header">
+                        <span>Distancia</span>
+                        <span>Cabeza</span>
+                        <span>Cuerpo</span>
+                        <span>Piernas</span>
                       </div>
-                    ))}
-                  </div>
-                </>
-              )}
+
+                      {(armaSeleccionada.damageRanges || []).map((dmg, idx) => (
+                        <div key={idx} className="damage-row">
+                          <span>
+                            {dmg.rangeStartMeters}–{dmg.rangeEndMeters}m
+                          </span>
+                          <span>{dmg.headDamage}</span>
+                          <span>{dmg.bodyDamage}</span>
+                          <span>{dmg.legDamage}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
             </div>
 
             {/* =============================
@@ -309,43 +328,36 @@ export default function Armas() {
       {/* =============================
          ARMAS POR CATEGORÍA
       ============================== */}
-      {Object.entries(armasPorCategoria).map(
-        ([categoria, armasCategoria]) => (
-          <section key={categoria} className="weapons-category">
-            <h2 className="weapons-category-title">{categoria}</h2>
+      {Object.entries(armasPorCategoria).map(([categoria, armasCategoria]) => (
+        <section key={categoria} className="weapons-category">
+          <h2 className="weapons-category-title">{categoria}</h2>
 
-            <div className="weapons-grid">
-              {armasCategoria.map((arma, idx) => {
-                const activa =
-                  armaSeleccionada?.displayName === arma.displayName;
+          <div className="weapons-grid">
+            {armasCategoria.map((arma, idx) => {
+              const activa = armaSeleccionada?.displayName === arma.displayName;
 
-                return (
-                  <div
-                    key={idx}
-                    className={`weapon-card ${activa ? "active" : ""}`}
-                    onClick={() =>
-                      setArmaSeleccionada(activa ? null : arma)
-                    }
-                  >
-                    {arma.displayIcon && (
-                      <img
-                        src={arma.displayIcon}
-                        alt={arma.displayName}
-                        className="weapon-image"
-                        loading="lazy"
-                      />
-                    )}
+              return (
+                <div
+                  key={idx}
+                  className={`weapon-card ${activa ? "active" : ""}`}
+                  onClick={() => setArmaSeleccionada(activa ? null : arma)}
+                >
+                  {arma.displayIcon && (
+                    <img
+                      src={arma.displayIcon}
+                      alt={arma.displayName}
+                      className="weapon-image"
+                      loading="lazy"
+                    />
+                  )}
 
-                    <h2 className="weapon-card-name">
-                      {arma.displayName}
-                    </h2>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )
-      )}
+                  <h2 className="weapon-card-name">{arma.displayName}</h2>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

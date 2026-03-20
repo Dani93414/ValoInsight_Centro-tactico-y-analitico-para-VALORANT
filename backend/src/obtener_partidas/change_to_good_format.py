@@ -286,8 +286,7 @@ def build_output(template: Dict[str, Any], src_raw: Dict[str, Any]) -> Dict[str,
                     "weapon": (eco.get("weapon") or {}).get("id"),
                     "armor": (eco.get("armor") or {}).get("id") if eco.get("armor") else None,
                     "remaining": eco.get("remaining"),
-                    # No existe en tu source por ronda => default 0 del template
-                    "spent": None,
+                    "spent": max(0, (eco.get("loadout_value") or 0) - (eco.get("remaining") or 0)),
                 },
                 "ability": {
                     # No existe en tu source => default "string" del template

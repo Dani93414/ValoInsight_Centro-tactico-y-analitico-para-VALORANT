@@ -41,16 +41,13 @@ Thumbs.db
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/public/
 dist/
 /.cache/
 
 # Env / secrets
-# Ignore real env files but keep example templates tracked
 .env
 .env.*
-!.env.example
-!frontend/.env.example
-!backend/.env.example
 backend/.env
 frontend/.env
 
@@ -73,6 +70,10 @@ data/**
 *.dump
 *.sql
 db_cluster*.backup
+
+# Legacy/local datasets and generated match artifacts
+Antiguo/Partidas en JSON/
+Antiguo/Partidas en JSON/**
 
 # Temporary files
 *.tmp
