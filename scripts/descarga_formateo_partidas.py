@@ -118,6 +118,27 @@ def main() -> None:
     parser.add_argument("--tz", default="Europe/Madrid", help="Zona horaria para rename_matches.py")
     parser.add_argument("--recursive", action="store_true", help="Busca JSON recursivamente")
     parser.add_argument(
+        "--players",
+        nargs="+",
+        help=(
+            "Lista de jugadores en formato GameName#TagLine para descargar_matches.py. "
+            "Ejemplo: --players \"No Screams#GFS\" \"No Baiting#NNG\""
+        ),
+    )
+    parser.add_argument(
+        "--matches-per-player",
+        type=int,
+        help="Cantidad de partidas por jugador para descargar_matches.py.",
+    )
+    parser.add_argument(
+        "--check-db-before-download",
+        action="store_true",
+        help=(
+            "Consulta MongoDB antes de descargar detalles para evitar bajar "
+            "partidas ya presentes en la coleccion matches."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Sobrescribe salidas ya existentes en data/BaseDatos_Partidas/",
@@ -125,7 +146,7 @@ def main() -> None:
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parents[1]
-    root_dir = project_root / "backend" / "src" / "obtener_partidas"
+    root_dir = project_root / "backend" / "ingestion"
     output_dir = project_root / "data" / "BaseDatos_Partidas"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -135,7 +156,17 @@ def main() -> None:
     python_exe = sys.executable
 
     # 1) Descargar partidas nuevas (ya deduplica por match_id guardado)
-    run_step([python_exe, "descargar_matches.py"], root_dir, "Descarga")
+    download_cmd = [python_exe, "download_matches.py"]
+    if args.players:
+        download_cmd.extend(["--players", *args.players])
+    if args.matches_per_player is not None:
+        if args.matches_per_player <= 0:
+            raise RuntimeError("--matches-per-player debe ser mayor que 0")
+        download_cmd.extend(["--matches-per-player", str(args.matches_per_player)])
+    if args.check_db_before_download:
+        download_cmd.append("--check-db-existing")
+
+    run_step(download_cmd, root_dir, "Descarga")
 
     # 2) Renombrar por fecha y eliminar duplicados residuales
     run_step(
@@ -179,7 +210,7 @@ def main() -> None:
 
         cmd = [
             python_exe,
-            "change_to_good_format.py",
+            "format_matches.py",
             "-t",
             str(template_path),
             "-i",

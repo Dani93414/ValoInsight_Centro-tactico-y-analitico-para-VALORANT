@@ -4,9 +4,14 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+project_root = Path(__file__).resolve().parents[1]
+backend_root = project_root / "backend"
 
-from backend.src.services.match_processor import process_single_match_with_status
+for path in (str(project_root), str(backend_root)):
+    if path not in sys.path:
+        sys.path.append(path)
+
+from backend.modules.matches.application.match_processor import process_single_match_with_status
 
 
 VALID_STATUSES = {"inserted", "already_exists", "failed"}

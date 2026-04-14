@@ -7,10 +7,9 @@ from datetime import datetime, UTC
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backend.db.mongo_client import (
+from backend.infrastructure.mongo_client import (
     matches_collection,
     regions_collection,
-    player_match_analytics_collection,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,12 +97,12 @@ def _side_summary(side_totals):
 
 
 # ──────────────────────────────────────────────
-# COMPREHENSIVE REBUILD (from player_match_analytics)
+# COMPREHENSIVE REBUILD (from embedded analytics in matches)
 # ──────────────────────────────────────────────
 
-def rebuild_regions():
+def rebuild_regions(*, force: bool = False):
     """
-    Full rebuild of regions collection using player_match_analytics.
+    Full rebuild of regions collection using embedded analytics in matches.
     Produces one document per region with:
       - global totals + averages
       - side breakdown (attack / defense)
@@ -113,7 +112,14 @@ def rebuild_regions():
       - per-weapon stats (kills, HS%)
       - top lists for quick display
     """
-    logger.info("Rebuilding regions from player_match_analytics...")
+    if not force:
+        logger.error(
+            "Este script borra la colección regions. "
+            "Usa --force para confirmar."
+        )
+        raise RuntimeError("Refusing to rebuild regions without --force")
+
+    logger.info("Rebuilding regions from embedded analytics in matches...")
 
     # ── Accumulators keyed by region ──
     regions = defaultdict(lambda: {
@@ -134,50 +140,57 @@ def rebuild_regions():
         "weapons": defaultdict(lambda: {"weapon_name": "Unknown", "totals": Counter()}),
     })
 
-    # ── 1. Iterate all analytics docs ──
-    cursor = player_match_analytics_collection.find({"is_ranked": True})
+    # ── 1. Iterate all ranked matches ──
+    cursor = matches_collection.find({"matchInfo.isRanked": True})
     doc_count = 0
 
-    for doc in cursor:
-        doc_count += 1
-        region = _normalize_region(doc.get("region"))
-        rd = regions[region]
+    for match_obj in cursor:
+        match_info = match_obj.get("matchInfo") or {}
+        match_id = str(match_info.get("matchId") or "")
+        region = _normalize_region(match_info.get("region"))
+        map_id = str(match_info.get("mapId") or "UNKNOWN")
 
-        rd["match_ids"].add(doc.get("match_id"))
-        rd["puuids"].add(doc.get("puuid"))
+        for player in match_obj.get("players", []) or []:
+            analytics = player.get("analytics")
+            if not analytics:
+                continue
 
-        overview = doc.get("overview") or {}
+            doc_count += 1
+            rd = regions[region]
+            rd["match_ids"].add(match_id)
+            rd["puuids"].add(player.get("puuid"))
 
-        # Global totals
-        for field in _SUM_FIELDS:
-            rd["totals"][field] += int(overview.get(field, 0) or 0)
+            overview = analytics.get("overview") or {}
 
-        # ── Agent ──
-        agent_id = str(doc.get("agent_id") or "UNKNOWN")
-        ag = rd["agents"][agent_id]
-        ag["agent_name"] = doc.get("agent_name") or "Unknown"
-        ag["role"] = doc.get("role") or "Desconocido"
-        ag["picks"] += 1
-        ag["wins"] += 1 if doc.get("won_match") else 0
-        for field in _SUM_FIELDS:
-            ag["totals"][field] += int(overview.get(field, 0) or 0)
-
-        # ── Map ──
-        map_id = str(doc.get("map_id") or "UNKNOWN")
-        mp = rd["maps"][map_id]
-        mp["map_name"] = doc.get("map_name") or "Unknown"
-        mp["match_ids"].add(doc.get("match_id"))
-        for field in _SUM_FIELDS:
-            mp["totals"][field] += int(overview.get(field, 0) or 0)
-
-        # ── Sides (global + per-map) ──
-        sides = doc.get("sides") or {}
-        for side_name in ("attack", "defense"):
-            side = sides.get(side_name) or {}
+            # Global totals
             for field in _SUM_FIELDS:
-                val = int(side.get(field, 0) or 0)
-                rd["sides"][side_name][field] += val
-                mp["sides"][side_name][field] += val
+                rd["totals"][field] += int(overview.get(field, 0) or 0)
+
+            # ── Agent ──
+            agent_id = str(player.get("characterId") or "UNKNOWN")
+            ag = rd["agents"][agent_id]
+            ag["agent_name"] = analytics.get("agent_name") or "Unknown"
+            ag["role"] = analytics.get("role") or "Desconocido"
+            ag["picks"] += 1
+            ag["wins"] += 1 if analytics.get("won_match") else 0
+            for field in _SUM_FIELDS:
+                ag["totals"][field] += int(overview.get(field, 0) or 0)
+
+            # ── Map ──
+            mp = rd["maps"][map_id]
+            mp["map_name"] = analytics.get("map_name") or "Unknown"
+            mp["match_ids"].add(match_id)
+            for field in _SUM_FIELDS:
+                mp["totals"][field] += int(overview.get(field, 0) or 0)
+
+            # ── Sides (global + per-map) ──
+            sides = analytics.get("sides") or {}
+            for side_name in ("attack", "defense"):
+                side = sides.get(side_name) or {}
+                for field in _SUM_FIELDS:
+                    val = int(side.get(field, 0) or 0)
+                    rd["sides"][side_name][field] += val
+                    mp["sides"][side_name][field] += val
 
         # ── Economy (buy buckets) ──
         for bucket_name in ("eco", "low_buy", "full_buy"):
@@ -382,7 +395,7 @@ def update_region_from_match(match_obj):
 
 def update_regions():
     """Backward-compatible alias. Runs the comprehensive rebuild."""
-    rebuild_regions()
+    rebuild_regions(force=True)
 
 
 def main() -> None:
@@ -393,12 +406,19 @@ def main() -> None:
         default="rebuild",
         help="Execution mode (default: rebuild)",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Confirma el borrado de la colección regions antes de reconstruir.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     if args.mode == "rebuild":
-        rebuild_regions()
+        if not args.force:
+            parser.error("Debes indicar --force para reconstruir la colección regions")
+        rebuild_regions(force=args.force)
 
 
 if __name__ == "__main__":

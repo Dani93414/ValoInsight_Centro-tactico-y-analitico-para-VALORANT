@@ -74,6 +74,8 @@ db_cluster*.backup
 # Legacy/local datasets and generated match artifacts
 Antiguo/Partidas en JSON/
 Antiguo/Partidas en JSON/**
+backend/src/obtener_partidas/*_match_*.json
+backend/src/obtener_partidas/*_match_ids_*.json
 
 # Temporary files
 *.tmp

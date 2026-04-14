@@ -58,6 +58,7 @@ body {
    ===================================================== */
 
 .weapons-container {
+  position: relative;
   max-width: 1400px;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
@@ -92,11 +93,7 @@ body {
   margin-top: 1.2rem;
   height: 3px;
   width: 160px;
-  background: linear-gradient(
-    to right,
-    var(--valorant-red),
-    transparent
-  );
+  background: linear-gradient(to right, var(--valorant-red), transparent);
 }
 
 /* =====================================================
@@ -122,11 +119,7 @@ body {
   content: "";
   flex: 1;
   height: 2px;
-  background: linear-gradient(
-    to right,
-    var(--valorant-red),
-    transparent
-  );
+  background: linear-gradient(to right, var(--valorant-red), transparent);
 }
 
 /* =====================================================
@@ -144,18 +137,15 @@ body {
    ===================================================== */
 
 .weapon-card {
-  background: linear-gradient(
-    180deg,
-    #1a1d23 0%,
-    #14171c 100%
-  );
+  background: linear-gradient(180deg, #1a1d23 0%, #14171c 100%);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   padding: 1.2rem;
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition: transform var(--transition-medium),
+  transition:
+    transform var(--transition-medium),
     box-shadow var(--transition-medium),
     border-color var(--transition-fast);
   animation: fadeUp 0.4s ease forwards;
@@ -165,11 +155,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    to top,
-    rgba(255, 70, 85, 0.28),
-    transparent 60%
-  );
+  background: linear-gradient(to top, rgba(255, 70, 85, 0.28), transparent 60%);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -197,7 +183,9 @@ body {
   width: 0;
   height: 3px;
   background-color: var(--valorant-red);
-  transition: width 0.3s ease, left 0.3s ease;
+  transition:
+    width 0.3s ease,
+    left 0.3s ease;
 }
 
 .weapon-card:hover::before,
@@ -326,11 +314,7 @@ body {
   content: "";
   flex: 1;
   height: 2px;
-  background: linear-gradient(
-    to right,
-    var(--valorant-red),
-    transparent
-  );
+  background: linear-gradient(to right, var(--valorant-red), transparent);
 }
 
 /* -------------------------
@@ -461,11 +445,7 @@ body {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(
-      circle at center,
-      rgba(255, 70, 85, 0.08),
-      transparent 60%
-    ),
+    radial-gradient(circle at center, rgba(255, 70, 85, 0.08), transparent 60%),
     var(--bg-dark);
   display: flex;
   align-items: center;
@@ -527,7 +507,8 @@ body {
   color: var(--text-primary);
   font-size: 0.95rem;
   font-weight: 600;
-  transition: border-color var(--transition-fast),
+  transition:
+    border-color var(--transition-fast),
     box-shadow var(--transition-fast);
 }
 
