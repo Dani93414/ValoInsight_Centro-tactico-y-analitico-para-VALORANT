@@ -1,4 +1,5 @@
 import os
+import unittest
 import requests
 from dotenv import load_dotenv
 
@@ -15,18 +16,27 @@ TAG_LINE = "GFS"    # tag del jugador
 # Construir URL del endpoint
 url = f"https://{REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{GAME_NAME}/{TAG_LINE}"
 
-# Encabezado con la API key
-headers = {"X-Riot-Token": API_KEY}
+RUN_EXTERNAL_TESTS = os.getenv("RUN_EXTERNAL_TESTS") == "1"
 
-# Hacer la petición
-response = requests.get(url, headers=headers)
 
-# Mostrar el resultado
-if response.status_code == 200:
-    print("✅ Conexión correcta con la API de Riot")
-    print("Datos del jugador:")
-    print(response.json())
-else:
-    print("❌ Error al conectar con la API")
-    print("Código de estado:", response.status_code)
-    print("Mensaje:", response.text)
+def _fetch_account() -> requests.Response:
+    headers = {"X-Riot-Token": API_KEY or ""}
+    return requests.get(url, headers=headers, timeout=20)
+
+
+class RiotApiConnectivityTest(unittest.TestCase):
+    @unittest.skipUnless(
+        RUN_EXTERNAL_TESTS,
+        "External Riot API test disabled. Set RUN_EXTERNAL_TESTS=1 to enable.",
+    )
+    def test_riot_account_lookup(self):
+        response = _fetch_account()
+        self.assertEqual(
+            response.status_code,
+            200,
+            msg=f"Unexpected status: {response.status_code} body={response.text}",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

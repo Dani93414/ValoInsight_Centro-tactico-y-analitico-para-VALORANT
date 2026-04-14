@@ -1,50 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { getArmas } from "../api/content";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useArmas } from "../api/hooks";
+import BackButton from "../components/BackButton";
+import type { Arma } from "../types/weapons";
 import "./Armas.css";
-
-/* =============================
-   TIPOS
-============================== */
-
-type DamageRange = {
-  rangeStartMeters: number;
-  rangeEndMeters: number;
-  headDamage: number;
-  bodyDamage: number;
-  legDamage: number;
-};
-
-type WeaponStats = {
-  fireRate?: number;
-  magazineSize?: number;
-  runSpeedMultiplier?: number;
-  equipTimeSeconds?: number;
-  reloadTimeSeconds?: number;
-  firstBulletAccuracy?: number;
-  shotgunPelletCount?: number;
-  wallPenetration?: string;
-  feature?: string;
-  fireMode?: string;
-  altFireType?: string;
-};
-
-type AdsStats = {
-  zoomMultiplier?: number;
-  fireRate?: number;
-  runSpeedMultiplier?: number;
-  firstBulletAccuracy?: number;
-  burstCount?: number;
-};
-
-type Arma = {
-  displayName: string;
-  displayIcon?: string | null;
-  category: string;
-  cost?: number | null; // Opcional para el cuchillo
-  stats?: WeaponStats | null; // Opcional para el cuchillo
-  adsStats?: AdsStats | null; // Opcional para el cuchillo
-  damageRanges?: DamageRange[] | null; // Opcional para el cuchillo
-};
 
 /* =============================
    HELPERS
@@ -98,11 +56,17 @@ const traduccionesStats: Record<string, string> = {
   burstCount: "Disparos por ráfaga",
 };
 
-const formatearValor = (valor: any) => {
+const formatearValor = (valor: unknown): string | number => {
   if (typeof valor === "string" && valor.includes("::")) {
     return valor.split("::")[1];
   }
-  return valor;
+  if (typeof valor === "number") {
+    return valor;
+  }
+  if (typeof valor === "string") {
+    return valor;
+  }
+  return "-";
 };
 
 /* =============================
@@ -110,25 +74,18 @@ const formatearValor = (valor: any) => {
 ============================== */
 
 export default function Armas() {
-  const [armas, setArmas] = useState<Arma[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawArmas, isLoading: loading } = useArmas();
+  const armas = useMemo(() => {
+    if (!rawArmas) return [];
+    return [...(rawArmas as Arma[])].sort((a, b) =>
+      a.displayName.localeCompare(b.displayName),
+    );
+  }, [rawArmas]);
+
   const [armaSeleccionada, setArmaSeleccionada] = useState<Arma | null>(null);
   const [busqueda, setBusqueda] = useState("");
 
   const detalleRef = useRef<HTMLDivElement | null>(null);
-
-  /* =============================
-     CARGA DE ARMAS
-  ============================== */
-  useEffect(() => {
-    getArmas().then((data: Arma[]) => {
-      const armasOrdenadas = data.sort((a, b) =>
-        a.displayName.localeCompare(b.displayName),
-      );
-      setArmas(armasOrdenadas);
-      setLoading(false);
-    });
-  }, []);
 
   /* =============================
      FILTRADO POR BÚSQUEDA
@@ -183,6 +140,7 @@ export default function Armas() {
 
   return (
     <div className="weapons-container">
+      <BackButton />
       {/* =============================
          HEADER
       ============================== */}

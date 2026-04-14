@@ -44,3 +44,32 @@ Fase 1 y Fase 2 (estructura) aplicadas:
 - Base URL API centralizada en `frontend/src/api/config.ts`.
 - Backend movido a `backend/` (`main.py`, `src/`, `db/`, `tests/`, `requirements.txt`).
 - Scripts en `scripts/` actualizados para resolver imports desde `backend/`.
+
+## Flujo Final De Partidas (Un Comando)
+
+Pipeline recomendado para descargar partidas nuevas, evitar duplicados contra MongoDB,
+convertir al formato final y subirlas a la base de datos:
+
+```bash
+python scripts/pipeline_partidas.py --matches-per-player 5
+```
+
+Opciones útiles:
+
+- Jugadores concretos:
+
+```bash
+python scripts/pipeline_partidas.py --matches-per-player 5 --players "No Screams#GFS" "No Smoking#Camel"
+```
+
+- Sin subida a Mongo (solo descarga+conversión):
+
+```bash
+python scripts/pipeline_partidas.py --matches-per-player 5 --skip-upload
+```
+
+- Verificación final de integridad:
+
+```bash
+python scripts/pipeline_partidas.py --matches-per-player 5 --verify --expected-per-player 405
+```

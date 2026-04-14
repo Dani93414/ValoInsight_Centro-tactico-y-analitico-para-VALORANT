@@ -12,14 +12,14 @@ export async function getArmas() {
   return res.json();
 }
 
-export async function getActos() {
-  const res = await fetch(apiUrl("/content/actos"));
-  if (!res.ok) throw new Error("Error actos");
-  return res.json();
-}
-
 export async function getCompetitiveTiers() {
   const res = await fetch(apiUrl("/content/competitive-tiers"));
   if (!res.ok) throw new Error("Error competitive tiers");
+  return res.json();
+}
+
+export async function getMapasGeo() {
+  const res = await fetch(apiUrl("/content/mapas-geo"));
+  if (!res.ok) throw new Error("Error mapas geo");
   return res.json();
 }

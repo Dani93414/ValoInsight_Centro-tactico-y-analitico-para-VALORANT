@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Tuple
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # 2. AHORA ya podemos importar desde backend
-from backend.db.mongo_client import content_collection
-from backend.src.api.riot_client import get_puuid, get_valorant_content
-from backend.src.api.valorant_api_client import (
+from backend.infrastructure.mongo_client import content_collection
+from backend.infrastructure.riot_http_client import get_puuid, get_valorant_content
+from backend.infrastructure.valorant_api_http_client import (
     get_agents_es,
     get_buddies_es,
     get_bundles_es,

@@ -1,43 +1,27 @@
-import { useEffect, useRef, useState } from "react";
-import { getAgentes } from "../api/content";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { useAgentes } from "../api/hooks";
+import BackButton from "../components/BackButton";
+import type { Agente } from "../types/agents";
 import "./Agentes.css";
-
-/* =============================
-   TIPOS
-============================== */
-
-type Ability = {
-  slot: string;
-  displayName: string;
-  description: string;
-  displayIcon?: string | null;
-};
-
-type Role = {
-  displayName: string;
-  description: string;
-  displayIcon?: string | null;
-};
-
-type Agente = {
-  displayName: string;
-  description: string;
-  displayIcon?: string | null;
-  fullPortrait?: string | null;
-  background?: string | null;
-  role: Role;
-  abilities: Ability[];
-};
 
 /* =============================
    COMPONENTE
 ============================== */
 
 export default function Agentes() {
-  const [agentes, setAgentes] = useState<Agente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [agenteSeleccionado, setAgenteSeleccionado] =
-    useState<Agente | null>(null);
+  const { data: rawAgentes, isLoading: loading } = useAgentes();
+  const location = useLocation();
+  const agentes = useMemo(() => {
+    if (!rawAgentes) return [];
+    return [...(rawAgentes as Agente[])].sort((a, b) =>
+      a.displayName.localeCompare(b.displayName),
+    );
+  }, [rawAgentes]);
+
+  const [agenteSeleccionado, setAgenteSeleccionado] = useState<Agente | null>(
+    null,
+  );
 
   const [mostrarRol, setMostrarRol] = useState(false);
 
@@ -48,17 +32,23 @@ export default function Agentes() {
   const detalleRef = useRef<HTMLDivElement | null>(null);
 
   /* =============================
-     CARGA DE AGENTES
+     AUTO-SELECT FROM ROUTE STATE
   ============================== */
   useEffect(() => {
-    getAgentes().then((data: Agente[]) => {
-      const agentesOrdenados = data.sort((a, b) =>
-        a.displayName.localeCompare(b.displayName)
+    const state = location.state as { agentName?: string } | null;
+    if (state?.agentName && agentes.length > 0 && !agenteSeleccionado) {
+      const match = agentes.find(
+        (a) => a.displayName.toLowerCase() === state.agentName!.toLowerCase(),
       );
-      setAgentes(agentesOrdenados);
-      setLoading(false);
-    });
-  }, []);
+      if (match) {
+        const frame = requestAnimationFrame(() => {
+          setAgenteSeleccionado(match);
+          setMostrarRol(false);
+        });
+        return () => cancelAnimationFrame(frame);
+      }
+    }
+  }, [agentes, location.state, agenteSeleccionado]);
 
   /* =============================
      SCROLL AL DETALLE
@@ -69,7 +59,6 @@ export default function Agentes() {
         behavior: "smooth",
         block: "start",
       });
-      setMostrarRol(false);
     }
   }, [agenteSeleccionado]);
 
@@ -77,22 +66,18 @@ export default function Agentes() {
      ROLES ÚNICOS
   ============================== */
   const rolesUnicos = Array.from(
-    new Map(
-      agentes.map((a) => [a.role.displayName, a.role])
-    ).values()
+    new Map(agentes.map((a) => [a.role.displayName, a.role])).values(),
   );
 
   /* =============================
      FILTRADO
   ============================== */
   const agentesFiltrados = agentes.filter((agente) => {
-    const coincideRol =
-      !rolActivo || agente.role.displayName === rolActivo;
+    const coincideRol = !rolActivo || agente.role.displayName === rolActivo;
 
-    const coincideBusqueda =
-      agente.displayName
-        .toLowerCase()
-        .includes(busqueda.toLowerCase());
+    const coincideBusqueda = agente.displayName
+      .toLowerCase()
+      .includes(busqueda.toLowerCase());
 
     return coincideRol && coincideBusqueda;
   });
@@ -114,6 +99,7 @@ export default function Agentes() {
 
   return (
     <div className="agents-container">
+      <BackButton />
       {/* =============================
          HEADER
       ============================== */}
@@ -136,15 +122,12 @@ export default function Agentes() {
               }`}
               onClick={() =>
                 setRolActivo((prev) =>
-                  prev === rol.displayName ? null : rol.displayName
+                  prev === rol.displayName ? null : rol.displayName,
                 )
               }
             >
               {rol.displayIcon && (
-                <img
-                  src={rol.displayIcon}
-                  alt={rol.displayName}
-                />
+                <img src={rol.displayIcon} alt={rol.displayName} />
               )}
               <span>{rol.displayName}</span>
             </button>
@@ -174,7 +157,10 @@ export default function Agentes() {
         <div ref={detalleRef} className="agent-detail">
           <button
             className="agent-detail-close"
-            onClick={() => setAgenteSeleccionado(null)}
+            onClick={() => {
+              setAgenteSeleccionado(null);
+              setMostrarRol(false);
+            }}
             aria-label="Cerrar detalle"
           >
             ✕
@@ -201,9 +187,7 @@ export default function Agentes() {
                       alt={agenteSeleccionado.role.displayName}
                     />
                   )}
-                  <p>
-                    {agenteSeleccionado.role.description}
-                  </p>
+                  <p>{agenteSeleccionado.role.description}</p>
                 </div>
               )}
 
@@ -214,34 +198,23 @@ export default function Agentes() {
               <h3 className="abilities-title">Habilidades</h3>
 
               <div className="abilities-list">
-                {agenteSeleccionado.abilities.map(
-                  (hab, index) => (
-                    <div
-                      key={index}
-                      className="ability-card"
-                    >
-                      <div className="ability-header">
-                        {hab.displayIcon && (
-                          <img
-                            src={hab.displayIcon}
-                            alt={hab.displayName}
-                            className="ability-icon"
-                          />
-                        )}
-                        <span className="ability-slot">
-                          {hab.slot}
-                        </span>
-                        <h4 className="ability-name">
-                          {hab.displayName}
-                        </h4>
-                      </div>
-
-                      <p className="ability-description">
-                        {hab.description}
-                      </p>
+                {agenteSeleccionado.abilities.map((hab, index) => (
+                  <div key={index} className="ability-card">
+                    <div className="ability-header">
+                      {hab.displayIcon && (
+                        <img
+                          src={hab.displayIcon}
+                          alt={hab.displayName}
+                          className="ability-icon"
+                        />
+                      )}
+                      <span className="ability-slot">{hab.slot}</span>
+                      <h4 className="ability-name">{hab.displayName}</h4>
                     </div>
-                  )
-                )}
+
+                    <p className="ability-description">{hab.description}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -271,21 +244,21 @@ export default function Agentes() {
       ============================== */}
       <div className="agents-grid">
         {agentesFiltrados.map((agente, idx) => {
-          const activo =
-            agenteSeleccionado?.displayName ===
-            agente.displayName;
+          const activo = agenteSeleccionado?.displayName === agente.displayName;
 
           return (
             <div
               key={idx}
-              className={`agent-card ${
-                activo ? "active" : ""
-              }`}
-              onClick={() =>
-                setAgenteSeleccionado(
-                  activo ? null : agente
-                )
-              }
+              className={`agent-card ${activo ? "active" : ""}`}
+              onClick={() => {
+                if (activo) {
+                  setAgenteSeleccionado(null);
+                  setMostrarRol(false);
+                  return;
+                }
+                setAgenteSeleccionado(agente);
+                setMostrarRol(false);
+              }}
             >
               {agente.displayIcon && (
                 <img
@@ -296,12 +269,8 @@ export default function Agentes() {
                 />
               )}
 
-              <h2 className="agent-name">
-                {agente.displayName}
-              </h2>
-              <p className="agent-role">
-                {agente.role.displayName}
-              </p>
+              <h2 className="agent-name">{agente.displayName}</h2>
+              <p className="agent-role">{agente.role.displayName}</p>
             </div>
           );
         })}

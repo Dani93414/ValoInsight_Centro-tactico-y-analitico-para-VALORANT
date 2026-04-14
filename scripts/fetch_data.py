@@ -1,12 +1,19 @@
 import os
 import sys
 import logging
+import argparse
+from pathlib import Path
 
-# 1. PRIMERO configuramos el path para que Python encuentre el paquete backend
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# 1. PRIMERO configuramos el path para que Python encuentre backend y src
+project_root = Path(__file__).resolve().parents[1]
+backend_root = project_root / "backend"
+
+for path in (str(project_root), str(backend_root)):
+    if path not in sys.path:
+        sys.path.append(path)
 
 # 2. AHORA ya podemos importar desde backend
-from backend.db.mongo_client import (
+from backend.infrastructure.mongo_client import (
     db,
     content_collection,
     leaderboards_collection,
@@ -14,13 +21,13 @@ from backend.db.mongo_client import (
     players_collection# Asegúrate de haberla añadido a mongo_client.py
 )
 
-from backend.src.api.riot_client import (
+from backend.infrastructure.riot_http_client import (
     get_puuid,
     get_valorant_content,
     get_leaderboard
 )
 
-from backend.src.api.valorant_api_client import (
+from backend.infrastructure.valorant_api_http_client import (
     get_agents_es, get_maps_es, get_weapons_es, get_buddies_es,
     get_bundles_es, get_ceremonies_es, get_competitivetiers_es,
     get_contenttiers_es, get_contracts_es, get_currencies_es,
@@ -28,6 +35,7 @@ from backend.src.api.valorant_api_client import (
     get_levelborders_es, get_playercards_es, get_playertitles_es,
     get_sprays_es, get_themes_es, get_version_es
 )
+from backend.modules.analytics.application.service import rebuild_all_player_match_analytics
 
 # ================================
 # LOGGING
@@ -41,7 +49,14 @@ logger = logging.getLogger(__name__)
 # ================================
 # OBTENER DATOS
 # ================================
-def obtener_datos():
+def obtener_datos(*, force: bool = False):
+    if not force:
+        logger.error(
+            "Este script borra content y leaderboards. "
+            "Usa --force para confirmar."
+        )
+        sys.exit(1)
+
     logger.info("🗑️ Borrando datos anteriores...")
 
     content_collection.delete_many({})
@@ -166,6 +181,17 @@ def obtener_datos():
 
     logger.info("💾 Contenido guardado en MongoDB.")
 
+    # Si matches se cargaron antes que content, este rebuild corrige campos "Unknown"
+    # en matches.players[].analytics (map_name, agent_name, weapon_name, role, etc.).
+    logger.info("♻ Recalculando analytics embebidas para refrescar nombres de referencia...")
+    rebuild_result = rebuild_all_player_match_analytics(batch_size=200)
+    logger.info(
+        "✔ Analytics rebuild completado | processed_matches=%s embedded_players=%s failed_matches=%s",
+        rebuild_result.get("processed_matches", 0),
+        rebuild_result.get("embedded_players", 0),
+        rebuild_result.get("failed_matches", 0),
+    )
+
     # ---------------------------------------
     # 3. Leaderboards (Todas las Regiones)
     # ---------------------------------------
@@ -210,4 +236,13 @@ def obtener_datos():
 # ENTRY POINT
 # ================================
 if __name__ == "__main__":
-    obtener_datos()
+    parser = argparse.ArgumentParser(
+        description="Descarga contenido y leaderboards de Valorant (borra datos previos).",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Confirma el borrado de content y leaderboards antes de recargar.",
+    )
+    args = parser.parse_args()
+    obtener_datos(force=args.force)
