@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getPlayerDashboard,
+  getPlayerRankComparison,
   getMatchById,
   searchPlayers,
   type DashboardFilters,
+  type RankComparisonFilters,
 } from "./playerApi";
 
-// Player dashboard data can tolerate a few minutes of staleness
-const DASHBOARD_STALE = 1000 * 60 * 5; // 5 min
+// Keep dashboard data fairly fresh so analytics rebuilds show quickly in UI.
+const DASHBOARD_STALE = 1000 * 30; // 30 s
 // Match detail is immutable once played
 const MATCH_STALE = Infinity;
 // Search results are short-lived
@@ -21,6 +23,19 @@ export function usePlayerDashboard(
     queryKey: ["player", "dashboard", playerId, filters],
     queryFn: () => getPlayerDashboard(playerId!, filters),
     enabled: !!playerId,
+    staleTime: DASHBOARD_STALE,
+  });
+}
+
+export function usePlayerRankComparison(
+  playerId: string | undefined,
+  filters?: RankComparisonFilters,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["player", "rank-comparison", playerId, filters],
+    queryFn: () => getPlayerRankComparison(playerId!, filters),
+    enabled: !!playerId && enabled,
     staleTime: DASHBOARD_STALE,
   });
 }

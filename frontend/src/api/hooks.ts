@@ -8,6 +8,7 @@ export {
 
 export {
   usePlayerDashboard,
+  usePlayerRankComparison,
   useSearchPlayers,
   useMatchById,
 } from "./usePlayerQueries";

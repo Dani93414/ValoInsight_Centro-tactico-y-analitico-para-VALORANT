@@ -33,6 +33,14 @@ export type HeatmapFilterOptionsPayload = {
   phases?: FilterOption[];
 };
 
+export type HeatmapInitialFilters = {
+  mapId?: string;
+  mapName?: string;
+  agentId?: string;
+  seasonIds?: string[];
+  side?: "" | "attack" | "defense";
+};
+
 export const VIEW_MODE_OPTIONS: Array<{ key: ViewMode; label: string }> = [
   { key: "attack-defense", label: "Ataque y Defensa" },
   { key: "combined", label: "Combinado" },
@@ -93,14 +101,18 @@ export function useHeatmapViewModel(props: {
   playerId: string;
   agentNameMap: Record<string, string>;
   actOptions: Array<{ id: string; label: string }>;
-  initialFilters?: {
-    mapName?: string;
-    agentId?: string;
-    seasonIds?: string[];
-    side?: "" | "attack" | "defense";
-  };
+  initialFilters?: HeatmapInitialFilters;
+  startWithSetup?: boolean;
+  lockBodyScroll?: boolean;
 }) {
-  const { playerId, agentNameMap, actOptions, initialFilters } = props;
+  const {
+    playerId,
+    agentNameMap,
+    actOptions,
+    initialFilters,
+    startWithSetup = true,
+    lockBodyScroll = true,
+  } = props;
 
   const { data: mapsGeoRaw } = useMapasGeo();
   const mapsGeo = useMemo<MapGeo[]>(() => {
@@ -115,20 +127,23 @@ export function useHeatmapViewModel(props: {
   const [selectedSide, setSelectedSide] = useState<SideFilter>("");
   const [selectedPhase, setSelectedPhase] = useState("");
   const [selectedActs, setSelectedActs] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>("combined");
-  const [showSetupStep, setShowSetupStep] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("attack-defense");
+  const [splitByEvent, setSplitByEvent] = useState(false);
+  const [showSetupStep, setShowSetupStep] = useState(startWithSetup);
   const [pendingMapDefaults, setPendingMapDefaults] = useState(true);
   const [initialDefaultsApplied, setInitialDefaultsApplied] = useState(false);
   const [radiusPx, setRadiusPx] = useState(FIXED_RADIUS_PX);
   const [legendExpanded, setLegendExpanded] = useState(false);
 
   useEffect(() => {
+    if (!lockBodyScroll) return;
+
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, []);
+  }, [lockBodyScroll]);
 
   const heatmapDebugEnabled = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -213,6 +228,11 @@ export function useHeatmapViewModel(props: {
   );
 
   const preferredInitialMapId = useMemo(() => {
+    const explicitMapId = initialFilters?.mapId?.trim();
+    if (explicitMapId && availableMapIdSet.has(explicitMapId)) {
+      return explicitMapId;
+    }
+
     const mapName = initialFilters?.mapName?.trim();
     if (!mapName) return "";
     const target = normalizeText(mapName);
@@ -220,7 +240,12 @@ export function useHeatmapViewModel(props: {
       (mapItem) => normalizeText(mapItem.displayName) === target,
     );
     return found?.uuid ?? "";
-  }, [initialFilters?.mapName, availableMaps]);
+  }, [
+    initialFilters?.mapId,
+    initialFilters?.mapName,
+    availableMaps,
+    availableMapIdSet,
+  ]);
 
   const actLabelById = useMemo(
     () => new Map(actOptions.map((act) => [act.id, act.label])),
@@ -419,10 +444,29 @@ export function useHeatmapViewModel(props: {
 
     const frame = requestAnimationFrame(() => {
       const isInitialPass = !initialDefaultsApplied;
-      setSelectedAgent(AGENT_ALL);
+
+      const preferredAgentId = isInitialPass
+        ? (initialFilters?.agentId?.trim() ?? "")
+        : "";
+      if (preferredAgentId && availableAgentIdSet.has(preferredAgentId)) {
+        setSelectedAgent(preferredAgentId);
+      } else {
+        setSelectedAgent(AGENT_ALL);
+      }
 
       if (availableActs.length > 0) {
-        setSelectedActs(new Set(availableActs.map((act) => act.id)));
+        const preferredSeasonIds = isInitialPass
+          ? (initialFilters?.seasonIds ?? [])
+          : [];
+        const validPreferredActs = preferredSeasonIds.filter((actId) =>
+          availableActIdSet.has(actId),
+        );
+
+        if (validPreferredActs.length > 0) {
+          setSelectedActs(new Set(validPreferredActs));
+        } else {
+          setSelectedActs(new Set(availableActs.map((act) => act.id)));
+        }
       } else {
         setSelectedActs(new Set());
       }
@@ -443,9 +487,12 @@ export function useHeatmapViewModel(props: {
     pendingMapDefaults,
     selectedMapId,
     filterOptionsRaw,
-    availableAgents,
+    availableAgentIdSet,
+    availableActIdSet,
     availableActs,
     initialDefaultsApplied,
+    initialFilters?.agentId,
+    initialFilters?.seasonIds,
     initialFilters?.side,
   ]);
 
@@ -874,6 +921,7 @@ export function useHeatmapViewModel(props: {
     selectedPhase,
     selectedActs,
     viewMode,
+    splitByEvent,
     showSetupStep,
     radiusPx,
     legendExpanded,
@@ -884,6 +932,7 @@ export function useHeatmapViewModel(props: {
     setSelectedPhase,
     setShowSetupStep,
     setViewMode,
+    setSplitByEvent,
     setRadiusPx,
     setLegendExpanded,
 

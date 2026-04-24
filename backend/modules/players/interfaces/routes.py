@@ -2,7 +2,10 @@ import copy
 
 from fastapi import APIRouter, HTTPException, Query
 from modules.players.infrastructure import mongo_player_repo
-from modules.players.application.player_dashboard_service import get_player_dashboard
+from modules.players.application.player_dashboard_service import (
+    get_player_dashboard,
+    get_player_rank_comparison,
+)
 
 router = APIRouter()
 
@@ -165,3 +168,30 @@ def get_player_dashboard_data(
     }
 
     return dashboard
+
+
+@router.get("/{puuid}/rank-comparison")
+def get_player_rank_comparison_data(
+    puuid: str,
+    queue_id: str | None = Query(default=None, description="Filter matches by queue type (e.g. 'competitive')"),
+    agent_id: str | None = Query(default=None, description="Filter matches by agent UUID"),
+    map_name: str | None = Query(default=None, description="Filter matches by map name"),
+    season_id: str | None = Query(default=None, description="Filter matches by act/season id"),
+    party_size: str | None = Query(
+        default=None,
+        description="Filter matches by party bucket: solo, duo, trio or team",
+    ),
+):
+    """Devuelve la comparativa de cohorte para el bloque Perfil de rendimiento."""
+    player = mongo_player_repo.find_by_puuid(puuid)
+    if not player:
+        raise HTTPException(status_code=404, detail="Jugador no encontrado")
+
+    return get_player_rank_comparison(
+        puuid,
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        season_id=season_id,
+        party_size=party_size,
+    )

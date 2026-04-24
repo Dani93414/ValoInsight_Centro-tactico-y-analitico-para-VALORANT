@@ -5,6 +5,7 @@ const Home = lazy(() => import("./pages/Home"));
 const Agentes = lazy(() => import("./pages/Agentes"));
 const Armas = lazy(() => import("./pages/Armas"));
 const Estadisticas = lazy(() => import("./pages/Estadisticas"));
+const HeatmapPage = lazy(() => import("./pages/HeatmapPage"));
 
 function App() {
   return (
@@ -16,6 +17,10 @@ function App() {
             <Route path="/agentes" element={<Agentes />} />
             <Route path="/armas" element={<Armas />} />
             <Route path="/estadisticas/:playerId" element={<Estadisticas />} />
+            <Route
+              path="/estadisticas/:playerId/heatmap"
+              element={<HeatmapPage />}
+            />
           </Routes>
         </Suspense>
       </div>

@@ -63,7 +63,7 @@ def main() -> None:
     parser.add_argument(
         "--matches-per-player",
         type=int,
-        default=5,
+        default=30,
         help="Cantidad de partidas a solicitar por jugador (default: 5).",
     )
     parser.add_argument(
