@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useArmas } from "../api/hooks";
 import BackButton from "../components/BackButton";
+import FloatingActionButton from "../components/FloatingActionButton";
 import type { Arma } from "../types/weapons";
 import "./Armas.css";
 
@@ -75,6 +77,19 @@ const formatearValor = (valor: unknown): string | number => {
 
 export default function Armas() {
   const { data: rawArmas, isLoading: loading } = useArmas();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const routeState =
+    (location.state as {
+      weaponName?: string;
+      returnTo?: string;
+      returnLabel?: string;
+    } | null) ?? null;
+
+  const returnTo = routeState?.returnTo ?? null;
+  const returnLabel = routeState?.returnLabel ?? "Volver";
+
   const armas = useMemo(() => {
     if (!rawArmas) return [];
     return [...(rawArmas as Arma[])].sort((a, b) =>
@@ -84,8 +99,37 @@ export default function Armas() {
 
   const [armaSeleccionada, setArmaSeleccionada] = useState<Arma | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const consumedRouteWeaponNameRef = useRef<string | null>(null);
 
   const detalleRef = useRef<HTMLDivElement | null>(null);
+
+  /* =============================
+     AUTO-SELECT FROM ROUTE STATE
+  ============================== */
+  useEffect(() => {
+    const routeWeaponName = routeState?.weaponName?.trim() || null;
+    if (
+      !routeWeaponName ||
+      consumedRouteWeaponNameRef.current === routeWeaponName ||
+      armas.length === 0 ||
+      armaSeleccionada
+    ) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      const match = armas.find(
+        (weapon) =>
+          weapon.displayName.toLowerCase() === routeWeaponName.toLowerCase(),
+      );
+      if (match) {
+        setArmaSeleccionada(match);
+      }
+      consumedRouteWeaponNameRef.current = routeWeaponName;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [armas, routeState?.weaponName, armaSeleccionada]);
 
   /* =============================
      FILTRADO POR BÚSQUEDA
@@ -141,6 +185,13 @@ export default function Armas() {
   return (
     <div className="weapons-container">
       <BackButton />
+      {returnTo && (
+        <FloatingActionButton
+          label={returnLabel}
+          onClick={() => navigate(returnTo)}
+          ariaLabel={returnLabel}
+        />
+      )}
       {/* =============================
          HEADER
       ============================== */}

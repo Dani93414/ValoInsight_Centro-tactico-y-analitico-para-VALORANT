@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -15,11 +16,16 @@ import {
   Bar,
   Cell,
 } from "recharts";
+import { useLocation } from "react-router-dom";
 import {
   formatNumber,
   formatPercent,
   formatDate,
 } from "../../../utils/formatters";
+import {
+  RECHARTS_TOOLTIP_CLAMP_VIEWBOX,
+  RECHARTS_TOOLTIP_WRAPPER_STYLE,
+} from "../../../utils/tooltipPositioning";
 import type { AnalyticsMatch } from "../../../types/dashboard";
 import { useAgentDetailStats } from "./useAgentDetailStats";
 import "../DetailModals.css";
@@ -45,6 +51,17 @@ export default function AgentDetailModal({
   agentNameMap,
   onClose,
 }: Props) {
+  const location = useLocation();
+  const [chartsReady, setChartsReady] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setChartsReady(true);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   const {
     navigate,
     loading,
@@ -111,10 +128,16 @@ export default function AgentDetailModal({
 
           <button
             type="button"
-            className="agent-view-btn"
+            className="detail-view-btn"
             onClick={() => {
               onClose();
-              navigate("/agentes", { state: { agentName: displayName } });
+              navigate("/agentes", {
+                state: {
+                  agentName: displayName,
+                  returnTo: `${location.pathname}${location.search}${location.hash}`,
+                  returnLabel: "Volver",
+                },
+              });
             }}
           >
             Ver el agente
@@ -191,16 +214,16 @@ export default function AgentDetailModal({
                 <strong>{formatNumber(stats.acsAvg, 1)}</strong>
               </div>
               <div className="summary-item">
-                <span>Diff. Daño / partida</span>
+                <span>Diff. Daño / ronda</span>
                 <strong
                   className={
-                    stats.damageDeltaPerMatch >= 0
+                    stats.damageDeltaPerRound >= 0
                       ? "text-positive"
                       : "text-negative"
                   }
                 >
-                  {stats.damageDeltaPerMatch >= 0 ? "+" : ""}
-                  {formatNumber(stats.damageDeltaPerMatch, 1)}
+                  {stats.damageDeltaPerRound >= 0 ? "+" : ""}
+                  {formatNumber(stats.damageDeltaPerRound, 1)}
                 </strong>
               </div>
               <div className="summary-item">
@@ -227,61 +250,72 @@ export default function AgentDetailModal({
             </div>
             <div className="modal-chart-box modal-chart-box--tall">
               {miniChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart
-                    data={miniChartData}
-                    margin={{ top: 10, right: 14, bottom: 4, left: -6 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.06)"
-                    />
-                    <XAxis
-                      dataKey="shortName"
-                      tick={{ fill: "#b5b5b5", fontSize: 13, fontWeight: 700 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: "#b5b5b5", fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                      domain={["dataMin - 20", "dataMax + 20"]}
-                    />
-                    <ReTooltip
-                      contentStyle={{
-                        background: "rgba(20,22,28,0.95)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        borderRadius: "10px",
-                        fontSize: "0.85rem",
-                      }}
-                      formatter={(
-                        value: unknown,
-                        _name: unknown,
-                        props: unknown,
-                      ) => {
-                        const p = (
-                          props as {
-                            payload?: { name?: string; result?: string };
-                          }
-                        )?.payload;
-                        return [
-                          `ACS: ${value}  ·  ${p?.result ?? ""}`,
-                          p?.name ?? "",
-                        ];
-                      }}
-                      labelFormatter={() => ""}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="acs"
-                      stroke="#ff4655"
-                      strokeWidth={2.5}
-                      dot={{ r: 4, fill: "#ff4655", strokeWidth: 0 }}
-                      activeDot={{ r: 6, fill: "#ff7a85", strokeWidth: 0 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                chartsReady ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart
+                      data={miniChartData}
+                      margin={{ top: 10, right: 14, bottom: 4, left: -6 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="rgba(255,255,255,0.06)"
+                      />
+                      <XAxis
+                        dataKey="shortName"
+                        tick={{
+                          fill: "#b5b5b5",
+                          fontSize: 13,
+                          fontWeight: 700,
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fill: "#b5b5b5", fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                        domain={["dataMin - 20", "dataMax + 20"]}
+                      />
+                      <ReTooltip
+                        contentStyle={{
+                          background: "rgba(20,22,28,0.95)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "10px",
+                          fontSize: "0.85rem",
+                        }}
+                        allowEscapeViewBox={RECHARTS_TOOLTIP_CLAMP_VIEWBOX}
+                        wrapperStyle={RECHARTS_TOOLTIP_WRAPPER_STYLE}
+                        formatter={(
+                          value: unknown,
+                          _name: unknown,
+                          props: unknown,
+                        ) => {
+                          const p = (
+                            props as {
+                              payload?: { name?: string; result?: string };
+                            }
+                          )?.payload;
+                          return [
+                            `ACS: ${value}  ·  ${p?.result ?? ""}`,
+                            p?.name ?? "",
+                          ];
+                        }}
+                        labelFormatter={() => ""}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="acs"
+                        stroke="#ff4655"
+                        strokeWidth={2.5}
+                        dot={{ r: 4, fill: "#ff4655", strokeWidth: 0 }}
+                        activeDot={{ r: 6, fill: "#ff7a85", strokeWidth: 0 }}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="empty-chart">Cargando grafico...</div>
+                )
               ) : (
                 <div className="empty-chart">Sin suficientes partidas.</div>
               )}
@@ -337,50 +371,57 @@ export default function AgentDetailModal({
               </div>
             </div>
             <div className="modal-chart-box modal-chart-box--radar">
-              <ResponsiveContainer width="100%" height={310}>
-                <RadarChart
-                  data={radarData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius="72%"
-                >
-                  <PolarGrid stroke="rgba(255,255,255,0.08)" />
-                  <PolarAngleAxis
-                    dataKey="metric"
-                    tick={{ fill: "#c0c0c0", fontSize: 12, fontWeight: 600 }}
-                  />
-                  <PolarRadiusAxis
-                    angle={90}
-                    domain={[0, 100]}
-                    tick={false}
-                    axisLine={false}
-                  />
-                  <Radar
-                    dataKey="value"
-                    stroke="#ff4655"
-                    fill="#ff4655"
-                    fillOpacity={0.2}
-                    strokeWidth={2}
-                  />
-                  <ReTooltip
-                    contentStyle={{
-                      background: "rgba(20,22,28,0.95)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      borderRadius: "10px",
-                      fontSize: "0.85rem",
-                    }}
-                    formatter={(
-                      _value: unknown,
-                      _name: unknown,
-                      props: unknown,
-                    ) => {
-                      const p = (props as { payload?: { real?: string } })
-                        ?.payload;
-                      return [p?.real ?? `${Number(_value).toFixed(1)}%`, ""];
-                    }}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height={310}>
+                  <RadarChart
+                    data={radarData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius="72%"
+                  >
+                    <PolarGrid stroke="rgba(255,255,255,0.08)" />
+                    <PolarAngleAxis
+                      dataKey="metric"
+                      tick={{ fill: "#c0c0c0", fontSize: 12, fontWeight: 600 }}
+                    />
+                    <PolarRadiusAxis
+                      angle={90}
+                      domain={[0, 100]}
+                      tick={false}
+                      axisLine={false}
+                    />
+                    <Radar
+                      dataKey="value"
+                      stroke="#ff4655"
+                      fill="#ff4655"
+                      fillOpacity={0.2}
+                      strokeWidth={2}
+                      isAnimationActive={false}
+                    />
+                    <ReTooltip
+                      contentStyle={{
+                        background: "rgba(20,22,28,0.95)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: "10px",
+                        fontSize: "0.85rem",
+                      }}
+                      allowEscapeViewBox={RECHARTS_TOOLTIP_CLAMP_VIEWBOX}
+                      wrapperStyle={RECHARTS_TOOLTIP_WRAPPER_STYLE}
+                      formatter={(
+                        _value: unknown,
+                        _name: unknown,
+                        props: unknown,
+                      ) => {
+                        const p = (props as { payload?: { real?: string } })
+                          ?.payload;
+                        return [p?.real ?? `${Number(_value).toFixed(1)}%`, ""];
+                      }}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="empty-chart">Cargando grafico...</div>
+              )}
             </div>
           </section>
 
@@ -458,47 +499,58 @@ export default function AgentDetailModal({
                 </div>
               </div>
               <div className="modal-chart-box">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart
-                    data={multikillData}
-                    margin={{ top: 10, right: 20, bottom: 4, left: -10 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.06)"
-                    />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fill: "#b5b5b5", fontSize: 13, fontWeight: 700 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: "#b5b5b5", fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                      allowDecimals={false}
-                    />
-                    <ReTooltip
-                      contentStyle={{
-                        background: "rgba(20,22,28,0.95)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        borderRadius: "10px",
-                        fontSize: "0.85rem",
-                      }}
-                    />
-                    <Bar
-                      dataKey="value"
-                      name="Rondas"
-                      radius={[6, 6, 0, 0]}
-                      barSize={32}
+                {chartsReady ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart
+                      data={multikillData}
+                      margin={{ top: 10, right: 20, bottom: 4, left: -10 }}
                     >
-                      {multikillData.map((d, i) => (
-                        <Cell key={i} fill={d.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="rgba(255,255,255,0.06)"
+                      />
+                      <XAxis
+                        dataKey="label"
+                        tick={{
+                          fill: "#b5b5b5",
+                          fontSize: 13,
+                          fontWeight: 700,
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fill: "#b5b5b5", fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                        allowDecimals={false}
+                      />
+                      <ReTooltip
+                        contentStyle={{
+                          background: "rgba(20,22,28,0.95)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "10px",
+                          fontSize: "0.85rem",
+                        }}
+                        allowEscapeViewBox={RECHARTS_TOOLTIP_CLAMP_VIEWBOX}
+                        wrapperStyle={RECHARTS_TOOLTIP_WRAPPER_STYLE}
+                      />
+                      <Bar
+                        dataKey="value"
+                        name="Rondas"
+                        radius={[6, 6, 0, 0]}
+                        barSize={32}
+                        isAnimationActive={false}
+                      >
+                        {multikillData.map((d, i) => (
+                          <Cell key={i} fill={d.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="empty-chart">Cargando grafico...</div>
+                )}
               </div>
             </section>
           )}

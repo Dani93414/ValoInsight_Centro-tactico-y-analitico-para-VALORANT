@@ -25,17 +25,17 @@ REGION = "eu"
 PLATFORM = "pc"
 
 DEFAULT_PLAYERS = [
-    #("No Screams", "GFS"),
-    #("No Baiting", "NNG"),
-    #("No Smoking", "Camel"),
-    #("No Enemies", "11111"),
-    #("No Filling", "GFS"),
-    #("No AFK", "zzz"),
-    #("No Reason", "GFS"),
+    ("No Screams", "GFS"),
+    ("No Baiting", "NNG"),
+    ("No Smoking", "Camel"),
+    ("No Enemies", "11111"),
+    ("No Filling", "GFS"),
+    ("No AFK", "zzz"),
+    ("No Reason", "GFS"),
     ("TA JLodbrok", "8674")
 ]
 
-MATCHES_PER_PLAYER = 400
+MATCHES_PER_PLAYER = 20
 PAGE_SIZE = 10  # max 10
 COMPETITIVE_QUEUE_ID = "competitive"
 

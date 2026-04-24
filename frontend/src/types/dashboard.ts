@@ -24,8 +24,10 @@ export type PlayerStats = {
 export type WeaponStat = {
   weaponId: string;
   weaponName: string;
+  rounds?: number;
   kills: number;
   deaths: number;
+  assists?: number;
   kdRatio: number;
 };
 
@@ -47,18 +49,68 @@ export type AnalyticsMatch = {
     headshot_pct?: number;
     rounds?: number;
     wins?: number;
+    losses?: number;
     headshots?: number;
     bodyshots?: number;
     legshots?: number;
     weapon_stats?: Array<Record<string, unknown>>;
     first_kills?: number;
     first_deaths?: number;
+    plants?: number;
+    defuses?: number;
+    plant_opportunities?: number;
+    defuse_opportunities?: number;
+    plants_per_opportunity_pct?: number;
+    defuses_per_opportunity_pct?: number;
     opening_duel_win_pct?: number;
     trade_kills?: number;
+    trade_opportunities?: number;
+    missed_trade_opportunities?: number;
+    trade_conversion_rate?: number;
     traded_deaths?: number;
     clutch_opportunities?: number;
     clutches_won?: number;
     clutch_win_rate?: number;
+    clutch_1v1_opportunities?: number;
+    clutch_1v1_wins?: number;
+    clutch_1v2_opportunities?: number;
+    clutch_1v2_wins?: number;
+    clutch_1v3_opportunities?: number;
+    clutch_1v3_wins?: number;
+    clutch_1v4_opportunities?: number;
+    clutch_1v4_wins?: number;
+    clutch_1v5_opportunities?: number;
+    clutch_1v5_wins?: number;
+    survival_rounds?: number;
+    rounds_with_kill?: number;
+    rounds_with_assist?: number;
+    rounds_with_death?: number;
+    rounds_with_direct_participation?: number;
+    rounds_without_direct_participation?: number;
+    rounds_with_kill_pct?: number;
+    rounds_with_assist_pct?: number;
+    rounds_with_death_pct?: number;
+    rounds_with_direct_participation_pct?: number;
+    rounds_without_direct_participation_pct?: number;
+    rounds_only_kill?: number;
+    rounds_only_assist?: number;
+    rounds_only_death?: number;
+    rounds_kill_assist?: number;
+    rounds_kill_death?: number;
+    rounds_assist_death?: number;
+    rounds_kill_assist_death?: number;
+    rounds_none?: number;
+    rounds_combined_or_none?: number;
+    rounds_only_kill_pct?: number;
+    rounds_only_assist_pct?: number;
+    rounds_only_death_pct?: number;
+    rounds_kill_assist_pct?: number;
+    rounds_kill_death_pct?: number;
+    rounds_assist_death_pct?: number;
+    rounds_kill_assist_death_pct?: number;
+    rounds_none_pct?: number;
+    rounds_combined_or_none_pct?: number;
+    rounds_with_kast?: number;
     survival_rate?: number;
     multikill_rate?: number;
     multi_2k?: number;
@@ -68,6 +120,9 @@ export type AnalyticsMatch = {
     damage_delta?: number;
     damage_delta_per_round?: number;
     kd_ratio?: number;
+    kast?: number;
+    kast_pct?: number;
+    kill_assist_survive_trade_pct?: number;
   };
   player_totals_from_match?: {
     kills?: number;
@@ -101,6 +156,25 @@ export type AnalyticsSideStats = {
   headshot_pct?: number;
   first_kills?: number;
   first_deaths?: number;
+  rounds_with_kill?: number;
+  rounds_with_assist?: number;
+  rounds_with_death?: number;
+  rounds_with_direct_participation?: number;
+  rounds_without_direct_participation?: number;
+  rounds_only_kill?: number;
+  rounds_only_assist?: number;
+  rounds_only_death?: number;
+  rounds_kill_assist?: number;
+  rounds_kill_death?: number;
+  rounds_assist_death?: number;
+  rounds_kill_assist_death?: number;
+  rounds_none?: number;
+  rounds_combined_or_none?: number;
+  rounds_with_multikill?: number;
+  multi_2k?: number;
+  multi_3k?: number;
+  multi_4k?: number;
+  multi_5k?: number;
 };
 
 export type SideStats = {
@@ -174,6 +248,7 @@ export type HeaderVisualCard = {
   title: string;
   subtitle: string;
   image?: string | null;
+  valueLabel?: string;
 };
 
 export type DashboardMetric = {
@@ -182,6 +257,38 @@ export type DashboardMetric = {
   percent: number;
   helper: string;
   benchmark: string;
+};
+
+export type RankComparisonMetricKey =
+  | "kd"
+  | "k"
+  | "d"
+  | "a"
+  | "kda"
+  | "acs"
+  | "hsPct"
+  | "kast"
+  | "incDamage"
+  | "wr"
+  | "wins"
+  | "losses";
+
+export type RankComparisonMetricComparison = {
+  percentile: number;
+  sampleSize: number;
+  isNeutral: boolean;
+};
+
+export type RankComparisonPayload = {
+  baseTier?: number | null;
+  baseRankName?: string;
+  cohortTiers?: number[];
+  cohortLabels?: string[];
+  sampleSize?: number;
+  metricComparisons?: Partial<
+    Record<RankComparisonMetricKey, RankComparisonMetricComparison>
+  >;
+  notes?: string[];
 };
 
 export type DashboardPayload = {
@@ -194,8 +301,48 @@ export type DashboardPayload = {
   >;
   mapMediaMap?: Record<string, string>;
   analyticsList: AnalyticsMatch[];
+  roundStats?: {
+    total_rounds: number;
+    rounds_with_kill: number;
+    rounds_with_assist: number;
+    rounds_with_death: number;
+    rounds_with_kill_pct: number;
+    rounds_with_assist_pct: number;
+    rounds_with_death_pct: number;
+    first_bloods: number;
+    aces: number;
+    plants?: number;
+    defuses?: number;
+    plant_opportunities?: number;
+    defuse_opportunities?: number;
+    plants_per_opportunity_pct?: number;
+    defuses_per_opportunity_pct?: number;
+    direct_participation_rounds: number;
+    no_direct_participation_rounds: number;
+    direct_participation_pct: number;
+    no_direct_participation_pct: number;
+    distribution_only_kills_rounds: number;
+    distribution_only_assists_rounds: number;
+    distribution_only_deaths_rounds: number;
+    distribution_kill_assist_rounds: number;
+    distribution_kill_death_rounds: number;
+    distribution_assist_death_rounds: number;
+    distribution_kill_assist_death_rounds: number;
+    distribution_none_rounds: number;
+    distribution_combined_or_none_rounds: number;
+    distribution_only_kills_pct: number;
+    distribution_only_assists_pct: number;
+    distribution_only_deaths_pct: number;
+    distribution_kill_assist_pct: number;
+    distribution_kill_death_pct: number;
+    distribution_assist_death_pct: number;
+    distribution_kill_assist_death_pct: number;
+    distribution_none_pct: number;
+    distribution_combined_or_none_pct: number;
+  };
   currentActId?: string | null;
   currentRank: RankInfo;
+  rankComparison?: RankComparisonPayload;
   headerShowcase: HeaderVisualCard[];
   mostPlayedAgents: Array<{
     id: string;

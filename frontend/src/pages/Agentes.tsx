@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAgentes } from "../api/hooks";
 import BackButton from "../components/BackButton";
+import FloatingActionButton from "../components/FloatingActionButton";
 import type { Agente } from "../types/agents";
 import "./Agentes.css";
 
@@ -12,6 +13,18 @@ import "./Agentes.css";
 export default function Agentes() {
   const { data: rawAgentes, isLoading: loading } = useAgentes();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const routeState =
+    (location.state as {
+      agentName?: string;
+      returnTo?: string;
+      returnLabel?: string;
+    } | null) ?? null;
+
+  const returnTo = routeState?.returnTo ?? null;
+  const returnLabel = routeState?.returnLabel ?? "Volver";
+
   const agentes = useMemo(() => {
     if (!rawAgentes) return [];
     return [...(rawAgentes as Agente[])].sort((a, b) =>
@@ -24,6 +37,7 @@ export default function Agentes() {
   );
 
   const [mostrarRol, setMostrarRol] = useState(false);
+  const consumedRouteAgentNameRef = useRef<string | null>(null);
 
   // 🆕 Filtros
   const [rolActivo, setRolActivo] = useState<string | null>(null);
@@ -35,20 +49,29 @@ export default function Agentes() {
      AUTO-SELECT FROM ROUTE STATE
   ============================== */
   useEffect(() => {
-    const state = location.state as { agentName?: string } | null;
-    if (state?.agentName && agentes.length > 0 && !agenteSeleccionado) {
+    const routeAgentName = routeState?.agentName?.trim() || null;
+    if (
+      !routeAgentName ||
+      consumedRouteAgentNameRef.current === routeAgentName ||
+      agentes.length === 0 ||
+      agenteSeleccionado
+    ) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
       const match = agentes.find(
-        (a) => a.displayName.toLowerCase() === state.agentName!.toLowerCase(),
+        (a) => a.displayName.toLowerCase() === routeAgentName.toLowerCase(),
       );
       if (match) {
-        const frame = requestAnimationFrame(() => {
-          setAgenteSeleccionado(match);
-          setMostrarRol(false);
-        });
-        return () => cancelAnimationFrame(frame);
+        setAgenteSeleccionado(match);
+        setMostrarRol(false);
       }
-    }
-  }, [agentes, location.state, agenteSeleccionado]);
+      consumedRouteAgentNameRef.current = routeAgentName;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [agentes, routeState?.agentName, agenteSeleccionado]);
 
   /* =============================
      SCROLL AL DETALLE
@@ -100,6 +123,13 @@ export default function Agentes() {
   return (
     <div className="agents-container">
       <BackButton />
+      {returnTo && (
+        <FloatingActionButton
+          label={returnLabel}
+          onClick={() => navigate(returnTo)}
+          ariaLabel={returnLabel}
+        />
+      )}
       {/* =============================
          HEADER
       ============================== */}

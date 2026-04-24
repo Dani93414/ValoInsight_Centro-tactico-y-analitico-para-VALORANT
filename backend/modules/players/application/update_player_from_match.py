@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import copy
 import logging
-from collections import Counter
 from typing import Any
 
 from modules.players.infrastructure import mongo_player_repo
+from shared.weapon_attribution import compute_precise_weapon_stats_core
 
 logger = logging.getLogger(__name__)
 
@@ -31,31 +31,17 @@ def _extract_player_shots(match_obj: dict, puuid: str) -> tuple[int, int, int]:
 
 
 def _extract_player_weapon_stats(match_obj: dict, puuid: str) -> dict[str, dict[str, int]]:
-    weapon_uses: Counter[str] = Counter()
-    weapon_kills: Counter[str] = Counter()
-    weapon_deaths: Counter[str] = Counter()
+    precise_weapon_stats = compute_precise_weapon_stats_core(
+        match_obj.get("roundResults") or [],
+        puuid,
+    )
 
-    for round_result in match_obj.get("roundResults", []) or []:
-        for p_stat in round_result.get("playerStats", []) or []:
-            if p_stat.get("puuid") == puuid:
-                weapon_id = ((p_stat.get("economy") or {}).get("weapon")) or "UNKNOWN"
-                weapon_uses[str(weapon_id)] += 1
-
-            for kill_event in p_stat.get("kills", []) or []:
-                finishing = kill_event.get("finishingDamage") or {}
-                damage_item = str(finishing.get("damageItem") or "UNKNOWN")
-                if kill_event.get("killer") == puuid:
-                    weapon_kills[damage_item] += 1
-                if kill_event.get("victim") == puuid:
-                    weapon_deaths[damage_item] += 1
-
-    all_weapons = set(weapon_uses) | set(weapon_kills) | set(weapon_deaths)
-    weapon_stats = {}
-    for weapon_id in all_weapons:
+    weapon_stats: dict[str, dict[str, int]] = {}
+    for weapon_id, payload in precise_weapon_stats.items():
         weapon_stats[weapon_id] = {
-            "uses": weapon_uses.get(weapon_id, 0),
-            "kills": weapon_kills.get(weapon_id, 0),
-            "deaths": weapon_deaths.get(weapon_id, 0),
+            "uses": int(payload.get("rounds", 0) or 0),
+            "kills": int(payload.get("kills", 0) or 0),
+            "deaths": int(payload.get("deaths", 0) or 0),
         }
     return weapon_stats
 

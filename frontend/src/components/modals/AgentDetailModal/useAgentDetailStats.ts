@@ -158,7 +158,10 @@ export function useAgentDetailStats({
       ),
       survivalRate: safeDivide(totals.survivalRate, Math.max(m, 1)),
       multikillRate: safeDivide(totals.multikillRate, Math.max(m, 1)),
-      damageDeltaPerMatch: safeDivide(totals.damageDelta, Math.max(m, 1)),
+      damageDeltaPerRound: safeDivide(
+        totals.damageDelta,
+        Math.max(totals.rounds, 1),
+      ),
     };
   }, [totals]);
 

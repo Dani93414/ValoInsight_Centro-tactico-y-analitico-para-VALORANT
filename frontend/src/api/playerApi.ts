@@ -1,4 +1,8 @@
 import { apiUrl } from "./config.ts";
+import type {
+  DashboardPayload,
+  RankComparisonPayload,
+} from "../types/dashboard";
 
 type PlayerSummary = {
   puuid: string;
@@ -36,10 +40,18 @@ export type DashboardFilters = {
   page_size?: number;
 };
 
+export type RankComparisonFilters = {
+  queue_id?: string;
+  agent_id?: string;
+  map_name?: string;
+  season_id?: string;
+  party_size?: "solo" | "duo" | "trio" | "team";
+};
+
 export async function getPlayerDashboard(
   playerId: string,
   filters?: DashboardFilters,
-) {
+): Promise<DashboardPayload> {
   const params = new URLSearchParams();
   if (filters?.queue_id) params.set("queue_id", filters.queue_id);
   if (filters?.agent_id) params.set("agent_id", filters.agent_id);
@@ -52,9 +64,29 @@ export async function getPlayerDashboard(
   const url = apiUrl(
     `/players/${encodeURIComponent(playerId)}/dashboard${qs ? `?${qs}` : ""}`,
   );
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error("Error player dashboard");
-  return res.json();
+  return (await res.json()) as DashboardPayload;
+}
+
+export async function getPlayerRankComparison(
+  playerId: string,
+  filters?: RankComparisonFilters,
+): Promise<RankComparisonPayload> {
+  const params = new URLSearchParams();
+  if (filters?.queue_id) params.set("queue_id", filters.queue_id);
+  if (filters?.agent_id) params.set("agent_id", filters.agent_id);
+  if (filters?.map_name) params.set("map_name", filters.map_name);
+  if (filters?.season_id) params.set("season_id", filters.season_id);
+  if (filters?.party_size) params.set("party_size", filters.party_size);
+
+  const qs = params.toString();
+  const url = apiUrl(
+    `/players/${encodeURIComponent(playerId)}/rank-comparison${qs ? `?${qs}` : ""}`,
+  );
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("Error player rank comparison");
+  return (await res.json()) as RankComparisonPayload;
 }
 
 export async function getMatchById(matchId: string) {

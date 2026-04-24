@@ -8,6 +8,7 @@ from modules.analytics.domain.constants import (
     SIDE_ATTACK,
     SIDE_DEFENSE,
     SIDE_UNKNOWN,
+    SPATIAL_PROXIMITY_THRESHOLD_UNITS,
     TRADE_WINDOW_MS,
 )
 from modules.analytics.infrastructure.reference_data import (
@@ -17,8 +18,12 @@ from modules.analytics.infrastructure.reference_data import (
     resolve_weapon_name,
 )
 
-from shared.math_utils import safe_div as _safe_div_raw
+from shared.math_utils import euclidean_distance_2d, safe_div as _safe_div_raw
 from shared.stat_formulas import finalize_core_stats
+from shared.weapon_attribution import (
+    compute_precise_weapon_stats_core,
+    merge_precise_weapon_core_stats,
+)
 
 
 def safe_div(numerator: float, denominator: float) -> float:
@@ -67,12 +72,36 @@ def new_scope_stats() -> dict:
         "opening_duel_wins": 0,
         "opening_duel_losses": 0,
         "trade_kills": 0,
+        "trade_opportunities": 0,
+        "missed_trade_opportunities": 0,
         "traded_deaths": 0,
         "clutch_opportunities": 0,
         "clutches_won": 0,
+        "clutch_1v1_opportunities": 0,
+        "clutch_1v1_wins": 0,
+        "clutch_1v2_opportunities": 0,
+        "clutch_1v2_wins": 0,
+        "clutch_1v3_opportunities": 0,
+        "clutch_1v3_wins": 0,
+        "clutch_1v4_opportunities": 0,
+        "clutch_1v4_wins": 0,
+        "clutch_1v5_opportunities": 0,
+        "clutch_1v5_wins": 0,
         "survival_rounds": 0,
         "rounds_with_kill": 0,
         "rounds_with_assist": 0,
+        "rounds_with_death": 0,
+        "rounds_with_direct_participation": 0,
+        "rounds_without_direct_participation": 0,
+        "rounds_only_kill": 0,
+        "rounds_only_assist": 0,
+        "rounds_only_death": 0,
+        "rounds_kill_assist": 0,
+        "rounds_kill_death": 0,
+        "rounds_assist_death": 0,
+        "rounds_kill_assist_death": 0,
+        "rounds_none": 0,
+        "rounds_combined_or_none": 0,
         "rounds_with_multikill": 0,
         "multi_2k": 0,
         "multi_3k": 0,
@@ -113,9 +142,31 @@ def _new_weapon_scope(weapon_id: str, weapon_name: Optional[str] = None) -> dict
         "traded_deaths": 0,
         "clutch_opportunities": 0,
         "clutches_won": 0,
+        "clutch_1v1_opportunities": 0,
+        "clutch_1v1_wins": 0,
+        "clutch_1v2_opportunities": 0,
+        "clutch_1v2_wins": 0,
+        "clutch_1v3_opportunities": 0,
+        "clutch_1v3_wins": 0,
+        "clutch_1v4_opportunities": 0,
+        "clutch_1v4_wins": 0,
+        "clutch_1v5_opportunities": 0,
+        "clutch_1v5_wins": 0,
         "survival_rounds": 0,
         "rounds_with_kill": 0,
         "rounds_with_assist": 0,
+        "rounds_with_death": 0,
+        "rounds_with_direct_participation": 0,
+        "rounds_without_direct_participation": 0,
+        "rounds_only_kill": 0,
+        "rounds_only_assist": 0,
+        "rounds_only_death": 0,
+        "rounds_kill_assist": 0,
+        "rounds_kill_death": 0,
+        "rounds_assist_death": 0,
+        "rounds_kill_assist_death": 0,
+        "rounds_none": 0,
+        "rounds_combined_or_none": 0,
         "rounds_with_multikill": 0,
         "multi_2k": 0,
         "multi_3k": 0,
@@ -263,43 +314,210 @@ def _find_first_kill(kills: List[dict]) -> Optional[dict]:
     return kills[0] if kills else None
 
 
+def _get_player_location_snapshot(kill: dict, puuid: str | None) -> Optional[dict]:
+    if not puuid:
+        return None
+
+    for player_location in (kill.get("playerLocations") or []):
+        if player_location.get("puuid") != puuid:
+            continue
+        location = player_location.get("location")
+        if isinstance(location, dict):
+            return location
+    return None
+
+
+def _is_within_trade_proximity(
+    actor_location: Optional[dict],
+    reference_location: Optional[dict],
+) -> bool:
+    distance = euclidean_distance_2d(actor_location, reference_location)
+    if distance is None:
+        return True
+    return distance <= SPATIAL_PROXIMITY_THRESHOLD_UNITS
+
+
+def _prune_expired_trade_opportunities(
+    opportunities: list[dict],
+    current_time_ms: int,
+) -> None:
+    opportunities[:] = [opp for opp in opportunities if current_time_ms <= int(opp.get("expires_at", 0) or 0)]
+
+
+def _consume_trade_opportunity(
+    opportunities: list[dict],
+    target_killer: str | None,
+    event_time_ms: int,
+    actor_location: Optional[dict],
+    require_proximity: bool = True,
+) -> bool:
+    if not target_killer:
+        return False
+
+    for idx, opportunity in enumerate(opportunities):
+        if opportunity.get("target_killer") != target_killer:
+            continue
+
+        expires_at = int(opportunity.get("expires_at", 0) or 0)
+        if event_time_ms > expires_at:
+            continue
+
+        if require_proximity:
+            reference_location = opportunity.get("reference_location")
+            if not _is_within_trade_proximity(actor_location, reference_location):
+                continue
+
+        opportunities.pop(idx)
+        return True
+
+    return False
+
+
+def _close_trade_opportunities_for_killer(
+    opportunities: list[dict],
+    killer_puuid: str | None,
+) -> None:
+    opportunities[:] = [
+        opportunity
+        for opportunity in opportunities
+        if opportunity.get("target_killer") != killer_puuid
+    ]
+
+
+def _is_player_positioned_for_realistic_trade(
+    kill: dict,
+    puuid: str,
+    player_alive: bool,
+) -> bool:
+    if not player_alive:
+        return False
+
+    player_location = _get_player_location_snapshot(kill, puuid)
+    reference_location = kill.get("victimLocation")
+    if not isinstance(reference_location, dict):
+        reference_location = None
+    return _is_within_trade_proximity(player_location, reference_location)
+
+
+def _compute_trade_metrics(
+    kills: List[dict],
+    puuid: str,
+    player_team: Set[str],
+    enemy_team: Set[str],
+) -> dict[str, int | float]:
+    trade_kills = 0
+    traded_deaths = 0
+    realistic_trade_candidates = 0
+    realistic_trade_conversions = 0
+    player_alive = True
+
+    open_trade_kill_opportunities: list[dict] = []
+    open_realistic_trade_kill_opportunities: list[dict] = []
+    open_traded_death_opportunities: list[dict] = []
+
+    ordered_kills = sorted(
+        kills,
+        key=lambda item: int(item.get("timeSinceRoundStartMillis", 0) or 0),
+    )
+
+    for kill in ordered_kills:
+        kill_time = int(kill.get("timeSinceRoundStartMillis", 0) or 0)
+        killer = kill.get("killer")
+        victim = kill.get("victim")
+
+        _prune_expired_trade_opportunities(open_trade_kill_opportunities, kill_time)
+        _prune_expired_trade_opportunities(
+            open_realistic_trade_kill_opportunities,
+            kill_time,
+        )
+        _prune_expired_trade_opportunities(open_traded_death_opportunities, kill_time)
+
+        if killer == puuid and victim in enemy_team:
+            current_killer_location = _get_player_location_snapshot(kill, killer)
+            if _consume_trade_opportunity(
+                opportunities=open_trade_kill_opportunities,
+                target_killer=victim,
+                event_time_ms=kill_time,
+                actor_location=current_killer_location,
+                require_proximity=False,
+            ):
+                trade_kills += 1
+                if _consume_trade_opportunity(
+                    opportunities=open_realistic_trade_kill_opportunities,
+                    target_killer=victim,
+                    event_time_ms=kill_time,
+                    actor_location=current_killer_location,
+                ):
+                    realistic_trade_conversions += 1
+
+        if killer in player_team and killer != puuid and victim in enemy_team:
+            teammate_killer_location = _get_player_location_snapshot(kill, killer)
+            if _consume_trade_opportunity(
+                opportunities=open_traded_death_opportunities,
+                target_killer=victim,
+                event_time_ms=kill_time,
+                actor_location=teammate_killer_location,
+                require_proximity=False,
+            ):
+                traded_deaths += 1
+
+        if victim in enemy_team:
+            _close_trade_opportunities_for_killer(open_trade_kill_opportunities, victim)
+            _close_trade_opportunities_for_killer(
+                open_realistic_trade_kill_opportunities,
+                victim,
+            )
+            _close_trade_opportunities_for_killer(open_traded_death_opportunities, victim)
+
+        if victim in player_team and victim != puuid and killer in enemy_team and player_alive:
+            reference_location = kill.get("victimLocation")
+            opportunity = {
+                "target_killer": killer,
+                "expires_at": kill_time + TRADE_WINDOW_MS,
+                "reference_location": reference_location if isinstance(reference_location, dict) else None,
+            }
+            open_trade_kill_opportunities.append(opportunity)
+
+            if _is_player_positioned_for_realistic_trade(kill, puuid, player_alive):
+                realistic_trade_candidates += 1
+                open_realistic_trade_kill_opportunities.append(dict(opportunity))
+
+        if victim == puuid and killer in enemy_team:
+            reference_location = kill.get("victimLocation")
+            open_traded_death_opportunities.append(
+                {
+                    "target_killer": killer,
+                    "expires_at": kill_time + TRADE_WINDOW_MS,
+                    "reference_location": reference_location if isinstance(reference_location, dict) else None,
+                }
+            )
+
+        if victim == puuid:
+            player_alive = False
+
+    missed_trade_opportunities = max(
+        realistic_trade_candidates - realistic_trade_conversions,
+        0,
+    )
+    trade_opportunities = trade_kills + missed_trade_opportunities
+
+    return {
+        "trade_kills": trade_kills,
+        "trade_opportunities": trade_opportunities,
+        "missed_trade_opportunities": missed_trade_opportunities,
+        "trade_conversion_rate": safe_div(trade_kills * 100.0, trade_opportunities),
+        "traded_deaths": traded_deaths,
+    }
+
+
 def _find_trade_kill_count(
     kills: List[dict],
     puuid: str,
     player_team: Set[str],
     enemy_team: Set[str],
 ) -> tuple[int, int]:
-    """
-    trade_kills: el jugador mata a alguien que mató a su compañero hace <= TRADE_WINDOW_MS
-    traded_deaths: el jugador muere y un compañero mata a su killer en <= TRADE_WINDOW_MS
-    """
-    trade_kills = 0
-    traded_deaths = 0
-
-    for idx, kill in enumerate(kills):
-        kill_time = int(kill.get("timeSinceRoundStartMillis", 0) or 0)
-        killer = kill.get("killer")
-        victim = kill.get("victim")
-
-        if killer == puuid:
-            for prev in kills[:idx]:
-                prev_time = int(prev.get("timeSinceRoundStartMillis", 0) or 0)
-                if kill_time - prev_time > TRADE_WINDOW_MS:
-                    continue
-                if prev.get("killer") == victim and prev.get("victim") in player_team:
-                    trade_kills += 1
-                    break
-
-        if victim == puuid:
-            for nxt in kills[idx + 1 :]:
-                next_time = int(nxt.get("timeSinceRoundStartMillis", 0) or 0)
-                if next_time - kill_time > TRADE_WINDOW_MS:
-                    break
-                if nxt.get("killer") in player_team and nxt.get("victim") == killer:
-                    traded_deaths += 1
-                    break
-
-    return trade_kills, traded_deaths
+    metrics = _compute_trade_metrics(kills, puuid, player_team, enemy_team)
+    return int(metrics["trade_kills"]), int(metrics["traded_deaths"])
 
 
 def _find_clutch_for_player(
@@ -308,7 +526,7 @@ def _find_clutch_for_player(
     player_team: Set[str],
     enemy_team: Set[str],
     player_team_won_round: bool,
-) -> tuple[int, int]:
+) -> tuple[int, int, dict[str, int]]:
     """
     clutch opportunity:
       en algún momento el jugador queda como único superviviente de su equipo
@@ -316,6 +534,19 @@ def _find_clutch_for_player(
     clutch won:
       si además su equipo gana la ronda.
     """
+    clutch_breakdown = {
+        "clutch_1v1_opportunities": 0,
+        "clutch_1v1_wins": 0,
+        "clutch_1v2_opportunities": 0,
+        "clutch_1v2_wins": 0,
+        "clutch_1v3_opportunities": 0,
+        "clutch_1v3_wins": 0,
+        "clutch_1v4_opportunities": 0,
+        "clutch_1v4_wins": 0,
+        "clutch_1v5_opportunities": 0,
+        "clutch_1v5_wins": 0,
+    }
+
     alive_player_team = set(player_team)
     alive_enemy_team = set(enemy_team)
 
@@ -336,9 +567,16 @@ def _find_clutch_for_player(
             break
 
     if clutch_enemy_count is None:
-        return 0, 0
+        return 0, 0, clutch_breakdown
 
-    return 1, 1 if player_team_won_round else 0
+    clutch_enemy_count = max(1, min(int(clutch_enemy_count), 5))
+    opportunity_key = f"clutch_1v{clutch_enemy_count}_opportunities"
+    won_key = f"clutch_1v{clutch_enemy_count}_wins"
+    clutch_breakdown[opportunity_key] = 1
+    if player_team_won_round:
+        clutch_breakdown[won_key] = 1
+
+    return 1, 1 if player_team_won_round else 0, clutch_breakdown
 
 
 def _upsert_weapon_stats(scope: dict, weapon_id: str) -> dict:
@@ -370,12 +608,36 @@ def _update_weapon_scope(weapon_scope: dict, round_payload: dict) -> None:
         "opening_duel_wins",
         "opening_duel_losses",
         "trade_kills",
+        "trade_opportunities",
+        "missed_trade_opportunities",
         "traded_deaths",
         "clutch_opportunities",
         "clutches_won",
+        "clutch_1v1_opportunities",
+        "clutch_1v1_wins",
+        "clutch_1v2_opportunities",
+        "clutch_1v2_wins",
+        "clutch_1v3_opportunities",
+        "clutch_1v3_wins",
+        "clutch_1v4_opportunities",
+        "clutch_1v4_wins",
+        "clutch_1v5_opportunities",
+        "clutch_1v5_wins",
         "survival_rounds",
         "rounds_with_kill",
         "rounds_with_assist",
+        "rounds_with_death",
+        "rounds_with_direct_participation",
+        "rounds_without_direct_participation",
+        "rounds_only_kill",
+        "rounds_only_assist",
+        "rounds_only_death",
+        "rounds_kill_assist",
+        "rounds_kill_death",
+        "rounds_assist_death",
+        "rounds_kill_assist_death",
+        "rounds_none",
+        "rounds_combined_or_none",
         "rounds_with_multikill",
         "multi_2k",
         "multi_3k",
@@ -409,9 +671,31 @@ def _update_scope(scope: dict, weapon_id: str, round_payload: dict, spent: int) 
         "traded_deaths",
         "clutch_opportunities",
         "clutches_won",
+        "clutch_1v1_opportunities",
+        "clutch_1v1_wins",
+        "clutch_1v2_opportunities",
+        "clutch_1v2_wins",
+        "clutch_1v3_opportunities",
+        "clutch_1v3_wins",
+        "clutch_1v4_opportunities",
+        "clutch_1v4_wins",
+        "clutch_1v5_opportunities",
+        "clutch_1v5_wins",
         "survival_rounds",
         "rounds_with_kill",
         "rounds_with_assist",
+        "rounds_with_death",
+        "rounds_with_direct_participation",
+        "rounds_without_direct_participation",
+        "rounds_only_kill",
+        "rounds_only_assist",
+        "rounds_only_death",
+        "rounds_kill_assist",
+        "rounds_kill_death",
+        "rounds_assist_death",
+        "rounds_kill_assist_death",
+        "rounds_none",
+        "rounds_combined_or_none",
         "rounds_with_multikill",
         "multi_2k",
         "multi_3k",
@@ -577,6 +861,10 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             SIDE_ATTACK: new_scope_stats(),
             SIDE_DEFENSE: new_scope_stats(),
         }
+        side_round_results = {
+            SIDE_ATTACK: [],
+            SIDE_DEFENSE: [],
+        }
 
         for round_obj in round_results:
             pstats_map = _player_stats_map(round_obj)
@@ -634,14 +922,14 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
                     first_deaths = 1
                     opening_duel_losses = 1
 
-            trade_kills, traded_deaths = _find_trade_kill_count(
+            trade_metrics = _compute_trade_metrics(
                 kills=all_kills,
                 puuid=puuid,
                 player_team=player_team_set,
                 enemy_team=enemy_team_set,
             )
 
-            clutch_opportunities, clutches_won = _find_clutch_for_player(
+            clutch_opportunities, clutches_won, clutch_breakdown = _find_clutch_for_player(
                 kills=all_kills,
                 puuid=puuid,
                 player_team=player_team_set,
@@ -652,6 +940,94 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             survival_rounds = 0 if died else 1
             rounds_with_kill = 1 if kills_round > 0 else 0
             rounds_with_assist = 1 if assists_round > 0 else 0
+            rounds_with_death = 1 if deaths_round > 0 else 0
+            rounds_with_direct_participation = (
+                1 if (rounds_with_kill > 0 or rounds_with_assist > 0) else 0
+            )
+            rounds_without_direct_participation = (
+                0 if rounds_with_direct_participation > 0 else 1
+            )
+
+            rounds_only_kill = (
+                1
+                if (
+                    rounds_with_kill > 0
+                    and rounds_with_assist == 0
+                    and rounds_with_death == 0
+                )
+                else 0
+            )
+            rounds_only_assist = (
+                1
+                if (
+                    rounds_with_assist > 0
+                    and rounds_with_kill == 0
+                    and rounds_with_death == 0
+                )
+                else 0
+            )
+            rounds_only_death = (
+                1
+                if (
+                    rounds_with_death > 0
+                    and rounds_with_kill == 0
+                    and rounds_with_assist == 0
+                )
+                else 0
+            )
+            rounds_kill_assist = (
+                1
+                if (
+                    rounds_with_kill > 0
+                    and rounds_with_assist > 0
+                    and rounds_with_death == 0
+                )
+                else 0
+            )
+            rounds_kill_death = (
+                1
+                if (
+                    rounds_with_kill > 0
+                    and rounds_with_death > 0
+                    and rounds_with_assist == 0
+                )
+                else 0
+            )
+            rounds_assist_death = (
+                1
+                if (
+                    rounds_with_assist > 0
+                    and rounds_with_death > 0
+                    and rounds_with_kill == 0
+                )
+                else 0
+            )
+            rounds_kill_assist_death = (
+                1
+                if (
+                    rounds_with_kill > 0
+                    and rounds_with_assist > 0
+                    and rounds_with_death > 0
+                )
+                else 0
+            )
+            rounds_none = (
+                1
+                if (
+                    rounds_with_kill == 0
+                    and rounds_with_assist == 0
+                    and rounds_with_death == 0
+                )
+                else 0
+            )
+            rounds_combined_or_none = (
+                rounds_kill_assist
+                + rounds_kill_death
+                + rounds_assist_death
+                + rounds_kill_assist_death
+                + rounds_none
+            )
+
             rounds_with_multikill = 1 if kills_round >= 2 else 0
             multi_2k = 1 if kills_round == 2 else 0
             multi_3k = 1 if kills_round == 3 else 0
@@ -675,13 +1051,28 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
                 "first_deaths": first_deaths,
                 "opening_duel_wins": opening_duel_wins,
                 "opening_duel_losses": opening_duel_losses,
-                "trade_kills": trade_kills,
-                "traded_deaths": traded_deaths,
+                "trade_kills": int(trade_metrics["trade_kills"]),
+                "trade_opportunities": int(trade_metrics["trade_opportunities"]),
+                "missed_trade_opportunities": int(trade_metrics["missed_trade_opportunities"]),
+                "traded_deaths": int(trade_metrics["traded_deaths"]),
                 "clutch_opportunities": clutch_opportunities,
                 "clutches_won": clutches_won,
+                **clutch_breakdown,
                 "survival_rounds": survival_rounds,
                 "rounds_with_kill": rounds_with_kill,
                 "rounds_with_assist": rounds_with_assist,
+                "rounds_with_death": rounds_with_death,
+                "rounds_with_direct_participation": rounds_with_direct_participation,
+                "rounds_without_direct_participation": rounds_without_direct_participation,
+                "rounds_only_kill": rounds_only_kill,
+                "rounds_only_assist": rounds_only_assist,
+                "rounds_only_death": rounds_only_death,
+                "rounds_kill_assist": rounds_kill_assist,
+                "rounds_kill_death": rounds_kill_death,
+                "rounds_assist_death": rounds_assist_death,
+                "rounds_kill_assist_death": rounds_kill_assist_death,
+                "rounds_none": rounds_none,
+                "rounds_combined_or_none": rounds_combined_or_none,
                 "rounds_with_multikill": rounds_with_multikill,
                 "multi_2k": multi_2k,
                 "multi_3k": multi_3k,
@@ -694,7 +1085,18 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             _update_scope(overview, equipped_weapon_id, round_payload, spent)
 
             if round_side in {SIDE_ATTACK, SIDE_DEFENSE}:
+                side_round_results[round_side].append(round_obj)
                 _update_scope(sides[round_side], equipped_weapon_id, round_payload, spent)
+
+        overview["weapon_stats"] = merge_precise_weapon_core_stats(
+            overview.get("weapon_stats"),
+            compute_precise_weapon_stats_core(round_results, puuid),
+        )
+        for side_name in (SIDE_ATTACK, SIDE_DEFENSE):
+            sides[side_name]["weapon_stats"] = merge_precise_weapon_core_stats(
+                sides[side_name].get("weapon_stats"),
+                compute_precise_weapon_stats_core(side_round_results[side_name], puuid),
+            )
 
         _finalize_stats_block(overview)
         if sides[SIDE_ATTACK].get("rounds", 0) > 0:

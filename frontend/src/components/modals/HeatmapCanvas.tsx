@@ -21,6 +21,7 @@ interface Props {
   maxWeight?: number; // for normalisation across comparisons
   debugEnabled?: boolean;
   transformMeta?: HeatmapTransformMeta | null;
+  eventTypeLabels?: Record<string, string>;
 }
 
 function formatTransformValue(value: number): string {
@@ -49,6 +50,7 @@ export default function HeatmapCanvas({
   maxWeight,
   debugEnabled = false,
   transformMeta = null,
+  eventTypeLabels = {},
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -99,6 +101,9 @@ export default function HeatmapCanvas({
     const dpr = window.devicePixelRatio || 1;
     dprRef.current = dpr;
 
+    // Request the 2D context in read-heavy mode before simpleheat initializes it.
+    canvas.getContext("2d", { willReadFrequently: true });
+
     canvas.width = Math.max(1, Math.round(imgSize.w * dpr));
     canvas.height = Math.max(1, Math.round(imgSize.h * dpr));
     canvas.style.width = `${imgSize.w}px`;
@@ -117,7 +122,7 @@ export default function HeatmapCanvas({
 
     const { w, h: hh } = imgSize;
     const dpr = dprRef.current;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (events.length === 0) return;
@@ -209,27 +214,35 @@ export default function HeatmapCanvas({
       const hoverRadiusPx = Math.max(5, Math.min(12, radius * 0.9));
       const hoverRadiusSq = hoverRadiusPx * hoverRadiusPx;
       let count = 0;
-      let kills = 0;
-      let deaths = 0;
+      const eventTypeCount = new Map<string, number>();
       for (const ev of events) {
         const dxPx = ev.x * imageRect.width - localX;
         const dyPx = ev.y * imageRect.height - localY;
         if (dxPx * dxPx + dyPx * dyPx <= hoverRadiusSq) {
           count++;
-          if (
-            ev.event_type === "kill" ||
-            ev.event_type === "kill_enemy_position" ||
-            ev.event_type === "first_blood"
-          )
-            kills++;
-          if (ev.event_type === "death") deaths++;
+          eventTypeCount.set(
+            ev.event_type,
+            (eventTypeCount.get(ev.event_type) ?? 0) + 1,
+          );
         }
       }
 
       if (count > 0) {
         const parts: string[] = [`${count} evento${count > 1 ? "s" : ""}`];
-        if (kills > 0) parts.push(`${kills} kill${kills > 1 ? "s" : ""}`);
-        if (deaths > 0) parts.push(`${deaths} muerte${deaths > 1 ? "s" : ""}`);
+
+        const sortedBreakdown = [...eventTypeCount.entries()].sort(
+          (a, b) =>
+            b[1] - a[1] ||
+            (eventTypeLabels[a[0]] ?? a[0]).localeCompare(
+              eventTypeLabels[b[0]] ?? b[0],
+              "es",
+            ),
+        );
+
+        for (const [eventType, amount] of sortedBreakdown) {
+          parts.push(`${eventTypeLabels[eventType] ?? eventType}: ${amount}`);
+        }
+
         setTooltip({
           x: e.clientX - containerRect.left,
           y: e.clientY - containerRect.top,
@@ -239,7 +252,7 @@ export default function HeatmapCanvas({
         setTooltip(null);
       }
     },
-    [debugEnabled, events, radius],
+    [debugEnabled, events, eventTypeLabels, radius],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -337,7 +350,7 @@ export default function HeatmapCanvas({
       {tooltip && (
         <div
           className="heatmap-tooltip"
-          style={{ left: tooltip.x + 12, top: tooltip.y - 8 }}
+          style={{ left: tooltip.x, top: tooltip.y }}
         >
           {tooltip.text}
         </div>

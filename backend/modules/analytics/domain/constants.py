@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 TRADE_WINDOW_MS = 5000
+SPATIAL_PROXIMITY_THRESHOLD_UNITS = 700
 
 SIDE_ATTACK = "attack"
 SIDE_DEFENSE = "defense"

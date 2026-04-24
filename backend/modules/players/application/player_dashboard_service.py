@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import threading
 import time
 import unicodedata
@@ -7,6 +8,10 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from modules.analytics.domain.constants import (
+    SPATIAL_PROXIMITY_THRESHOLD_UNITS,
+    TRADE_WINDOW_MS,
+)
 from modules.players.infrastructure import dashboard_queries
 
 
@@ -24,7 +29,11 @@ def _get_dashboard_content() -> dict[str, Any]:
         return _DASHBOARD_CONTENT_CACHE
 
 
-from shared.math_utils import safe_div as _safe_div
+from shared.math_utils import euclidean_distance_2d, safe_div as _safe_div
+from shared.weapon_attribution import (
+    compute_precise_weapon_stats_core,
+    merge_precise_weapon_core_stats,
+)
 
 
 def _coerce_positive_int(value: Any) -> int | None:
@@ -45,6 +54,13 @@ def _coerce_positive_int(value: Any) -> int | None:
         except (TypeError, ValueError):
             return None
     return None
+
+
+def _coerce_rank_tier(value: Any) -> int | None:
+    tier = _coerce_positive_int(value)
+    if tier is None or tier < 3:
+        return None
+    return tier
 
 
 def _format_tier_name(tier: int | None) -> str:
@@ -79,6 +95,22 @@ def _format_tier_name(tier: int | None) -> str:
         27: "Radiant",
     }
     return names.get(tier, f"Tier {tier}")
+
+
+_RANK_COMPARISON_METRICS: tuple[tuple[str, bool], ...] = (
+    ("kd", False),
+    ("k", False),
+    ("d", True),
+    ("a", False),
+    ("kda", False),
+    ("acs", False),
+    ("hsPct", False),
+    ("kast", False),
+    ("incDamage", False),
+    ("wr", False),
+    ("wins", False),
+    ("losses", True),
+)
 
 
 def _normalize_rank_label(value: Any) -> str:
@@ -123,6 +155,857 @@ def _normalize_weapon_stats(
             continue
         normalized.append({**entry, "key": key})
     return normalized
+
+
+def _coerce_non_negative_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, float):
+        return max(0, int(value))
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return 0
+        try:
+            return max(0, int(float(stripped)))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _clamp_round_count(value: Any, total_rounds: int) -> int:
+    coerced = _coerce_non_negative_int(value)
+    return min(coerced, max(total_rounds, 0))
+
+
+def _pct_rounds(value: int, total_rounds: int) -> float:
+    return round(_safe_div(float(value) * 100.0, max(total_rounds, 1)), 4)
+
+
+def _pct_from_denominator(value: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(_safe_div(float(value) * 100.0, denominator), 4)
+
+
+def _normalize_round_overview(overview: dict[str, Any] | None) -> dict[str, int | float]:
+    source = overview or {}
+
+    total_rounds = _coerce_non_negative_int(source.get("rounds"))
+    plants = _coerce_non_negative_int(source.get("plants"))
+    defuses = _coerce_non_negative_int(source.get("defuses"))
+    plant_opportunities = _coerce_non_negative_int(source.get("plant_opportunities"))
+    defuse_opportunities = _coerce_non_negative_int(source.get("defuse_opportunities"))
+    rounds_with_kill = _clamp_round_count(source.get("rounds_with_kill"), total_rounds)
+    rounds_with_assist = _clamp_round_count(source.get("rounds_with_assist"), total_rounds)
+    rounds_with_death = _clamp_round_count(
+        source.get("rounds_with_death", source.get("deaths")),
+        total_rounds,
+    )
+
+    direct_fallback = max(rounds_with_kill, rounds_with_assist)
+    rounds_with_direct_participation = _clamp_round_count(
+        source.get("rounds_with_direct_participation", direct_fallback),
+        total_rounds,
+    )
+
+    rounds_without_direct_participation = _clamp_round_count(
+        source.get(
+            "rounds_without_direct_participation",
+            max(0, total_rounds - rounds_with_direct_participation),
+        ),
+        total_rounds,
+    )
+    if (
+        rounds_with_direct_participation + rounds_without_direct_participation
+        != total_rounds
+    ):
+        rounds_without_direct_participation = max(
+            0,
+            total_rounds - rounds_with_direct_participation,
+        )
+
+    rounds_only_kill = _clamp_round_count(source.get("rounds_only_kill"), total_rounds)
+    remaining = max(0, total_rounds - rounds_only_kill)
+
+    rounds_only_assist = min(
+        _clamp_round_count(source.get("rounds_only_assist"), total_rounds),
+        remaining,
+    )
+    remaining = max(0, remaining - rounds_only_assist)
+
+    rounds_only_death = min(
+        _clamp_round_count(source.get("rounds_only_death"), total_rounds),
+        remaining,
+    )
+    remaining = max(0, remaining - rounds_only_death)
+
+    rounds_kill_assist = min(
+        _clamp_round_count(source.get("rounds_kill_assist"), total_rounds),
+        remaining,
+    )
+    remaining = max(0, remaining - rounds_kill_assist)
+
+    rounds_kill_death = min(
+        _clamp_round_count(source.get("rounds_kill_death"), total_rounds),
+        remaining,
+    )
+    remaining = max(0, remaining - rounds_kill_death)
+
+    rounds_assist_death = min(
+        _clamp_round_count(source.get("rounds_assist_death"), total_rounds),
+        remaining,
+    )
+    remaining = max(0, remaining - rounds_assist_death)
+
+    rounds_kill_assist_death = min(
+        _clamp_round_count(source.get("rounds_kill_assist_death"), total_rounds),
+        remaining,
+    )
+    remaining = max(0, remaining - rounds_kill_assist_death)
+
+    rounds_none = min(
+        _clamp_round_count(source.get("rounds_none"), total_rounds),
+        remaining,
+    )
+
+    if (
+        rounds_kill_assist == 0
+        and rounds_kill_death == 0
+        and rounds_assist_death == 0
+        and rounds_kill_assist_death == 0
+        and rounds_none == 0
+    ):
+        rounds_none = min(
+            _clamp_round_count(source.get("rounds_combined_or_none"), total_rounds),
+            remaining,
+        )
+
+    rounds_combined_or_none = (
+        rounds_kill_assist
+        + rounds_kill_death
+        + rounds_assist_death
+        + rounds_kill_assist_death
+        + rounds_none
+    )
+
+    return {
+        "total_rounds": total_rounds,
+        "plants": plants,
+        "defuses": defuses,
+        "plant_opportunities": plant_opportunities,
+        "defuse_opportunities": defuse_opportunities,
+        "rounds_with_kill": rounds_with_kill,
+        "rounds_with_assist": rounds_with_assist,
+        "rounds_with_death": rounds_with_death,
+        "rounds_with_direct_participation": rounds_with_direct_participation,
+        "rounds_without_direct_participation": rounds_without_direct_participation,
+        "rounds_only_kill": rounds_only_kill,
+        "rounds_only_assist": rounds_only_assist,
+        "rounds_only_death": rounds_only_death,
+        "rounds_kill_assist": rounds_kill_assist,
+        "rounds_kill_death": rounds_kill_death,
+        "rounds_assist_death": rounds_assist_death,
+        "rounds_kill_assist_death": rounds_kill_assist_death,
+        "rounds_none": rounds_none,
+        "rounds_combined_or_none": rounds_combined_or_none,
+        "rounds_with_kill_pct": _pct_rounds(rounds_with_kill, total_rounds),
+        "rounds_with_assist_pct": _pct_rounds(rounds_with_assist, total_rounds),
+        "rounds_with_death_pct": _pct_rounds(rounds_with_death, total_rounds),
+        "rounds_with_direct_participation_pct": _pct_rounds(
+            rounds_with_direct_participation,
+            total_rounds,
+        ),
+        "rounds_without_direct_participation_pct": _pct_rounds(
+            rounds_without_direct_participation,
+            total_rounds,
+        ),
+        "rounds_only_kill_pct": _pct_rounds(rounds_only_kill, total_rounds),
+        "rounds_only_assist_pct": _pct_rounds(rounds_only_assist, total_rounds),
+        "rounds_only_death_pct": _pct_rounds(rounds_only_death, total_rounds),
+        "rounds_kill_assist_pct": _pct_rounds(rounds_kill_assist, total_rounds),
+        "rounds_kill_death_pct": _pct_rounds(rounds_kill_death, total_rounds),
+        "rounds_assist_death_pct": _pct_rounds(rounds_assist_death, total_rounds),
+        "rounds_kill_assist_death_pct": _pct_rounds(
+            rounds_kill_assist_death,
+            total_rounds,
+        ),
+        "rounds_none_pct": _pct_rounds(rounds_none, total_rounds),
+        "rounds_combined_or_none_pct": _pct_rounds(
+            rounds_combined_or_none,
+            total_rounds,
+        ),
+        "plants_per_opportunity_pct": _pct_from_denominator(
+            plants,
+            plant_opportunities,
+        ),
+        "defuses_per_opportunity_pct": _pct_from_denominator(
+            defuses,
+            defuse_opportunities,
+        ),
+    }
+
+
+def _unique_round_kill_key(kill: dict[str, Any]) -> tuple[Any, Any, Any, tuple[str, ...]]:
+    assistants = tuple(sorted(str(a) for a in (kill.get("assistants") or []) if a))
+    return (
+        kill.get("timeSinceRoundStartMillis"),
+        kill.get("killer"),
+        kill.get("victim"),
+        assistants,
+    )
+
+
+def _collect_unique_round_kills(round_obj: dict[str, Any]) -> list[dict[str, Any]]:
+    seen: set[tuple[Any, Any, Any, tuple[str, ...]]] = set()
+    unique_kills: list[dict[str, Any]] = []
+
+    for player_round in round_obj.get("playerStats") or []:
+        for kill in (player_round or {}).get("kills") or []:
+            if not isinstance(kill, dict):
+                continue
+            key = _unique_round_kill_key(kill)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_kills.append(kill)
+
+    unique_kills.sort(key=lambda item: _coerce_non_negative_int(item.get("timeSinceRoundStartMillis")))
+    return unique_kills
+
+
+def _coerce_optional_non_negative_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, float):
+        return max(0, int(value))
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return max(0, int(float(stripped)))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _build_match_team_lookup(match_obj: dict[str, Any]) -> dict[str, str]:
+    team_by_puuid: dict[str, str] = {}
+    for player in match_obj.get("players") or []:
+        if not isinstance(player, dict):
+            continue
+        player_puuid = str(player.get("puuid") or "").strip()
+        player_team = str(player.get("teamId") or "").strip()
+        if not player_puuid or not player_team:
+            continue
+        team_by_puuid[player_puuid] = player_team
+    return team_by_puuid
+
+
+def _first_death_time_in_round(kills: list[dict[str, Any]], puuid: str) -> int | None:
+    for kill in kills:
+        if kill.get("victim") == puuid:
+            return _coerce_non_negative_int(kill.get("timeSinceRoundStartMillis"))
+    return None
+
+
+def _get_player_location_snapshot_from_kill(
+    kill: dict[str, Any],
+    player_puuid: str | None,
+) -> dict[str, Any] | None:
+    if not player_puuid:
+        return None
+
+    for player_location in kill.get("playerLocations") or []:
+        if not isinstance(player_location, dict):
+            continue
+        if player_location.get("puuid") != player_puuid:
+            continue
+        location = player_location.get("location")
+        if isinstance(location, dict):
+            return location
+    return None
+
+
+def _is_within_trade_proximity(
+    actor_location: dict[str, Any] | None,
+    reference_location: dict[str, Any] | None,
+) -> bool:
+    distance = euclidean_distance_2d(actor_location, reference_location)
+    if distance is None:
+        return True
+    return distance <= SPATIAL_PROXIMITY_THRESHOLD_UNITS
+
+
+def _prune_expired_trade_opportunities(
+    opportunities: list[dict[str, Any]],
+    current_time_ms: int,
+) -> None:
+    opportunities[:] = [
+        opp
+        for opp in opportunities
+        if current_time_ms <= _coerce_non_negative_int(opp.get("expires_at"))
+    ]
+
+
+def _consume_trade_opportunity(
+    opportunities: list[dict[str, Any]],
+    target_killer: Any,
+    event_time_ms: int,
+    actor_location: dict[str, Any] | None,
+    require_proximity: bool = True,
+) -> bool:
+    if not target_killer:
+        return False
+
+    for idx, opportunity in enumerate(opportunities):
+        if opportunity.get("target_killer") != target_killer:
+            continue
+
+        expires_at = _coerce_non_negative_int(opportunity.get("expires_at"))
+        if event_time_ms > expires_at:
+            continue
+
+        if require_proximity:
+            reference_location = opportunity.get("reference_location")
+            if not _is_within_trade_proximity(actor_location, reference_location):
+                continue
+
+        opportunities.pop(idx)
+        return True
+
+    return False
+
+
+def _close_trade_opportunities_for_killer(
+    opportunities: list[dict[str, Any]],
+    killer_puuid: Any,
+) -> None:
+    opportunities[:] = [
+        opp for opp in opportunities if opp.get("target_killer") != killer_puuid
+    ]
+
+
+def _is_player_positioned_for_realistic_trade(
+    kill: dict[str, Any],
+    puuid: str,
+    player_alive: bool,
+) -> bool:
+    if not player_alive:
+        return False
+
+    player_location = _get_player_location_snapshot_from_kill(kill, puuid)
+    reference_location = kill.get("victimLocation")
+    if not isinstance(reference_location, dict):
+        reference_location = None
+    return _is_within_trade_proximity(player_location, reference_location)
+
+
+def _compute_trade_metrics_from_round_kills(
+    kills: list[dict[str, Any]],
+    puuid: str,
+    player_team: set[str],
+    enemy_team: set[str],
+) -> dict[str, int | float]:
+    if not kills:
+        return {
+            "trade_kills": 0,
+            "trade_opportunities": 0,
+            "missed_trade_opportunities": 0,
+            "trade_conversion_rate": 0.0,
+            "traded_deaths": 0,
+        }
+
+    trade_kills = 0
+    traded_deaths = 0
+    realistic_trade_candidates = 0
+    realistic_trade_conversions = 0
+    player_alive = True
+
+    open_trade_kill_opportunities: list[dict[str, Any]] = []
+    open_realistic_trade_kill_opportunities: list[dict[str, Any]] = []
+    open_traded_death_opportunities: list[dict[str, Any]] = []
+
+    for kill in kills:
+        kill_time_ms = _coerce_non_negative_int(kill.get("timeSinceRoundStartMillis"))
+        killer = kill.get("killer")
+        victim = kill.get("victim")
+
+        _prune_expired_trade_opportunities(open_trade_kill_opportunities, kill_time_ms)
+        _prune_expired_trade_opportunities(
+            open_realistic_trade_kill_opportunities,
+            kill_time_ms,
+        )
+        _prune_expired_trade_opportunities(open_traded_death_opportunities, kill_time_ms)
+
+        if killer == puuid and victim in enemy_team:
+            player_location = _get_player_location_snapshot_from_kill(kill, puuid)
+            if _consume_trade_opportunity(
+                opportunities=open_trade_kill_opportunities,
+                target_killer=victim,
+                event_time_ms=kill_time_ms,
+                actor_location=player_location,
+                require_proximity=False,
+            ):
+                trade_kills += 1
+                if _consume_trade_opportunity(
+                    opportunities=open_realistic_trade_kill_opportunities,
+                    target_killer=victim,
+                    event_time_ms=kill_time_ms,
+                    actor_location=player_location,
+                ):
+                    realistic_trade_conversions += 1
+
+        if killer in player_team and killer != puuid and victim in enemy_team:
+            teammate_location = _get_player_location_snapshot_from_kill(kill, str(killer))
+            if _consume_trade_opportunity(
+                opportunities=open_traded_death_opportunities,
+                target_killer=victim,
+                event_time_ms=kill_time_ms,
+                actor_location=teammate_location,
+                require_proximity=False,
+            ):
+                traded_deaths += 1
+
+        if victim in enemy_team:
+            _close_trade_opportunities_for_killer(open_trade_kill_opportunities, victim)
+            _close_trade_opportunities_for_killer(
+                open_realistic_trade_kill_opportunities,
+                victim,
+            )
+            _close_trade_opportunities_for_killer(open_traded_death_opportunities, victim)
+
+        if victim in player_team and victim != puuid and killer in enemy_team and player_alive:
+            reference_location = kill.get("victimLocation")
+            opportunity = {
+                "target_killer": killer,
+                "expires_at": kill_time_ms + TRADE_WINDOW_MS,
+                "reference_location": reference_location if isinstance(reference_location, dict) else None,
+            }
+            open_trade_kill_opportunities.append(opportunity)
+
+            if _is_player_positioned_for_realistic_trade(kill, puuid, player_alive):
+                realistic_trade_candidates += 1
+                open_realistic_trade_kill_opportunities.append(dict(opportunity))
+
+        if victim == puuid and killer in enemy_team:
+            reference_location = kill.get("victimLocation")
+            open_traded_death_opportunities.append(
+                {
+                    "target_killer": killer,
+                    "expires_at": kill_time_ms + TRADE_WINDOW_MS,
+                    "reference_location": reference_location if isinstance(reference_location, dict) else None,
+                }
+            )
+
+        if victim == puuid:
+            player_alive = False
+
+    missed_trade_opportunities = max(
+        realistic_trade_candidates - realistic_trade_conversions,
+        0,
+    )
+    trade_opportunities = trade_kills + missed_trade_opportunities
+
+    return {
+        "trade_kills": trade_kills,
+        "trade_opportunities": trade_opportunities,
+        "missed_trade_opportunities": missed_trade_opportunities,
+        "trade_conversion_rate": _pct_from_denominator(
+            trade_kills,
+            trade_opportunities,
+        ),
+        "traded_deaths": traded_deaths,
+    }
+
+
+def _compute_trade_counts_from_round_kills(
+    kills: list[dict[str, Any]],
+    puuid: str,
+    player_team: set[str],
+    enemy_team: set[str],
+) -> tuple[int, int]:
+    metrics = _compute_trade_metrics_from_round_kills(
+        kills,
+        puuid,
+        player_team,
+        enemy_team,
+    )
+    return int(metrics["trade_kills"]), int(metrics["traded_deaths"])
+
+
+def _was_player_alive_at_round_event(
+    round_obj: dict[str, Any],
+    puuid: str,
+    first_death_time_ms: int | None,
+    event_kind: str,
+) -> bool:
+    if event_kind == "plant":
+        event_locations = round_obj.get("plantPlayerLocations") or []
+        event_time = _coerce_optional_non_negative_int(round_obj.get("plantRoundTime"))
+    else:
+        event_locations = round_obj.get("defusePlayerLocations") or []
+        event_time = _coerce_optional_non_negative_int(round_obj.get("defuseRoundTime"))
+
+    if isinstance(event_locations, list) and event_locations:
+        for player_location in event_locations:
+            if isinstance(player_location, dict) and player_location.get("puuid") == puuid:
+                return True
+        return False
+
+    if event_time is None:
+        return first_death_time_ms is None
+
+    return first_death_time_ms is None or first_death_time_ms > event_time
+
+
+def _compute_round_overview_from_round_results(
+    match_obj: dict[str, Any],
+    puuid: str,
+) -> dict[str, int]:
+    round_results = match_obj.get("roundResults") or []
+    if not isinstance(round_results, list) or not round_results:
+        return {}
+
+    team_by_puuid = _build_match_team_lookup(match_obj)
+    player_team_id = team_by_puuid.get(puuid)
+    if player_team_id:
+        player_team_members = {
+            member_puuid
+            for member_puuid, team_id in team_by_puuid.items()
+            if team_id == player_team_id
+        }
+        enemy_team_members = {
+            member_puuid
+            for member_puuid, team_id in team_by_puuid.items()
+            if team_id and team_id != player_team_id
+        }
+    else:
+        player_team_members = {puuid}
+        enemy_team_members: set[str] = set()
+
+    rounds = 0
+    rounds_with_kill = 0
+    rounds_with_assist = 0
+    rounds_with_death = 0
+    rounds_with_direct_participation = 0
+    rounds_without_direct_participation = 0
+    rounds_only_kill = 0
+    rounds_only_assist = 0
+    rounds_only_death = 0
+    rounds_kill_assist = 0
+    rounds_kill_death = 0
+    rounds_assist_death = 0
+    rounds_kill_assist_death = 0
+    rounds_none = 0
+    rounds_combined_or_none = 0
+    first_kills = 0
+    plants = 0
+    defuses = 0
+    plant_opportunities = 0
+    defuse_opportunities = 0
+    trade_kills = 0
+    trade_opportunities = 0
+    missed_trade_opportunities = 0
+    traded_deaths = 0
+    rounds_with_multikill = 0
+    multi_2k = 0
+    multi_3k = 0
+    multi_4k = 0
+    multi_5k = 0
+
+    for round_obj in round_results:
+        if not isinstance(round_obj, dict):
+            continue
+
+        rounds += 1
+        unique_kills = _collect_unique_round_kills(round_obj)
+        first_death_time_ms = _first_death_time_in_round(unique_kills, puuid)
+        kills_round = sum(1 for kill in unique_kills if kill.get("killer") == puuid)
+        assists_round = sum(
+            1
+            for kill in unique_kills
+            if puuid in (kill.get("assistants") or [])
+        )
+        died = any(kill.get("victim") == puuid for kill in unique_kills)
+
+        round_trade_metrics = _compute_trade_metrics_from_round_kills(
+            kills=unique_kills,
+            puuid=puuid,
+            player_team=player_team_members,
+            enemy_team=enemy_team_members,
+        )
+        trade_kills += int(round_trade_metrics["trade_kills"])
+        trade_opportunities += int(round_trade_metrics["trade_opportunities"])
+        missed_trade_opportunities += int(
+            round_trade_metrics["missed_trade_opportunities"]
+        )
+        traded_deaths += int(round_trade_metrics["traded_deaths"])
+
+        has_kill = kills_round > 0
+        has_assist = assists_round > 0
+        has_death = died
+
+        if unique_kills and unique_kills[0].get("killer") == puuid:
+            first_kills += 1
+
+        planter = round_obj.get("bombPlanter")
+        if planter == puuid:
+            plants += 1
+        if planter and (
+            planter == puuid
+            or (player_team_id and team_by_puuid.get(planter) == player_team_id)
+        ):
+            if _was_player_alive_at_round_event(
+                round_obj=round_obj,
+                puuid=puuid,
+                first_death_time_ms=first_death_time_ms,
+                event_kind="plant",
+            ):
+                plant_opportunities += 1
+
+        defuser = round_obj.get("bombDefuser")
+        if defuser == puuid:
+            defuses += 1
+        if defuser and (
+            defuser == puuid
+            or (player_team_id and team_by_puuid.get(defuser) == player_team_id)
+        ):
+            if _was_player_alive_at_round_event(
+                round_obj=round_obj,
+                puuid=puuid,
+                first_death_time_ms=first_death_time_ms,
+                event_kind="defuse",
+            ):
+                defuse_opportunities += 1
+
+        if kills_round >= 2:
+            rounds_with_multikill += 1
+        if kills_round == 2:
+            multi_2k += 1
+        elif kills_round == 3:
+            multi_3k += 1
+        elif kills_round == 4:
+            multi_4k += 1
+        elif kills_round >= 5:
+            multi_5k += 1
+
+        if has_kill:
+            rounds_with_kill += 1
+        if has_assist:
+            rounds_with_assist += 1
+        if has_death:
+            rounds_with_death += 1
+
+        if has_kill or has_assist:
+            rounds_with_direct_participation += 1
+        else:
+            rounds_without_direct_participation += 1
+
+        if has_kill and not has_assist and not has_death:
+            rounds_only_kill += 1
+        elif has_assist and not has_kill and not has_death:
+            rounds_only_assist += 1
+        elif has_death and not has_kill and not has_assist:
+            rounds_only_death += 1
+        elif has_kill and has_assist and not has_death:
+            rounds_kill_assist += 1
+        elif has_kill and has_death and not has_assist:
+            rounds_kill_death += 1
+        elif has_assist and has_death and not has_kill:
+            rounds_assist_death += 1
+        elif has_kill and has_assist and has_death:
+            rounds_kill_assist_death += 1
+        else:
+            rounds_none += 1
+
+        rounds_combined_or_none += (
+            (1 if has_kill and has_assist and not has_death else 0)
+            + (1 if has_kill and has_death and not has_assist else 0)
+            + (1 if has_assist and has_death and not has_kill else 0)
+            + (1 if has_kill and has_assist and has_death else 0)
+            + (1 if not has_kill and not has_assist and not has_death else 0)
+        )
+
+    if rounds <= 0:
+        return {}
+
+    return {
+        "rounds": rounds,
+        "first_kills": first_kills,
+        "plants": plants,
+        "defuses": defuses,
+        "plant_opportunities": plant_opportunities,
+        "defuse_opportunities": defuse_opportunities,
+        "trade_kills": trade_kills,
+        "trade_opportunities": trade_opportunities,
+        "missed_trade_opportunities": missed_trade_opportunities,
+        "trade_conversion_rate": _pct_from_denominator(
+            trade_kills,
+            trade_opportunities,
+        ),
+        "traded_deaths": traded_deaths,
+        "rounds_with_kill": rounds_with_kill,
+        "rounds_with_assist": rounds_with_assist,
+        "rounds_with_death": rounds_with_death,
+        "rounds_with_direct_participation": rounds_with_direct_participation,
+        "rounds_without_direct_participation": rounds_without_direct_participation,
+        "rounds_only_kill": rounds_only_kill,
+        "rounds_only_assist": rounds_only_assist,
+        "rounds_only_death": rounds_only_death,
+        "rounds_kill_assist": rounds_kill_assist,
+        "rounds_kill_death": rounds_kill_death,
+        "rounds_assist_death": rounds_assist_death,
+        "rounds_kill_assist_death": rounds_kill_assist_death,
+        "rounds_none": rounds_none,
+        "rounds_combined_or_none": rounds_combined_or_none,
+        "rounds_with_multikill": rounds_with_multikill,
+        "multi_2k": multi_2k,
+        "multi_3k": multi_3k,
+        "multi_4k": multi_4k,
+        "multi_5k": multi_5k,
+    }
+
+
+def _compute_rounds_panel_summary(analytics_docs: list[dict[str, Any]]) -> dict[str, Any]:
+    totals = {
+        "total_rounds": 0,
+        "rounds_with_kill": 0,
+        "rounds_with_assist": 0,
+        "rounds_with_death": 0,
+        "direct_participation_rounds": 0,
+        "no_direct_participation_rounds": 0,
+        "distribution_only_kills_rounds": 0,
+        "distribution_only_assists_rounds": 0,
+        "distribution_only_deaths_rounds": 0,
+        "distribution_kill_assist_rounds": 0,
+        "distribution_kill_death_rounds": 0,
+        "distribution_assist_death_rounds": 0,
+        "distribution_kill_assist_death_rounds": 0,
+        "distribution_none_rounds": 0,
+        "distribution_combined_or_none_rounds": 0,
+        "first_bloods": 0,
+        "aces": 0,
+        "plants": 0,
+        "defuses": 0,
+        "plant_opportunities": 0,
+        "defuse_opportunities": 0,
+    }
+
+    for doc in analytics_docs:
+        overview = doc.get("overview") or {}
+        normalized_rounds = _normalize_round_overview(overview)
+
+        totals["total_rounds"] += int(normalized_rounds["total_rounds"])
+        totals["rounds_with_kill"] += int(normalized_rounds["rounds_with_kill"])
+        totals["rounds_with_assist"] += int(normalized_rounds["rounds_with_assist"])
+        totals["rounds_with_death"] += int(normalized_rounds["rounds_with_death"])
+        totals["direct_participation_rounds"] += int(
+            normalized_rounds["rounds_with_direct_participation"]
+        )
+        totals["no_direct_participation_rounds"] += int(
+            normalized_rounds["rounds_without_direct_participation"]
+        )
+        totals["distribution_only_kills_rounds"] += int(
+            normalized_rounds["rounds_only_kill"]
+        )
+        totals["distribution_only_assists_rounds"] += int(
+            normalized_rounds["rounds_only_assist"]
+        )
+        totals["distribution_only_deaths_rounds"] += int(
+            normalized_rounds["rounds_only_death"]
+        )
+        totals["distribution_kill_assist_rounds"] += int(
+            normalized_rounds["rounds_kill_assist"]
+        )
+        totals["distribution_kill_death_rounds"] += int(
+            normalized_rounds["rounds_kill_death"]
+        )
+        totals["distribution_assist_death_rounds"] += int(
+            normalized_rounds["rounds_assist_death"]
+        )
+        totals["distribution_kill_assist_death_rounds"] += int(
+            normalized_rounds["rounds_kill_assist_death"]
+        )
+        totals["distribution_none_rounds"] += int(
+            normalized_rounds["rounds_none"]
+        )
+        totals["distribution_combined_or_none_rounds"] += int(
+            normalized_rounds["rounds_combined_or_none"]
+        )
+
+        totals["first_bloods"] += _coerce_non_negative_int(overview.get("first_kills"))
+        totals["aces"] += _coerce_non_negative_int(overview.get("multi_5k"))
+        totals["plants"] += int(normalized_rounds["plants"])
+        totals["defuses"] += int(normalized_rounds["defuses"])
+        totals["plant_opportunities"] += int(normalized_rounds["plant_opportunities"])
+        totals["defuse_opportunities"] += int(normalized_rounds["defuse_opportunities"])
+
+    total_rounds = int(totals["total_rounds"])
+
+    return {
+        **totals,
+        "rounds_with_kill_pct": _pct_rounds(int(totals["rounds_with_kill"]), total_rounds),
+        "rounds_with_assist_pct": _pct_rounds(int(totals["rounds_with_assist"]), total_rounds),
+        "rounds_with_death_pct": _pct_rounds(int(totals["rounds_with_death"]), total_rounds),
+        "direct_participation_pct": _pct_rounds(
+            int(totals["direct_participation_rounds"]),
+            total_rounds,
+        ),
+        "no_direct_participation_pct": _pct_rounds(
+            int(totals["no_direct_participation_rounds"]),
+            total_rounds,
+        ),
+        "distribution_only_kills_pct": _pct_rounds(
+            int(totals["distribution_only_kills_rounds"]),
+            total_rounds,
+        ),
+        "distribution_only_assists_pct": _pct_rounds(
+            int(totals["distribution_only_assists_rounds"]),
+            total_rounds,
+        ),
+        "distribution_only_deaths_pct": _pct_rounds(
+            int(totals["distribution_only_deaths_rounds"]),
+            total_rounds,
+        ),
+        "distribution_kill_assist_pct": _pct_rounds(
+            int(totals["distribution_kill_assist_rounds"]),
+            total_rounds,
+        ),
+        "distribution_kill_death_pct": _pct_rounds(
+            int(totals["distribution_kill_death_rounds"]),
+            total_rounds,
+        ),
+        "distribution_assist_death_pct": _pct_rounds(
+            int(totals["distribution_assist_death_rounds"]),
+            total_rounds,
+        ),
+        "distribution_kill_assist_death_pct": _pct_rounds(
+            int(totals["distribution_kill_assist_death_rounds"]),
+            total_rounds,
+        ),
+        "distribution_none_pct": _pct_rounds(
+            int(totals["distribution_none_rounds"]),
+            total_rounds,
+        ),
+        "distribution_combined_or_none_pct": _pct_rounds(
+            int(totals["distribution_combined_or_none_rounds"]),
+            total_rounds,
+        ),
+        "plants_per_opportunity_pct": _pct_from_denominator(
+            int(totals["plants"]),
+            int(totals["plant_opportunities"]),
+        ),
+        "defuses_per_opportunity_pct": _pct_from_denominator(
+            int(totals["defuses"]),
+            int(totals["defuse_opportunities"]),
+        ),
+    }
 
 
 def _build_competitive_tier_maps(
@@ -345,7 +1228,7 @@ def _latest_rank_from_matches(puuid: str) -> dict[str, Any]:
             if player.get("puuid") != puuid:
                 continue
 
-            tier = _coerce_positive_int(
+            tier = _coerce_rank_tier(
                 player.get("competitiveTier", player.get("competitive_tier"))
             )
             if tier is not None:
@@ -477,6 +1360,14 @@ def _load_weapon_usage_summary(
             "$project": {
                 "weapon_id": "$ws.k",
                 "weapon_name": {"$ifNull": ["$ws.v.weapon_name", "Arma desconocida"]},
+                "rounds": {
+                    "$convert": {
+                        "input": "$ws.v.rounds",
+                        "to": "int",
+                        "onError": 0,
+                        "onNull": 0,
+                    }
+                },
                 "kills": {
                     "$convert": {
                         "input": "$ws.v.kills",
@@ -500,11 +1391,12 @@ def _load_weapon_usage_summary(
             "$group": {
                 "_id": "$weapon_id",
                 "name": {"$first": "$weapon_name"},
+                "rounds": {"$sum": "$rounds"},
                 "kills": {"$sum": "$kills"},
                 "matches": {
                     "$sum": {
                         "$cond": [
-                            {"$gt": [{"$add": ["$kills", "$deaths"]}, 0]},
+                            {"$gt": ["$rounds", 0]},
                             1,
                             0,
                         ]
@@ -515,7 +1407,7 @@ def _load_weapon_usage_summary(
                         "$cond": [
                             {
                                 "$and": [
-                                    {"$gt": [{"$add": ["$kills", "$deaths"]}, 0]},
+                                    {"$gt": ["$rounds", 0]},
                                     {"$eq": ["$won_match", True]},
                                 ]
                             },
@@ -526,7 +1418,7 @@ def _load_weapon_usage_summary(
                 },
             }
         },
-        {"$sort": {"kills": -1, "matches": -1}},
+        {"$sort": {"kills": -1, "rounds": -1, "matches": -1}},
         {"$limit": 20},
     ]
 
@@ -553,6 +1445,7 @@ def _build_light_analytics_list(
     for doc in analytics_docs:
         overview = doc.get("overview") or {}
         player_totals = doc.get("player_totals_from_match") or {}
+        normalized_rounds = _normalize_round_overview(overview)
 
         light_docs.append(
             {
@@ -571,21 +1464,103 @@ def _build_light_analytics_list(
                     "acs": overview.get("acs"),
                     "adr": overview.get("adr"),
                     "headshot_pct": overview.get("headshot_pct"),
-                    "rounds": overview.get("rounds"),
+                    "rounds": normalized_rounds.get("total_rounds"),
                     "wins": overview.get("wins"),
+                    "losses": overview.get("losses"),
                     "headshots": overview.get("headshots"),
                     "bodyshots": overview.get("bodyshots"),
                     "legshots": overview.get("legshots"),
+                    "plants": normalized_rounds.get("plants"),
+                    "defuses": normalized_rounds.get("defuses"),
+                    "plant_opportunities": normalized_rounds.get("plant_opportunities"),
+                    "defuse_opportunities": normalized_rounds.get("defuse_opportunities"),
+                    "plants_per_opportunity_pct": normalized_rounds.get(
+                        "plants_per_opportunity_pct"
+                    ),
+                    "defuses_per_opportunity_pct": normalized_rounds.get(
+                        "defuses_per_opportunity_pct"
+                    ),
                     "weapon_stats": _normalize_weapon_stats(overview.get("weapon_stats")),
                     # Tactical / advanced fields
                     "first_kills": overview.get("first_kills"),
                     "first_deaths": overview.get("first_deaths"),
                     "opening_duel_win_pct": overview.get("opening_duel_win_pct"),
                     "trade_kills": overview.get("trade_kills"),
+                    "trade_opportunities": overview.get("trade_opportunities"),
+                    "missed_trade_opportunities": overview.get(
+                        "missed_trade_opportunities"
+                    ),
+                    "trade_conversion_rate": overview.get("trade_conversion_rate"),
                     "traded_deaths": overview.get("traded_deaths"),
                     "clutch_opportunities": overview.get("clutch_opportunities"),
                     "clutches_won": overview.get("clutches_won"),
                     "clutch_win_rate": overview.get("clutch_win_rate"),
+                    "clutch_1v1_opportunities": overview.get("clutch_1v1_opportunities"),
+                    "clutch_1v1_wins": overview.get("clutch_1v1_wins"),
+                    "clutch_1v2_opportunities": overview.get("clutch_1v2_opportunities"),
+                    "clutch_1v2_wins": overview.get("clutch_1v2_wins"),
+                    "clutch_1v3_opportunities": overview.get("clutch_1v3_opportunities"),
+                    "clutch_1v3_wins": overview.get("clutch_1v3_wins"),
+                    "clutch_1v4_opportunities": overview.get("clutch_1v4_opportunities"),
+                    "clutch_1v4_wins": overview.get("clutch_1v4_wins"),
+                    "clutch_1v5_opportunities": overview.get("clutch_1v5_opportunities"),
+                    "clutch_1v5_wins": overview.get("clutch_1v5_wins"),
+                    "survival_rounds": overview.get("survival_rounds"),
+                    "rounds_with_kill": normalized_rounds.get("rounds_with_kill"),
+                    "rounds_with_assist": normalized_rounds.get("rounds_with_assist"),
+                    "rounds_with_death": normalized_rounds.get("rounds_with_death"),
+                    "rounds_with_direct_participation": normalized_rounds.get(
+                        "rounds_with_direct_participation"
+                    ),
+                    "rounds_without_direct_participation": normalized_rounds.get(
+                        "rounds_without_direct_participation"
+                    ),
+                    "rounds_with_kill_pct": normalized_rounds.get("rounds_with_kill_pct"),
+                    "rounds_with_assist_pct": normalized_rounds.get(
+                        "rounds_with_assist_pct"
+                    ),
+                    "rounds_with_death_pct": normalized_rounds.get("rounds_with_death_pct"),
+                    "rounds_with_direct_participation_pct": normalized_rounds.get(
+                        "rounds_with_direct_participation_pct"
+                    ),
+                    "rounds_without_direct_participation_pct": normalized_rounds.get(
+                        "rounds_without_direct_participation_pct"
+                    ),
+                    "rounds_only_kill": normalized_rounds.get("rounds_only_kill"),
+                    "rounds_only_assist": normalized_rounds.get("rounds_only_assist"),
+                    "rounds_only_death": normalized_rounds.get("rounds_only_death"),
+                    "rounds_kill_assist": normalized_rounds.get("rounds_kill_assist"),
+                    "rounds_kill_death": normalized_rounds.get("rounds_kill_death"),
+                    "rounds_assist_death": normalized_rounds.get("rounds_assist_death"),
+                    "rounds_kill_assist_death": normalized_rounds.get(
+                        "rounds_kill_assist_death"
+                    ),
+                    "rounds_none": normalized_rounds.get("rounds_none"),
+                    "rounds_combined_or_none": normalized_rounds.get(
+                        "rounds_combined_or_none"
+                    ),
+                    "rounds_only_kill_pct": normalized_rounds.get("rounds_only_kill_pct"),
+                    "rounds_only_assist_pct": normalized_rounds.get(
+                        "rounds_only_assist_pct"
+                    ),
+                    "rounds_only_death_pct": normalized_rounds.get("rounds_only_death_pct"),
+                    "rounds_kill_assist_pct": normalized_rounds.get(
+                        "rounds_kill_assist_pct"
+                    ),
+                    "rounds_kill_death_pct": normalized_rounds.get(
+                        "rounds_kill_death_pct"
+                    ),
+                    "rounds_assist_death_pct": normalized_rounds.get(
+                        "rounds_assist_death_pct"
+                    ),
+                    "rounds_kill_assist_death_pct": normalized_rounds.get(
+                        "rounds_kill_assist_death_pct"
+                    ),
+                    "rounds_none_pct": normalized_rounds.get("rounds_none_pct"),
+                    "rounds_combined_or_none_pct": normalized_rounds.get(
+                        "rounds_combined_or_none_pct"
+                    ),
+                    "rounds_with_kast": overview.get("rounds_with_kast"),
                     "survival_rate": overview.get("survival_rate"),
                     "multikill_rate": overview.get("multikill_rate"),
                     "multi_2k": overview.get("multi_2k"),
@@ -595,6 +1570,11 @@ def _build_light_analytics_list(
                     "damage_delta": overview.get("damage_delta"),
                     "damage_delta_per_round": overview.get("damage_delta_per_round"),
                     "kd_ratio": overview.get("kd_ratio"),
+                    "kast": overview.get("kast"),
+                    "kast_pct": overview.get("kast_pct"),
+                    "kill_assist_survive_trade_pct": overview.get(
+                        "kill_assist_survive_trade_pct"
+                    ),
                 },
                 "sides": doc.get("sides"),
                 "player_totals_from_match": {
@@ -708,8 +1688,10 @@ def _map_analytics_to_match_card(
             {
                 "weaponId": item.get("weapon_id") or item.get("key") or "unknown",
                 "weaponName": item.get("weapon_name") or "Arma desconocida",
+                "rounds": int(float(item.get("rounds") or 0)),
                 "kills": int(float(item.get("kills") or 0)),
                 "deaths": int(float(item.get("deaths") or 0)),
+                "assists": int(float(item.get("assists") or 0)),
                 "kdRatio": float(item.get("kd_ratio") or 0),
             }
             for item in weapon_stats
@@ -742,6 +1724,275 @@ def _build_act_summary(matches: list[dict[str, Any]]) -> dict[str, float | int]:
         "killsPerMatch": round(_safe_div(total_kills, max(total_matches, 1)), 3),
         "hsAvg": round(_safe_div(total_hs, max(total_matches, 1)), 2),
     }
+
+
+def _compute_rank_cohort_tiers(base_tier: int | None) -> list[int]:
+    if base_tier is None or base_tier < 3:
+        return []
+
+    min_tier = 3
+    max_tier = 27
+    candidates = {
+        max(min_tier, base_tier - 1),
+        base_tier,
+        min(max_tier, base_tier + 1),
+    }
+    return sorted(candidates)
+
+
+def _append_rank_comparison_note(notes: list[str], message: str) -> None:
+    text = str(message or "").strip()
+    if text and text not in notes:
+        notes.append(text)
+
+
+def _build_empty_rank_comparison_payload(
+    base_tier: int | None,
+    *,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    cohort_tiers = _compute_rank_cohort_tiers(base_tier)
+    notes: list[str] = []
+    if reason:
+        _append_rank_comparison_note(notes, reason)
+
+    return {
+        "baseTier": base_tier,
+        "baseRankName": _format_tier_name(base_tier),
+        "cohortTiers": cohort_tiers,
+        "cohortLabels": [_format_tier_name(tier) for tier in cohort_tiers],
+        "sampleSize": 0,
+        "metricComparisons": {
+            key: {
+                "percentile": 50.0,
+                "sampleSize": 0,
+                "isNeutral": True,
+            }
+            for key, _prefer_lower in _RANK_COMPARISON_METRICS
+        },
+        "notes": notes,
+    }
+
+
+def _is_valid_rank_metric_value(value: Any) -> bool:
+    return isinstance(value, (int, float)) and math.isfinite(float(value))
+
+
+def _rank_metric_values_close(left: float, right: float) -> bool:
+    return math.isclose(left, right, rel_tol=1e-9, abs_tol=1e-9)
+
+
+def _build_rank_metric_values(row: dict[str, Any]) -> dict[str, float | None]:
+    match_count = int(row.get("matchCount") or 0)
+    if match_count <= 0:
+        return {key: None for key, _prefer_lower in _RANK_COMPARISON_METRICS}
+
+    wins = float(row.get("wins") or 0)
+    kills = float(row.get("kills") or 0)
+    deaths = float(row.get("deaths") or 0)
+    assists = float(row.get("assists") or 0)
+    rounds = float(row.get("rounds") or 0)
+    score = float(row.get("score") or 0)
+    headshots = float(row.get("headshots") or 0)
+    bodyshots = float(row.get("bodyshots") or 0)
+    legshots = float(row.get("legshots") or 0)
+    round_based_kast_rounds = float(row.get("roundBasedKastRounds") or 0)
+    round_based_kast_source_rounds = float(row.get("roundBasedKastSourceRounds") or 0)
+    raw_kast_sum = float(row.get("rawKastFallbackSum") or 0)
+    raw_kast_count = int(row.get("rawKastFallbackCount") or 0)
+    damage_delta = float(row.get("damageDelta") or 0)
+
+    total_shots = headshots + bodyshots + legshots
+
+    kast: float | None = None
+    if round_based_kast_source_rounds > 0:
+        kast = _safe_div(round_based_kast_rounds * 100.0, round_based_kast_source_rounds)
+    elif raw_kast_count > 0:
+        kast = _safe_div(raw_kast_sum, raw_kast_count)
+
+    if kast is not None:
+        kast = max(0.0, min(100.0, kast))
+
+    losses = max(float(match_count) - wins, 0.0)
+
+    return {
+        "kd": _safe_div(kills, max(deaths, 1.0)),
+        "k": kills,
+        "d": deaths,
+        "a": assists,
+        "kda": _safe_div(kills + assists, max(deaths, 1.0)),
+        "acs": _safe_div(score, max(rounds, 1.0)) if rounds > 0 else None,
+        "hsPct": _safe_div(headshots * 100.0, total_shots) if total_shots > 0 else None,
+        "kast": kast,
+        "incDamage": _safe_div(damage_delta, max(rounds, 1.0)) if rounds > 0 else None,
+        "wr": _safe_div(wins * 100.0, max(match_count, 1.0)),
+        "wins": wins,
+        "losses": losses,
+    }
+
+
+def _build_rank_metric_comparison_payload(
+    player_value: float | None,
+    cohort_values: list[float | None],
+    *,
+    prefer_lower: bool,
+) -> dict[str, Any]:
+    valid_values = [
+        float(value)
+        for value in cohort_values
+        if _is_valid_rank_metric_value(value)
+    ]
+    sample_size = len(valid_values)
+
+    if not _is_valid_rank_metric_value(player_value) or sample_size == 0:
+        return {
+            "percentile": 50.0,
+            "sampleSize": sample_size,
+            "isNeutral": True,
+        }
+
+    player_metric_value = float(player_value)
+    if sample_size == 1:
+        return {
+            "percentile": 50.0,
+            "sampleSize": sample_size,
+            "isNeutral": True,
+        }
+
+    worse_count = 0
+    equal_count = 0
+    for value in valid_values:
+        if _rank_metric_values_close(value, player_metric_value):
+            equal_count += 1
+            continue
+
+        if prefer_lower:
+            if value > player_metric_value:
+                worse_count += 1
+        elif value < player_metric_value:
+            worse_count += 1
+
+    percentile = _safe_div(
+        worse_count + 0.5 * max(equal_count - 1, 0),
+        max(sample_size - 1, 1),
+    ) * 100.0
+
+    return {
+        "percentile": round(max(0.0, min(100.0, percentile)), 3),
+        "sampleSize": sample_size,
+        "isNeutral": False,
+    }
+
+
+def _build_rank_comparison_payload_from_players(
+    puuid: str,
+    base_tier: int,
+    cohort_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not cohort_rows:
+        return _build_empty_rank_comparison_payload(
+            base_tier,
+            reason="No hay jugadores elegibles en la cohorte para los filtros actuales.",
+        )
+
+    cohort_tiers = _compute_rank_cohort_tiers(base_tier)
+    metric_rows = [
+        {
+            "puuid": str(row.get("puuid") or ""),
+            "metrics": _build_rank_metric_values(row),
+        }
+        for row in cohort_rows
+    ]
+
+    player_row = next((row for row in metric_rows if row["puuid"] == puuid), None)
+    if player_row is None:
+        return _build_empty_rank_comparison_payload(
+            base_tier,
+            reason="El jugador no tiene datos validos dentro de la cohorte filtrada.",
+        )
+
+    metric_comparisons: dict[str, Any] = {}
+    for key, prefer_lower in _RANK_COMPARISON_METRICS:
+        player_value = player_row["metrics"].get(key)
+        cohort_values = [row["metrics"].get(key) for row in metric_rows]
+        metric_comparisons[key] = _build_rank_metric_comparison_payload(
+            player_value,
+            cohort_values,
+            prefer_lower=prefer_lower,
+        )
+
+    sample_size = len(metric_rows)
+    notes: list[str] = []
+    if sample_size < 2:
+        _append_rank_comparison_note(
+            notes,
+            "La cohorte tiene menos de 2 jugadores validos; los porcentajes se muestran en 50% neutral hasta tener comparacion real.",
+        )
+    if any(
+        int(metric.get("sampleSize") or 0) < sample_size
+        for metric in metric_comparisons.values()
+    ):
+        _append_rank_comparison_note(
+            notes,
+            "Algunas metricas usan menos jugadores validos porque faltan datos especificos en esa metrica.",
+        )
+
+    return {
+        "baseTier": base_tier,
+        "baseRankName": _format_tier_name(base_tier),
+        "cohortTiers": cohort_tiers,
+        "cohortLabels": [_format_tier_name(tier) for tier in cohort_tiers],
+        "sampleSize": sample_size,
+        "metricComparisons": metric_comparisons,
+        "notes": notes,
+    }
+
+
+def get_player_rank_comparison(
+    puuid: str,
+    *,
+    queue_id: str | None = None,
+    agent_id: str | None = None,
+    map_name: str | None = None,
+    season_id: str | None = None,
+    party_size: str | None = None,
+) -> dict[str, Any]:
+    if not puuid:
+        return _build_empty_rank_comparison_payload(
+            None,
+            reason="No se pudo resolver el jugador para construir la cohorte.",
+        )
+
+    latest_reference = dashboard_queries.find_player_latest_rank_reference(
+        puuid,
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        season_id=season_id,
+        party_size=party_size,
+    )
+    if not latest_reference:
+        return _build_empty_rank_comparison_payload(
+            None,
+            reason="El jugador no tiene partidas dentro de los filtros actuales.",
+        )
+
+    base_tier = _coerce_rank_tier(latest_reference.get("latestTier"))
+    if base_tier is None:
+        return _build_empty_rank_comparison_payload(
+            None,
+            reason="No se pudo resolver el rango desde la ultima partida valida dentro de los filtros actuales.",
+        )
+
+    cohort_rows = dashboard_queries.aggregate_rank_cohort_players(
+        _compute_rank_cohort_tiers(base_tier),
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        season_id=season_id,
+        party_size=party_size,
+    )
+    return _build_rank_comparison_payload_from_players(puuid, base_tier, cohort_rows)
 
 
 def build_player_dashboard(
@@ -922,13 +2173,23 @@ def build_player_dashboard(
         season_id=current_act_id if current_act_matches else None,
     )
 
+    usage_sorted_weapon_rows = sorted(
+        weapon_summary_rows,
+        key=lambda row: (
+            -int(row.get("rounds") or 0),
+            -int(row.get("kills") or 0),
+            -int(row.get("matches") or 0),
+        ),
+    )
+
     most_played_weapons: list[dict[str, Any]] = []
-    for row in weapon_summary_rows:
+    for row in usage_sorted_weapon_rows:
         name = str(row.get("name") or "Arma desconocida")
         most_played_weapons.append(
             {
                 "id": str(row.get("_id") or "unknown"),
                 "name": name,
+                "rounds": int(row.get("rounds") or 0),
                 "kills": int(row.get("kills") or 0),
                 "matches": int(row.get("matches") or 0),
                 "image": weapon_icon_by_name.get(_normalize_rank_label(name)),
@@ -937,7 +2198,14 @@ def build_player_dashboard(
 
     best_weapon: dict[str, Any] | None = None
     if weapon_summary_rows:
-        top = weapon_summary_rows[0]
+        top = max(
+            weapon_summary_rows,
+            key=lambda row: (
+                int(row.get("kills") or 0),
+                int(row.get("rounds") or 0),
+                int(row.get("matches") or 0),
+            ),
+        )
         best_weapon = {
             "name": str(top.get("name") or "Arma desconocida"),
             "matches": int(top.get("matches") or 0),
@@ -954,14 +2222,25 @@ def build_player_dashboard(
 
     latest_analytics = overview_docs[0] if overview_docs else (analytics_sorted[0] if analytics_sorted else {})
 
-    tier = _coerce_positive_int(latest_analytics.get("competitive_tier"))
+    tier = _coerce_rank_tier(latest_analytics.get("competitive_tier"))
     latest_raw_rank = _latest_rank_from_matches(str(player.get("puuid") or ""))
     if tier is None:
-        tier = _coerce_positive_int(latest_raw_rank.get("tier"))
+        tier = _coerce_rank_tier(latest_raw_rank.get("tier"))
     if tier is None:
-        tier = _coerce_positive_int(
+        tier = _coerce_rank_tier(
             player.get("competitiveTier", player.get("competitive_tier"))
         )
+    if tier is None:
+        ranked_matches = [
+            m
+            for m in mapped_matches
+            if _coerce_rank_tier(m.get("competitiveTier")) is not None
+        ]
+        if ranked_matches:
+            ranked_matches.sort(
+                key=lambda m: int(m.get("timestamp") or 0), reverse=True
+            )
+            tier = _coerce_rank_tier(ranked_matches[0].get("competitiveTier"))
 
     rank_name = _format_tier_name(tier)
     rank_name_candidates = [
@@ -991,6 +2270,10 @@ def build_player_dashboard(
         or latest_analytics.get("rankImage")
     )
     rank_small_icon = (rank_icon_map.get(tier) if tier is not None else None) or rank_icon_by_name
+    rank_comparison = get_player_rank_comparison(
+        str(player.get("puuid") or ""),
+        season_id=current_act_id if current_act_matches else None,
+    )
 
     top_agent = most_played_agents[0] if most_played_agents else None
     best_map_name = (best_map or {}).get("map")
@@ -1110,6 +2393,8 @@ def build_player_dashboard(
     if latest_tag_line:
         player_out["tagLine"] = latest_tag_line
 
+    round_stats_summary = _compute_rounds_panel_summary(overview_docs)
+
     return {
         "player": player_out,
         "totalMatchesInDb": total_matches_in_db,
@@ -1117,6 +2402,7 @@ def build_player_dashboard(
         "agentMediaMap": agent_media_map,
         "mapMediaMap": map_icon_by_name,
         "analyticsList": _build_light_analytics_list(analytics_sorted),
+        "roundStats": round_stats_summary,
         "currentActId": current_act_id,
         "currentRank": {
             "tier": tier,
@@ -1124,6 +2410,7 @@ def build_player_dashboard(
             "image": rank_image,
             "smallIcon": rank_small_icon,
         },
+        "rankComparison": rank_comparison,
         "headerShowcase": header_showcase,
         "mostPlayedAgents": most_played_agents,
         "mostPlayedWeapons": most_played_weapons,
@@ -1156,6 +2443,18 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
             if not analytics:
                 continue
             player_stats = player.get("stats") or {}
+            overview = dict(analytics.get("overview") or {})
+            round_overview = _compute_round_overview_from_round_results(match_obj, puuid)
+            if round_overview:
+                overview.update(round_overview)
+            overview["weapon_stats"] = merge_precise_weapon_core_stats(
+                overview.get("weapon_stats"),
+                compute_precise_weapon_stats_core(
+                    match_obj.get("roundResults") or [],
+                    puuid,
+                ),
+            )
+
             docs.append({
                 "match_id": str(match_info.get("matchId") or ""),
                 "puuid": puuid,
@@ -1186,7 +2485,7 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
                     "match_duration_millis": int(match_info.get("gameLengthMillis", 0) or 0),
                     "playtime_millis": int(player_stats.get("playtimeMillis", 0) or 0),
                 },
-                "overview": analytics.get("overview"),
+                "overview": overview,
                 "sides": analytics.get("sides"),
             })
             break  # Only one entry per match for this puuid
