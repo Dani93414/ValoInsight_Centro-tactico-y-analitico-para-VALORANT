@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
-  BarChart3,
   CalendarDays,
   Crosshair,
   Gem,
   Info,
   Layers3,
+  LogIn,
   Map,
   Medal,
   Search,
@@ -36,6 +36,13 @@ type NavItem = {
   icon: LucideIcon;
   className?: string;
 };
+
+const topbarLinks = [
+  { label: "Estadisticas", path: "/estadisticas-globales" },
+  { label: "Agentes", path: "/agentes" },
+  { label: "Armas", path: "/armas" },
+  { label: "Mapas", path: "/mapas" },
+];
 
 const analysisCards: NavItem[] = [
   {
@@ -186,48 +193,58 @@ export default function Home() {
 
   return (
     <main className="home-page">
+      <header className="home-topbar" aria-label="Navegacion principal">
+        <button
+          className="home-brand"
+          type="button"
+          onClick={() => navigate("/")}
+          aria-label="Ir al inicio de ValoInsight"
+        >
+          <span className="home-brand__mark">VI</span>
+          <span>ValoInsight</span>
+        </button>
+
+        <nav className="home-topbar__nav" aria-label="Accesos rapidos">
+          {topbarLinks.map((link) => (
+            <button
+              key={link.path}
+              type="button"
+              onClick={() => navigate(link.path)}
+            >
+              {link.label}
+            </button>
+          ))}
+        </nav>
+
+        <button className="home-login-button" type="button">
+          <LogIn size={17} aria-hidden="true" />
+          Iniciar sesion
+        </button>
+      </header>
+
       <section className="home-hero" aria-labelledby="home-hero-title">
         <div className="home-hero__visual" aria-hidden="true">
-          <div className="home-hero__agent" />
-          <div className="home-hero__scope">
-            <span />
-            <span />
-            <span />
-          </div>
+          <span className="home-tactical-line home-tactical-line--one" />
+          <span className="home-tactical-line home-tactical-line--two" />
+          <span className="home-tactical-line home-tactical-line--three" />
+          <span className="home-tactical-node home-tactical-node--one" />
+          <span className="home-tactical-node home-tactical-node--two" />
+          <span className="home-tactical-node home-tactical-node--three" />
         </div>
 
         <div className="home-hero__content">
           <span className="home-kicker">ValoInsight</span>
-          <h1 id="home-hero-title">Analiza Valorant como un profesional</h1>
+          <h1 id="home-hero-title">Tu centro tactico de Valorant</h1>
           <p>
-            Busca jugadores, compara estadisticas, explora agentes, armas,
-            mapas y descubre patrones de rendimiento.
+            Busca jugadores, compara rendimiento y explora datos competitivos
+            con una lectura clara.
           </p>
-
-          <div className="home-hero__actions" aria-label="Accesos rapidos">
-            <button
-              className="home-cta home-cta--primary"
-              type="button"
-              onClick={() => navigate("/estadisticas-globales")}
-            >
-              <BarChart3 size={18} aria-hidden="true" />
-              Ver estadisticas globales
-            </button>
-            <button
-              className="home-cta home-cta--ghost"
-              type="button"
-              onClick={() => navigate("/agentes")}
-            >
-              <Shield size={18} aria-hidden="true" />
-              Explorar agentes
-            </button>
-          </div>
         </div>
 
         <section className="home-search-panel" aria-label="Buscar jugador">
           <div className="home-search-panel__header">
             <div>
-              <span className="home-panel-label">Accion principal</span>
+              <span className="home-panel-label">Busqueda competitiva</span>
               <h2>Buscar jugador</h2>
             </div>
             <UserRoundSearch size={24} aria-hidden="true" />
@@ -391,25 +408,36 @@ export default function Home() {
           <h2 id="cosmetics-title">Inventario visual de Valorant</h2>
         </div>
 
-        <div className="home-cosmetics-grid">
-          {cosmeticCards.map((card) => {
-            const Icon = card.icon;
-            return (
-              <button
-                key={card.path}
-                className="home-cosmetic-card"
-                type="button"
-                onClick={() => navigate(card.path)}
-              >
-                <Icon size={22} aria-hidden="true" />
-                <span>
-                  <strong>{card.title}</strong>
-                  <small>{card.description}</small>
-                </span>
-                <ArrowRight size={17} aria-hidden="true" />
-              </button>
-            );
-          })}
+        <div className="home-cosmetics-showcase">
+          <article className="home-cosmetics-feature">
+            <span className="home-panel-label">Coleccion premium</span>
+            <h3>Cosmeticos</h3>
+            <p>
+              Explora skins, llaveros, sprays, flex y elementos de perfil desde
+              un bloque visual dedicado.
+            </p>
+          </article>
+
+          <div className="home-cosmetics-grid">
+            {cosmeticCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <button
+                  key={card.path}
+                  className="home-cosmetic-card"
+                  type="button"
+                  onClick={() => navigate(card.path)}
+                >
+                  <Icon size={22} aria-hidden="true" />
+                  <span>
+                    <strong>{card.title}</strong>
+                    <small>{card.description}</small>
+                  </span>
+                  <ArrowRight size={17} aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
     </main>
