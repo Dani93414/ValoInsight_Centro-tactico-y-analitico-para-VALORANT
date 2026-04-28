@@ -3,6 +3,8 @@ import copy
 from fastapi import APIRouter, HTTPException, Query
 from modules.players.infrastructure import mongo_player_repo
 from modules.players.application.player_dashboard_service import (
+    _build_act_summary,
+    _compute_rounds_panel_summary,
     get_player_dashboard,
     get_player_rank_comparison,
 )
@@ -12,8 +14,8 @@ router = APIRouter()
 
 @router.get("/")
 def get_players_list(
-    gameName: str | None = Query(default=None),
-    tagLine: str | None = Query(default=None),
+    gameName: str | None = Query(default=None, max_length=64),
+    tagLine: str | None = Query(default=None, max_length=64),
     limit: int = Query(default=20, ge=1, le=100),
 ):
     """Lista jugadores o busca por gameName/tagLine con coincidencia parcial (case-insensitive)."""
@@ -22,8 +24,8 @@ def get_players_list(
 
 @router.get("/search")
 def search_players(
-    gameName: str | None = Query(default=None),
-    tagLine: str | None = Query(default=None),
+    gameName: str | None = Query(default=None, max_length=64),
+    tagLine: str | None = Query(default=None, max_length=64),
     limit: int = Query(default=10, ge=1, le=50),
 ):
     """Búsqueda optimizada para autocompletado en frontend."""
@@ -75,15 +77,15 @@ def get_player_stats(puuid: str):
 @router.get("/{puuid}/dashboard")
 def get_player_dashboard_data(
     puuid: str,
-    queue_id: str | None = Query(default=None, description="Filter matches by queue type (e.g. 'competitive')"),
-    agent_id: str | None = Query(default=None, description="Filter matches by agent UUID"),
-    map_name: str | None = Query(default=None, description="Filter matches by map name"),
-    season_id: str | None = Query(default=None, description="Filter matches by act/season id"),
+    queue_id: str | None = Query(default=None, max_length=64, description="Filter matches by queue type (e.g. 'competitive')"),
+    agent_id: str | None = Query(default=None, max_length=128, description="Filter matches by agent UUID"),
+    map_name: str | None = Query(default=None, max_length=128, description="Filter matches by map name"),
+    season_id: str | None = Query(default=None, max_length=128, description="Filter matches by act/season id"),
     page: int = Query(default=1, ge=1, description="Page number for match cards"),
     page_size: int | None = Query(
         default=None,
         ge=1,
-        le=5000,
+        le=500,
         description="Match cards per page. If omitted, returns all matches.",
     ),
 ):
@@ -113,12 +115,27 @@ def get_player_dashboard_data(
                 if act_id != season_id:
                     filtered = []
             section["matches"] = filtered
-            section["summary"]["matches"] = len(filtered)
+            section["summary"] = _build_act_summary(filtered)
 
         # Remove empty act sections after filtering
         dashboard["actSections"] = {
             k: v for k, v in act_sections.items() if v.get("matches")
         }
+
+        filtered_match_ids = {
+            str(m.get("id") or m.get("match_id") or "")
+            for section in dashboard.get("actSections", {}).values()
+            for m in section.get("matches", [])
+        }
+        filtered_match_ids.discard("")
+        analytics_list = dashboard.get("analyticsList", [])
+        if isinstance(analytics_list, list):
+            dashboard["analyticsList"] = [
+                m
+                for m in analytics_list
+                if str(m.get("id") or m.get("match_id") or "") in filtered_match_ids
+            ]
+            dashboard["roundStats"] = _compute_rounds_panel_summary(dashboard["analyticsList"])
 
     # ---- Paginate match cards ----
     all_filtered = []
@@ -144,15 +161,7 @@ def get_player_dashboard_data(
                 m for m in section.get("matches", [])
                 if str(m.get("id") or m.get("match_id") or "") in paged_match_ids
             ]
-
-        # Keep analyticsList aligned with paginated match cards.
-        analytics_list = dashboard.get("analyticsList", [])
-        if isinstance(analytics_list, list):
-            dashboard["analyticsList"] = [
-                m
-                for m in analytics_list
-                if str(m.get("id") or m.get("match_id") or "") in paged_match_ids
-            ]
+            section["summary"] = _build_act_summary(section["matches"])
 
         effective_page_size = page_size
     else:
@@ -173,12 +182,13 @@ def get_player_dashboard_data(
 @router.get("/{puuid}/rank-comparison")
 def get_player_rank_comparison_data(
     puuid: str,
-    queue_id: str | None = Query(default=None, description="Filter matches by queue type (e.g. 'competitive')"),
-    agent_id: str | None = Query(default=None, description="Filter matches by agent UUID"),
-    map_name: str | None = Query(default=None, description="Filter matches by map name"),
-    season_id: str | None = Query(default=None, description="Filter matches by act/season id"),
+    queue_id: str | None = Query(default=None, max_length=64, description="Filter matches by queue type (e.g. 'competitive')"),
+    agent_id: str | None = Query(default=None, max_length=128, description="Filter matches by agent UUID"),
+    map_name: str | None = Query(default=None, max_length=128, description="Filter matches by map name"),
+    season_id: str | None = Query(default=None, max_length=128, description="Filter matches by act/season id"),
     party_size: str | None = Query(
         default=None,
+        max_length=16,
         description="Filter matches by party bucket: solo, duo, trio or team",
     ),
 ):

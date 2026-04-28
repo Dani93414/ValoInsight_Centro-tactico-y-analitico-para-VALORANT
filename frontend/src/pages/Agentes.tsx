@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAgentes } from "../api/hooks";
+import { useAgentes, useRegions } from "../api/hooks";
 import BackButton from "../components/BackButton";
 import FloatingActionButton from "../components/FloatingActionButton";
 import type { Agente } from "../types/agents";
@@ -12,6 +12,7 @@ import "./Agentes.css";
 
 export default function Agentes() {
   const { data: rawAgentes, isLoading: loading } = useAgentes();
+  const { data: regions } = useRegions();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -31,6 +32,25 @@ export default function Agentes() {
       a.displayName.localeCompare(b.displayName),
     );
   }, [rawAgentes]);
+
+  const regionStats = regions?.[0];
+  const agentStatsById = useMemo(
+    () => regionStats?.agentStats ?? {},
+    [regionStats?.agentStats],
+  );
+  const agentStatsByName = useMemo(() => {
+    const map = new Map<string, (typeof agentStatsById)[string]>();
+    Object.values(agentStatsById).forEach((stats) => {
+      if (stats.agent_name) {
+        map.set(stats.agent_name.toLowerCase(), stats);
+      }
+    });
+    return map;
+  }, [agentStatsById]);
+
+  const getAgentGlobalStats = (agent: Agente) =>
+    agentStatsById[agent.uuid ?? agent.id ?? ""] ??
+    agentStatsByName.get(agent.displayName.toLowerCase());
 
   const [agenteSeleccionado, setAgenteSeleccionado] = useState<Agente | null>(
     null,
@@ -92,6 +112,27 @@ export default function Agentes() {
     new Map(agentes.map((a) => [a.role.displayName, a.role])).values(),
   );
 
+  const roleSummary = rolesUnicos.map((role) => {
+    const roleAgents = agentes.filter(
+      (agent) => agent.role.displayName === role.displayName,
+    );
+    const picks = roleAgents.reduce(
+      (total, agent) => total + (getAgentGlobalStats(agent)?.picks ?? 0),
+      0,
+    );
+    const wins = roleAgents.reduce(
+      (total, agent) => total + (getAgentGlobalStats(agent)?.wins ?? 0),
+      0,
+    );
+
+    return {
+      ...role,
+      agents: roleAgents.length,
+      picks,
+      winRate: picks > 0 ? (wins * 100) / picks : 0,
+    };
+  });
+
   /* =============================
      FILTRADO
   ============================== */
@@ -114,7 +155,7 @@ export default function Agentes() {
         <div className="loading-card">
           <div className="loading-spinner" />
           <h2>Cargando agentes</h2>
-          <p>Plantando la spike…</p>
+          <p>Plantando la spike...</p>
         </div>
       </div>
     );
@@ -138,6 +179,23 @@ export default function Agentes() {
         <h1 className="agents-title">Agentes</h1>
         <div className="agents-divider" />
       </div>
+
+      <section className="agents-role-summary" aria-label="Resumen por rol">
+        {roleSummary.map((role) => (
+          <article key={role.displayName} className="agents-role-summary-card">
+            {role.displayIcon && <img src={role.displayIcon} alt="" />}
+            <div>
+              <span>{role.displayName}</span>
+              <strong>{role.agents} agentes</strong>
+              <small>
+                {role.picks > 0
+                  ? `${role.picks} picks · ${role.winRate.toFixed(1)}% WR`
+                  : "Sin muestra global"}
+              </small>
+            </div>
+          </article>
+        ))}
+      </section>
 
       {/* =============================
          FILTROS + BUSCADOR
@@ -225,6 +283,43 @@ export default function Agentes() {
                 {agenteSeleccionado.description}
               </p>
 
+              <div className="agent-extra-grid">
+                <div>
+                  <span>Fecha de salida</span>
+                  <strong>{agenteSeleccionado.releaseDate || "-"}</strong>
+                </div>
+                <div>
+                  <span>Origen</span>
+                  <strong>
+                    {agenteSeleccionado.isBaseContent
+                      ? "Contenido base"
+                      : "Contenido añadido"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Picks globales</span>
+                  <strong>
+                    {getAgentGlobalStats(agenteSeleccionado)?.picks ?? "-"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Win rate global</span>
+                  <strong>
+                    {getAgentGlobalStats(agenteSeleccionado)?.win_rate
+                      ? `${getAgentGlobalStats(agenteSeleccionado)?.win_rate?.toFixed(1)}%`
+                      : "-"}
+                  </strong>
+                </div>
+              </div>
+
+              {(agenteSeleccionado.characterTags?.length ?? 0) > 0 && (
+                <div className="agent-tags">
+                  {agenteSeleccionado.characterTags?.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+              )}
+
               <h3 className="abilities-title">Habilidades</h3>
 
               <div className="abilities-list">
@@ -301,6 +396,12 @@ export default function Agentes() {
 
               <h2 className="agent-name">{agente.displayName}</h2>
               <p className="agent-role">{agente.role.displayName}</p>
+              {getAgentGlobalStats(agente)?.picks ? (
+                <p className="agent-global-line">
+                  {getAgentGlobalStats(agente)?.picks} picks ·{" "}
+                  {getAgentGlobalStats(agente)?.win_rate?.toFixed(1)}% WR
+                </p>
+              ) : null}
             </div>
           );
         })}

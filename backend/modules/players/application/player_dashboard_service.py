@@ -15,18 +15,23 @@ from modules.analytics.domain.constants import (
 from modules.players.infrastructure import dashboard_queries
 
 
-_DASHBOARD_CONTENT_CACHE: dict[str, Any] | None = None
+_DASHBOARD_CONTENT_CACHE: tuple[float, dict[str, Any]] | None = None
 _DASHBOARD_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_DASHBOARD_CONTENT_CACHE_TTL_SECONDS = 300.0
 _DASHBOARD_RESPONSE_CACHE_TTL_SECONDS = 120.0
 _CACHE_LOCK = threading.Lock()
 
 
 def _get_dashboard_content() -> dict[str, Any]:
     global _DASHBOARD_CONTENT_CACHE
+    now = time.monotonic()
     with _CACHE_LOCK:
-        if _DASHBOARD_CONTENT_CACHE is None:
-            _DASHBOARD_CONTENT_CACHE = dashboard_queries.get_dashboard_content()
-        return _DASHBOARD_CONTENT_CACHE
+        if (
+            _DASHBOARD_CONTENT_CACHE is None
+            or (now - _DASHBOARD_CONTENT_CACHE[0]) > _DASHBOARD_CONTENT_CACHE_TTL_SECONDS
+        ):
+            _DASHBOARD_CONTENT_CACHE = (now, dashboard_queries.get_dashboard_content())
+        return _DASHBOARD_CONTENT_CACHE[1]
 
 
 from shared.math_utils import euclidean_distance_2d, safe_div as _safe_div
@@ -204,6 +209,7 @@ def _normalize_round_overview(overview: dict[str, Any] | None) -> dict[str, int 
         source.get("rounds_with_death", source.get("deaths")),
         total_rounds,
     )
+    rounds_with_kast = _clamp_round_count(source.get("rounds_with_kast"), total_rounds)
 
     direct_fallback = max(rounds_with_kill, rounds_with_assist)
     rounds_with_direct_participation = _clamp_round_count(
@@ -300,6 +306,7 @@ def _normalize_round_overview(overview: dict[str, Any] | None) -> dict[str, int 
         "rounds_with_kill": rounds_with_kill,
         "rounds_with_assist": rounds_with_assist,
         "rounds_with_death": rounds_with_death,
+        "rounds_with_kast": rounds_with_kast,
         "rounds_with_direct_participation": rounds_with_direct_participation,
         "rounds_without_direct_participation": rounds_without_direct_participation,
         "rounds_only_kill": rounds_only_kill,
@@ -314,6 +321,7 @@ def _normalize_round_overview(overview: dict[str, Any] | None) -> dict[str, int 
         "rounds_with_kill_pct": _pct_rounds(rounds_with_kill, total_rounds),
         "rounds_with_assist_pct": _pct_rounds(rounds_with_assist, total_rounds),
         "rounds_with_death_pct": _pct_rounds(rounds_with_death, total_rounds),
+        "rounds_with_kast_pct": _pct_rounds(rounds_with_kast, total_rounds),
         "rounds_with_direct_participation_pct": _pct_rounds(
             rounds_with_direct_participation,
             total_rounds,
@@ -693,6 +701,7 @@ def _compute_round_overview_from_round_results(
     rounds_with_kill = 0
     rounds_with_assist = 0
     rounds_with_death = 0
+    rounds_with_kast = 0
     rounds_with_direct_participation = 0
     rounds_without_direct_participation = 0
     rounds_only_kill = 0
@@ -750,6 +759,12 @@ def _compute_round_overview_from_round_results(
         has_kill = kills_round > 0
         has_assist = assists_round > 0
         has_death = died
+        has_kast = (
+            not died
+            or has_kill
+            or has_assist
+            or int(round_trade_metrics["traded_deaths"]) > 0
+        )
 
         if unique_kills and unique_kills[0].get("killer") == puuid:
             first_kills += 1
@@ -801,6 +816,8 @@ def _compute_round_overview_from_round_results(
             rounds_with_assist += 1
         if has_death:
             rounds_with_death += 1
+        if has_kast:
+            rounds_with_kast += 1
 
         if has_kill or has_assist:
             rounds_with_direct_participation += 1
@@ -853,6 +870,7 @@ def _compute_round_overview_from_round_results(
         "rounds_with_kill": rounds_with_kill,
         "rounds_with_assist": rounds_with_assist,
         "rounds_with_death": rounds_with_death,
+        "rounds_with_kast": rounds_with_kast,
         "rounds_with_direct_participation": rounds_with_direct_participation,
         "rounds_without_direct_participation": rounds_without_direct_participation,
         "rounds_only_kill": rounds_only_kill,
@@ -878,6 +896,7 @@ def _compute_rounds_panel_summary(analytics_docs: list[dict[str, Any]]) -> dict[
         "rounds_with_kill": 0,
         "rounds_with_assist": 0,
         "rounds_with_death": 0,
+        "rounds_with_kast": 0,
         "direct_participation_rounds": 0,
         "no_direct_participation_rounds": 0,
         "distribution_only_kills_rounds": 0,
@@ -905,6 +924,7 @@ def _compute_rounds_panel_summary(analytics_docs: list[dict[str, Any]]) -> dict[
         totals["rounds_with_kill"] += int(normalized_rounds["rounds_with_kill"])
         totals["rounds_with_assist"] += int(normalized_rounds["rounds_with_assist"])
         totals["rounds_with_death"] += int(normalized_rounds["rounds_with_death"])
+        totals["rounds_with_kast"] += int(normalized_rounds["rounds_with_kast"])
         totals["direct_participation_rounds"] += int(
             normalized_rounds["rounds_with_direct_participation"]
         )
@@ -953,6 +973,7 @@ def _compute_rounds_panel_summary(analytics_docs: list[dict[str, Any]]) -> dict[
         "rounds_with_kill_pct": _pct_rounds(int(totals["rounds_with_kill"]), total_rounds),
         "rounds_with_assist_pct": _pct_rounds(int(totals["rounds_with_assist"]), total_rounds),
         "rounds_with_death_pct": _pct_rounds(int(totals["rounds_with_death"]), total_rounds),
+        "rounds_with_kast_pct": _pct_rounds(int(totals["rounds_with_kast"]), total_rounds),
         "direct_participation_pct": _pct_rounds(
             int(totals["direct_participation_rounds"]),
             total_rounds,

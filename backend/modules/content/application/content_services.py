@@ -6,6 +6,8 @@ from modules.content.domain.services import (
     local_agent_ability_icon as _local_agent_ability_icon,
     local_weapon_image as _local_weapon_image,
     local_competitive_tier_icon as _local_competitive_tier_icon,
+    local_content_image as _local_content_image,
+    local_weapon_skin_image as _local_weapon_skin_image,
     classify_maps,
     filter_geo_maps,
     normalize_weapon_category as _normalizar_categoria_arma,
@@ -17,6 +19,25 @@ CONTENT_FIELDS_SUMMARY = (
     "maps.uuid",
     "weapons.uuid",
     "acts.id",
+    "buddies.uuid",
+    "bundles.uuid",
+    "ceremonies.uuid",
+    "competitive_tiers.uuid",
+    "content_tiers.uuid",
+    "contracts.uuid",
+    "currencies.uuid",
+    "events.uuid",
+    "flex.uuid",
+    "gamemodes.uuid",
+    "gear.uuid",
+    "levelborders.uuid",
+    "playercards.uuid",
+    "playertitles.uuid",
+    "sprays.uuid",
+    "themes.uuid",
+    "version.version",
+    "version.buildVersion",
+    "version.buildDate",
 )
 
 CONTENT_FIELDS_ACTS = (
@@ -35,6 +56,10 @@ CONTENT_FIELDS_AGENTS = (
     "agents.id",
     "agents.displayName",
     "agents.description",
+    "agents.releaseDate",
+    "agents.characterTags",
+    "agents.isBaseContent",
+    "agents.isAvailableForTest",
     "agents.role.displayName",
     "agents.role.description",
     "agents.abilities.slot",
@@ -49,7 +74,16 @@ CONTENT_FIELDS_MAPS = (
     "maps.displayIcon",
     "maps.name",
     "maps.coordinates",
+    "maps.narrativeDescription",
     "maps.tacticalDescription",
+    "maps.callouts.regionName",
+    "maps.callouts.superRegionName",
+    "maps.callouts.location.x",
+    "maps.callouts.location.y",
+    "maps.listViewIcon",
+    "maps.listViewIconTall",
+    "maps.premierBackgroundImage",
+    "maps.stylizedBackgroundImage",
     "maps.xMultiplier",
     "maps.xScalarToAdd",
     "maps.yMultiplier",
@@ -61,6 +95,8 @@ CONTENT_FIELDS_WEAPONS = (
     "weapons.id",
     "weapons.displayName",
     "weapons.category",
+    "weapons.defaultSkinUuid",
+    "weapons.killStreamIcon",
     "weapons.shopData.categoryText",
     "weapons.shopData.cost",
     "weapons.weaponStats.fireRate",
@@ -104,16 +140,38 @@ def get_contenido_resumen():
     if not ultimo:
         return None
 
-    agents = ultimo.get("agents", [])
-    weapons = ultimo.get("weapons", [])
-    maps = ultimo.get("maps", [])
-    acts = ultimo.get("acts", [])
+    counts = {
+        "agents": len(ultimo.get("agents", []) or []),
+        "maps": len(ultimo.get("maps", []) or []),
+        "weapons": len(ultimo.get("weapons", []) or []),
+        "acts": len(ultimo.get("acts", []) or []),
+        "buddies": len(ultimo.get("buddies", []) or []),
+        "bundles": len(ultimo.get("bundles", []) or []),
+        "ceremonies": len(ultimo.get("ceremonies", []) or []),
+        "competitive_tiers": len(ultimo.get("competitive_tiers", []) or []),
+        "content_tiers": len(ultimo.get("content_tiers", []) or []),
+        "contracts": len(ultimo.get("contracts", []) or []),
+        "currencies": len(ultimo.get("currencies", []) or []),
+        "events": len(ultimo.get("events", []) or []),
+        "flex": len(ultimo.get("flex", []) or []),
+        "gamemodes": len(ultimo.get("gamemodes", []) or []),
+        "gear": len(ultimo.get("gear", []) or []),
+        "levelborders": len(ultimo.get("levelborders", []) or []),
+        "playercards": len(ultimo.get("playercards", []) or []),
+        "playertitles": len(ultimo.get("playertitles", []) or []),
+        "sprays": len(ultimo.get("sprays", []) or []),
+        "themes": len(ultimo.get("themes", []) or []),
+    }
 
+    # Keep legacy Spanish keys for existing callers while exposing a structured
+    # shape for richer dashboards.
     return {
-        "total_agentes": len(agents),
-        "total_mapas": len(maps),
-        "total_armas": len(weapons),
-        "total_actos": len(acts),
+        "total_agentes": counts["agents"],
+        "total_mapas": counts["maps"],
+        "total_armas": counts["weapons"],
+        "total_actos": counts["acts"],
+        "counts": counts,
+        "version": ultimo.get("version") or {},
     }
 
 def get_actos():
@@ -206,6 +264,10 @@ def get_agentes():
             "id": ag.get("id") or ag.get("uuid"),
             "displayName": ag.get("displayName", "—"),
             "description": ag.get("description", "—"),
+            "releaseDate": ag.get("releaseDate"),
+            "characterTags": ag.get("characterTags") or [],
+            "isBaseContent": ag.get("isBaseContent"),
+            "isAvailableForTest": ag.get("isAvailableForTest"),
 
             # Local image paths under frontend/public/content.
             "displayIcon": _local_agent_image(agent_uuid, "displayIcon"),
@@ -271,8 +333,13 @@ def get_armas_detalladas():
         damage_ranges = stats.get("damageRanges") or []
 
         armas.append({
+            "uuid": weapon_uuid,
             "displayName": w.get("displayName", "—"),
             "displayIcon": _local_weapon_image(weapon_uuid),
+            "killStreamIcon": _local_content_image(
+                "weapons", weapon_uuid, "killStreamIcon"
+            ),
+            "defaultSkinUuid": w.get("defaultSkinUuid"),
             "category": _normalizar_categoria_arma(w, shop),
             "cost": shop.get("cost", "—"),
             "stats": {
@@ -309,13 +376,70 @@ def get_armas_detalladas():
 
     return armas
 
+def get_skins(limit=None):
+    ultimo = mongo_content_repo.get_raw_latest()
+    if not ultimo:
+        return []
+
+    skins = []
+
+    for weapon in ultimo.get("weapons", []):
+        weapon_uuid = weapon.get("uuid") or weapon.get("id")
+        weapon_name = weapon.get("displayName", "—")
+
+        for skin in weapon.get("skins", []):
+            skin_uuid = skin.get("uuid") or skin.get("id")
+            name = skin.get("displayName")
+            if not name:
+                continue
+
+            skins.append({
+                "uuid": skin_uuid,
+                "displayName": name,
+                "weaponUuid": weapon_uuid,
+                "weaponName": weapon_name,
+                "contentTierUuid": (
+                    skin.get("contentTierUuid")
+                    or skin.get("contentTierUUID")
+                ),
+                "themeUuid": skin.get("themeUuid"),
+                "displayIcon": _local_weapon_skin_image(
+                    weapon_uuid,
+                    skin_uuid,
+                    "displayIcon",
+                ),
+                "wallpaper": _local_weapon_skin_image(
+                    weapon_uuid,
+                    skin_uuid,
+                    "wallpaper",
+                ),
+                "chromasCount": len(skin.get("chromas", []) or []),
+                "levelsCount": len(skin.get("levels", []) or []),
+            })
+
+            if limit is not None and len(skins) >= limit:
+                return skins
+
+    return skins
+
 def get_buddies():
     ultimo = mongo_content_repo.get_raw_latest()
     if not ultimo:
         return []
 
     return [
-        {"displayName": b.get("displayName", "—")}
+        {
+            "uuid": b.get("uuid") or b.get("id"),
+            "displayName": b.get("displayName", "—"),
+            "themeUuid": b.get("themeUuid"),
+            "isHiddenIfNotOwned": b.get("isHiddenIfNotOwned"),
+            "displayIcon": _local_content_image(
+                "buddies",
+                b.get("uuid") or b.get("id"),
+                "displayIcon",
+            ),
+            "levelsCount": len(b.get("levels", []) or []),
+        }
         for b in ultimo.get("buddies", [])
         if b.get("displayName")
     ]
@@ -350,7 +474,16 @@ def get_bundles_filtrados():
             continue
 
         vistos.add(nombre)
-        resultado.append({"displayName": nombre})
+        item_uuid = b.get("uuid") or b.get("id")
+        resultado.append({
+            "uuid": item_uuid,
+            "displayName": nombre,
+            "displayIcon": _local_content_image("bundles", item_uuid, "displayIcon"),
+            "displayIcon2": _local_content_image("bundles", item_uuid, "displayIcon2"),
+            "verticalPromoImage": _local_content_image(
+                "bundles", item_uuid, "verticalPromoImage"
+            ),
+        })
 
     return resultado
 
@@ -360,7 +493,11 @@ def get_ceremonies():
         return []
 
     return [
-        {"displayName": c.get("displayName", "—")}
+        {
+            "uuid": c.get("uuid") or c.get("id"),
+            "displayName": c.get("displayName", "—"),
+            "assetPath": c.get("assetPath"),
+        }
         for c in ultimo.get("ceremonies", [])
         if c.get("displayName")
     ]
@@ -421,7 +558,17 @@ def get_content_tiers():
         return []
 
     return [
-        {"displayName": t.get("displayName", "—")}
+        {
+            "uuid": t.get("uuid") or t.get("id"),
+            "displayName": t.get("displayName", "—"),
+            "rank": t.get("rank"),
+            "highlightColor": t.get("highlightColor"),
+            "displayIcon": _local_content_image(
+                "contenttiers",
+                t.get("uuid") or t.get("id"),
+                "displayIcon",
+            ),
+        }
         for t in ultimo.get("content_tiers", [])
     ]
 
@@ -434,25 +581,34 @@ def get_contracts():
     contracts = []
 
     for c in ultimo.get("contracts", []):
+        contract_uuid = c.get("uuid") or c.get("id")
         contract_data = {
+            "uuid": contract_uuid,
             "displayName": c.get("displayName", "—"),
+            "displayIcon": _local_content_image(
+                "contracts",
+                contract_uuid,
+                "displayIcon",
+            ),
             "chapters": []
         }
 
         content = c.get("content", {})
         chapters = content.get("chapters", [])
 
-        for chapter in chapters:
+        for chapter_index, chapter in enumerate(chapters, start=1):
             chapter_data = {
+                "chapter": chapter_index,
                 "levels": []
             }
 
-            for lvl in chapter.get("levels", []):
+            for level_index, lvl in enumerate(chapter.get("levels", []), start=1):
                 xp = lvl.get("xp")
                 vp_cost = lvl.get("vpCost", -1)
                 dough_cost = lvl.get("doughCost", -1)
 
                 chapter_data["levels"].append({
+                    "level": level_index,
                     "xp": xp,
                     "vpCost": vp_cost,
                     "doughCost": dough_cost
@@ -470,7 +626,26 @@ def get_currencies():
         return []
 
     return [
-        {"displayName": c.get("displayName", "—")}
+        {
+            "uuid": c.get("uuid") or c.get("id"),
+            "displayName": c.get("displayName", "—"),
+            "displayIcon": _local_content_image(
+                "currencies",
+                c.get("uuid") or c.get("id"),
+                "displayIcon",
+            ),
+            "largeIcon": _local_content_image(
+                "currencies",
+                c.get("uuid") or c.get("id"),
+                "largeIcon",
+            ),
+            "rewardPreviewIcon": _local_content_image(
+                "currencies",
+                c.get("uuid") or c.get("id"),
+                "rewardPreviewIcon",
+            ),
+            "assetPath": c.get("assetPath"),
+        }
         for c in ultimo.get("currencies", [])
     ]
 
@@ -483,9 +658,12 @@ def get_events():
     eventos = []
     for e in ultimo.get("events", []):
         eventos.append({
+            "uuid": e.get("uuid") or e.get("id"),
             "displayName": e.get("displayName", "—"),
+            "shortDisplayName": e.get("shortDisplayName"),
             "startTime": e.get("startTime", "—"),
-            "endTime": e.get("endTime", "—")
+            "endTime": e.get("endTime", "—"),
+            "assetPath": e.get("assetPath"),
         })
 
     return eventos
@@ -510,7 +688,13 @@ def get_flex(limit=None):
         if nombre.lower() in prohibidas:
             continue
 
-        resultado.append({"displayName": nombre})
+        item_uuid = f.get("uuid") or f.get("id")
+        resultado.append({
+            "uuid": item_uuid,
+            "displayName": nombre,
+            "displayNameAllCaps": f.get("displayNameAllCaps"),
+            "displayIcon": _local_content_image("flex", item_uuid, "displayIcon"),
+        })
 
     return resultado
 
@@ -525,11 +709,30 @@ def get_gamemodes(limit=None):
 
     resultado = []
     for g in to_iter:
+        item_uuid = g.get("uuid") or g.get("id")
         resultado.append({
-            "uuid": g.get("uuid", "—"),
+            "uuid": item_uuid,
             "displayName": g.get("displayName", "—"),
             "description": g.get("description", "—"),
-            "duration": g.get("duration", "—")
+            "duration": g.get("duration", "—"),
+            "roundsPerHalf": g.get("roundsPerHalf"),
+            "economyType": g.get("economyType"),
+            "orbCount": g.get("orbCount"),
+            "teamRoles": g.get("teamRoles") or [],
+            "isTeamVoiceAllowed": g.get("isTeamVoiceAllowed"),
+            "isMinimapHidden": g.get("isMinimapHidden"),
+            "allowsMatchTimeouts": g.get("allowsMatchTimeouts"),
+            "allowsCustomGameReplays": g.get("allowsCustomGameReplays"),
+            "displayIcon": _local_content_image(
+                "gamemodes",
+                item_uuid,
+                "displayIcon",
+            ),
+            "listViewIconTall": _local_content_image(
+                "gamemodes",
+                item_uuid,
+                "listViewIconTall",
+            ),
         })
 
     return resultado
@@ -545,11 +748,21 @@ def get_gear(limit=None):
 
     resultado = []
     for item in to_iter:
+        item_uuid = item.get("uuid") or item.get("id")
         shop = item.get("shopData") or {}
         resultado.append({
+            "uuid": item_uuid,
             "displayName": item.get("displayName", "—"),
             "description": item.get("description", "—"),
-            "cost": shop.get("cost", "—")
+            "descriptions": item.get("descriptions") or [],
+            "details": item.get("details") or {},
+            "cost": shop.get("cost", "—"),
+            "category": item.get("category"),
+            "displayIcon": _local_content_image("gear", item_uuid, "displayIcon"),
+            "shopImage": (
+                f"/content/gear/{item_uuid}/shopData/newImage.png"
+                if item_uuid else None
+            ),
         })
 
     return resultado
@@ -563,7 +776,22 @@ def get_levelborders(limit=None):
     to_iter = levelborders if limit is None else levelborders[:limit]
 
     return [
-        {"displayName": lb.get("displayName", "—")}
+        {
+            "uuid": lb.get("uuid") or lb.get("id"),
+            "displayName": lb.get("displayName", "—"),
+            "startingLevel": lb.get("startingLevel"),
+            "levelNumber": lb.get("levelNumber"),
+            "levelNumberAppearance": _local_content_image(
+                "levelborders",
+                lb.get("uuid") or lb.get("id"),
+                "levelNumberAppearance",
+            ),
+            "smallPlayerCardAppearance": _local_content_image(
+                "levelborders",
+                lb.get("uuid") or lb.get("id"),
+                "smallPlayerCardAppearance",
+            ),
+        }
         for lb in to_iter
     ]
 
@@ -576,7 +804,32 @@ def get_playercards(limit=None):
     to_iter = playercards if limit is None else playercards[:limit]
 
     return [
-        {"displayName": pc.get("displayName", "—")}
+        {
+            "uuid": pc.get("uuid") or pc.get("id"),
+            "displayName": pc.get("displayName", "—"),
+            "themeUuid": pc.get("themeUuid"),
+            "isHiddenIfNotOwned": pc.get("isHiddenIfNotOwned"),
+            "displayIcon": _local_content_image(
+                "playercards",
+                pc.get("uuid") or pc.get("id"),
+                "displayIcon",
+            ),
+            "smallArt": _local_content_image(
+                "playercards",
+                pc.get("uuid") or pc.get("id"),
+                "smallArt",
+            ),
+            "wideArt": _local_content_image(
+                "playercards",
+                pc.get("uuid") or pc.get("id"),
+                "wideArt",
+            ),
+            "largeArt": _local_content_image(
+                "playercards",
+                pc.get("uuid") or pc.get("id"),
+                "largeArt",
+            ),
+        }
         for pc in to_iter
     ]
 
@@ -601,8 +854,10 @@ def get_playertitles(limit=None):
             continue
 
         resultado.append({
+            "uuid": t.get("uuid") or t.get("id"),
             "displayName": nombre,
-            "titleText": t.get("titleText", "—")
+            "titleText": t.get("titleText", "—"),
+            "isHiddenIfNotOwned": t.get("isHiddenIfNotOwned"),
         })
 
     return resultado
@@ -620,6 +875,7 @@ def get_sprays(limit=None):
     resultado = []
 
     for s in to_iter:
+        item_uuid = s.get("uuid") or s.get("id")
         nombre = s.get("displayName", "—")
 
         if nombre and nombre.lower() in prohibidas:
@@ -630,7 +886,20 @@ def get_sprays(limit=None):
         )
 
         resultado.append({
+            "uuid": item_uuid,
             "displayName": nombre,
+            "category": s.get("category"),
+            "themeUuid": s.get("themeUuid"),
+            "hideIfNotOwned": s.get("hideIfNotOwned"),
+            "isNullSpray": s.get("isNullSpray"),
+            "levelsCount": len(s.get("levels", []) or []),
+            "displayIcon": _local_content_image("sprays", item_uuid, "displayIcon"),
+            "fullIcon": _local_content_image("sprays", item_uuid, "fullIcon"),
+            "fullTransparentIcon": _local_content_image(
+                "sprays",
+                item_uuid,
+                "fullTransparentIcon",
+            ),
             "isAnimated": is_animated
         })
 

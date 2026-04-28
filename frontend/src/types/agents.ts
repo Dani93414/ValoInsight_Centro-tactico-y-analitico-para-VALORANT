@@ -16,8 +16,14 @@ export type Role = {
 };
 
 export type Agente = {
+  uuid?: string;
+  id?: string;
   displayName: string;
   description: string;
+  releaseDate?: string | null;
+  characterTags?: string[];
+  isBaseContent?: boolean | null;
+  isAvailableForTest?: boolean | null;
   displayIcon?: string | null;
   fullPortrait?: string | null;
   background?: string | null;
@@ -34,6 +40,10 @@ export type AgentContent = {
   id?: string;
   displayName?: string;
   name?: string;
+  releaseDate?: string | null;
+  characterTags?: string[];
+  isBaseContent?: boolean | null;
+  isAvailableForTest?: boolean | null;
   displayIcon?: string;
   displayIconSmall?: string;
   description?: string;

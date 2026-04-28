@@ -1,4 +1,5 @@
-const API_BASE_PATH = "/api";
+const rawApiBasePath = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const API_BASE_PATH = String(rawApiBasePath).replace(/\/+$/, "") || "/api";
 
 export function apiUrl(path: string): string {
   const normalizedPath = path.startsWith("/") ? path : "/" + path;

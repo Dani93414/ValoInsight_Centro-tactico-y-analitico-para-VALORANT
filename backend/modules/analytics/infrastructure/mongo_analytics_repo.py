@@ -6,6 +6,10 @@ from typing import Any, Optional
 
 from infrastructure.mongo_client import content_collection, matches_collection
 
+MAX_ANALYTICS_ROWS = 20_000
+MAX_HEATMAP_MATCHES_PER_MAP = 1_500
+QUERY_MAX_TIME_MS = 5_000
+
 
 @lru_cache(maxsize=1)
 def heatmap_maps_by_uuid() -> dict[str, dict[str, Any]]:
@@ -34,6 +38,7 @@ def find_ranked_analytics_rows(
     map_id: Optional[str] = None,
     season_ids: Optional[list[str]] = None,
     agent_id: Optional[str] = None,
+    limit: int = MAX_ANALYTICS_ROWS,
 ) -> list[dict[str, Any]]:
     """Return lightweight per-match rows extracted from the matches collection."""
     elem: dict[str, Any] = {"puuid": puuid}
@@ -57,12 +62,19 @@ def find_ranked_analytics_rows(
         "matchInfo.matchId": 1,
         "matchInfo.mapId": 1,
         "matchInfo.seasonId": 1,
+        "matchInfo.gameStartMillis": 1,
         "players.puuid": 1,
         "players.characterId": 1,
     }
 
     rows: list[dict[str, Any]] = []
-    for match_obj in matches_collection.find(query, projection):
+    cursor = (
+        matches_collection.find(query, projection)
+        .sort("matchInfo.gameStartMillis", -1)
+        .limit(limit)
+        .max_time_ms(QUERY_MAX_TIME_MS)
+    )
+    for match_obj in cursor:
         match_info = match_obj.get("matchInfo") or {}
         match_id = str(match_info.get("matchId") or "").strip()
         if not match_id:
@@ -126,7 +138,12 @@ def find_heatmap_matches(
     }
     if map_id:
         query["matchInfo.mapId"] = map_id
-    return list(matches_collection.find(query, HEATMAP_MATCH_PROJECTION))
+    return list(
+        matches_collection.find(query, HEATMAP_MATCH_PROJECTION)
+        .sort("matchInfo.gameStartMillis", -1)
+        .limit(MAX_HEATMAP_MATCHES_PER_MAP)
+        .max_time_ms(QUERY_MAX_TIME_MS)
+    )
 
 
 def find_heatmap_matches_fallback(
@@ -151,7 +168,12 @@ def find_heatmap_matches_fallback(
             query["matchInfo.seasonId"] = {"$in": season_ids}
     if match_ids:
         query["matchInfo.matchId"] = {"$in": list(match_ids)}
-    return list(matches_collection.find(query, HEATMAP_MATCH_PROJECTION))
+    return list(
+        matches_collection.find(query, HEATMAP_MATCH_PROJECTION)
+        .sort("matchInfo.gameStartMillis", -1)
+        .limit(MAX_HEATMAP_MATCHES_PER_MAP)
+        .max_time_ms(QUERY_MAX_TIME_MS)
+    )
 
 
 def find_agent_stats_for_player(
@@ -174,11 +196,15 @@ def find_agent_stats_for_player(
 
     matches = list(
         matches_collection.find(match_query, {"_id": 0, "players": 1})
+        .limit(MAX_ANALYTICS_ROWS)
+        .max_time_ms(QUERY_MAX_TIME_MS)
     )
     if not matches:
         relaxed_query = dict(match_query)
         relaxed_query.pop("matchInfo.isRanked", None)
         matches = list(
             matches_collection.find(relaxed_query, {"_id": 0, "players": 1})
+            .limit(MAX_ANALYTICS_ROWS)
+            .max_time_ms(QUERY_MAX_TIME_MS)
         )
     return matches

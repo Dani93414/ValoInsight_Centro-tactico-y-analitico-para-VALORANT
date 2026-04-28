@@ -16,6 +16,16 @@ from modules.analytics.application.filters import AnalyticsFilters
 
 logger = logging.getLogger(__name__)
 
+PLAYER_PERFORMANCE_MATCH_LIMIT = 1_000
+PLAYER_PERFORMANCE_BASELINE_LIMIT = 5_000
+QUERY_MAX_TIME_MS = 5_000
+PERFORMANCE_PROJECTION = {
+    "_id": 0,
+    "players.puuid": 1,
+    "players.characterId": 1,
+    "players.analytics": 1,
+}
+
 
 def _aggregate_empty_scope() -> dict:
     return {
@@ -53,6 +63,7 @@ def _aggregate_empty_scope() -> dict:
         "survival_rounds": 0,
         "rounds_with_kill": 0,
         "rounds_with_assist": 0,
+        "rounds_with_death": 0,
         "rounds_with_direct_participation": 0,
         "rounds_with_multikill": 0,
         "multi_2k": 0,
@@ -107,6 +118,7 @@ def _merge_scope_into(target: dict, source: dict) -> None:
         "survival_rounds",
         "rounds_with_kill",
         "rounds_with_assist",
+        "rounds_with_death",
         "rounds_with_direct_participation",
         "rounds_with_multikill",
         "multi_2k",
@@ -117,6 +129,11 @@ def _merge_scope_into(target: dict, source: dict) -> None:
         "loadout_value_total",
     ):
         target[key] += int(source.get(key, 0) or 0)
+
+    if "rounds_with_kast" in source and source.get("rounds_with_kast") is not None:
+        target["rounds_with_kast"] = int(target.get("rounds_with_kast", 0) or 0) + int(
+            source.get("rounds_with_kast", 0) or 0
+        )
 
 
 def _extract_scope_from_doc(doc: dict, filters: AnalyticsFilters) -> Optional[dict]:
@@ -264,7 +281,12 @@ def get_player_performance(puuid: str, filters: Optional[AnalyticsFilters] = Non
     player_query = filters.to_mongo_query(puuid=puuid)
     all_query = filters.to_mongo_query()
 
-    player_matches = matches_collection.find(player_query)
+    player_matches = (
+        matches_collection.find(player_query, PERFORMANCE_PROJECTION)
+        .sort("matchInfo.gameStartMillis", -1)
+        .limit(PLAYER_PERFORMANCE_MATCH_LIMIT)
+        .max_time_ms(QUERY_MAX_TIME_MS)
+    )
     player_docs = _extract_analytics_docs_from_matches(
         player_matches, puuid=puuid, agent_id=filters.agent_id,
     )
@@ -278,7 +300,12 @@ def get_player_performance(puuid: str, filters: Optional[AnalyticsFilters] = Non
             "by_role": {},
         }
 
-    all_matches = matches_collection.find(all_query)
+    all_matches = (
+        matches_collection.find(all_query, PERFORMANCE_PROJECTION)
+        .sort("matchInfo.gameStartMillis", -1)
+        .limit(PLAYER_PERFORMANCE_BASELINE_LIMIT)
+        .max_time_ms(QUERY_MAX_TIME_MS)
+    )
     all_docs = _extract_analytics_docs_from_matches(
         all_matches, agent_id=filters.agent_id,
     )

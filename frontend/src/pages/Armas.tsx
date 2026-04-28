@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useArmas } from "../api/hooks";
+import { useArmas, useGear, useRegions } from "../api/hooks";
 import BackButton from "../components/BackButton";
 import FloatingActionButton from "../components/FloatingActionButton";
+import type { GearContent } from "../types/content";
 import type { Arma } from "../types/weapons";
 import "./Armas.css";
 
@@ -71,12 +72,21 @@ const formatearValor = (valor: unknown): string | number => {
   return "-";
 };
 
+const formatearCoste = (valor: unknown) => {
+  if (valor === undefined || valor === null || valor === "" || valor === "—") {
+    return "Gratis";
+  }
+  return `${valor} créditos`;
+};
+
 /* =============================
    COMPONENTE
 ============================== */
 
 export default function Armas() {
-  const { data: rawArmas, isLoading: loading } = useArmas();
+  const { data: rawArmas, isLoading: weaponsLoading } = useArmas();
+  const { data: rawGear, isLoading: gearLoading } = useGear();
+  const { data: regions } = useRegions();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -97,8 +107,31 @@ export default function Armas() {
     );
   }, [rawArmas]);
 
+  const escudos = useMemo<Arma[]>(() => {
+    if (!rawGear) return [];
+    return [...(rawGear as GearContent[])]
+      .filter((item) => item.displayName)
+      .map((item) => ({
+        uuid: item.uuid,
+        displayName: item.displayName,
+        displayIcon: item.displayIcon || item.shopImage || null,
+        category: "Escudos",
+        cost: item.cost,
+        description: item.description,
+        isShield: true,
+        stats: null,
+        adsStats: null,
+        damageRanges: null,
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [rawGear]);
+
+  const arsenal = useMemo(() => [...armas, ...escudos], [armas, escudos]);
+
   const [armaSeleccionada, setArmaSeleccionada] = useState<Arma | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const [categoriaActiva, setCategoriaActiva] = useState("Todas");
+  const [costeActivo, setCosteActivo] = useState("Todos");
   const consumedRouteWeaponNameRef = useRef<string | null>(null);
 
   const detalleRef = useRef<HTMLDivElement | null>(null);
@@ -111,14 +144,14 @@ export default function Armas() {
     if (
       !routeWeaponName ||
       consumedRouteWeaponNameRef.current === routeWeaponName ||
-      armas.length === 0 ||
+      arsenal.length === 0 ||
       armaSeleccionada
     ) {
       return;
     }
 
     const frame = requestAnimationFrame(() => {
-      const match = armas.find(
+      const match = arsenal.find(
         (weapon) =>
           weapon.displayName.toLowerCase() === routeWeaponName.toLowerCase(),
       );
@@ -129,13 +162,58 @@ export default function Armas() {
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [armas, routeState?.weaponName, armaSeleccionada]);
+  }, [arsenal, routeState?.weaponName, armaSeleccionada]);
 
   /* =============================
      FILTRADO POR BÚSQUEDA
   ============================== */
-  const armasFiltradas = armas.filter((arma) =>
-    arma.displayName.toLowerCase().includes(busqueda.toLowerCase()),
+  const armasFiltradas = arsenal.filter((arma) =>
+    {
+      const matchesSearch = arma.displayName
+        .toLowerCase()
+        .includes(busqueda.toLowerCase());
+      const normalizedCategory = normalizarCategoria(arma.category);
+      const matchesCategory =
+        categoriaActiva === "Todas" || normalizedCategory === categoriaActiva;
+      const numericCost = Number(arma.cost);
+      const matchesCost =
+        costeActivo === "Todos" ||
+        (costeActivo === "Gratis" && (!numericCost || Number.isNaN(numericCost))) ||
+        (costeActivo === "Económicas" && numericCost > 0 && numericCost <= 1600) ||
+        (costeActivo === "Premium" && numericCost > 1600);
+
+      return matchesSearch && matchesCategory && matchesCost;
+    },
+  );
+
+  const categorias = useMemo(
+    () =>
+      ["Todas", ...Array.from(new Set(arsenal.map((arma) => normalizarCategoria(arma.category))))],
+    [arsenal],
+  );
+
+  const regionWeaponStats = regions?.[0]?.weaponStats ?? {};
+  const weaponStatsByName = useMemo(() => {
+    const map = new Map<string, (typeof regionWeaponStats)[string]>();
+    Object.values(regionWeaponStats).forEach((stats) => {
+      if (stats.weapon_name) {
+        map.set(stats.weapon_name.toLowerCase(), stats);
+      }
+    });
+    return map;
+  }, [regionWeaponStats]);
+
+  const getWeaponGlobalStats = (weapon: Arma) =>
+    regionWeaponStats[weapon.uuid ?? ""] ??
+    weaponStatsByName.get(weapon.displayName.toLowerCase());
+
+  const topGlobalWeapons = useMemo(
+    () =>
+      Object.entries(regionWeaponStats)
+        .map(([id, stats]) => ({ id, ...stats }))
+        .sort((a, b) => (b.kills ?? 0) - (a.kills ?? 0))
+        .slice(0, 5),
+    [regionWeaponStats],
   );
 
   /* =============================
@@ -170,7 +248,7 @@ export default function Armas() {
   /* =============================
      LOADING
   ============================== */
-  if (loading) {
+  if (weaponsLoading || gearLoading) {
     return (
       <div className="loading-screen">
         <div className="loading-card">
@@ -213,6 +291,43 @@ export default function Armas() {
         />
       </div>
 
+      <div className="weapons-filter-row">
+        <select
+          value={categoriaActiva}
+          onChange={(event) => setCategoriaActiva(event.target.value)}
+        >
+          {categorias.map((categoria) => (
+            <option key={categoria} value={categoria}>
+              {categoria}
+            </option>
+          ))}
+        </select>
+        <select
+          value={costeActivo}
+          onChange={(event) => setCosteActivo(event.target.value)}
+        >
+          <option value="Todos">Todos los costes</option>
+          <option value="Gratis">Gratis</option>
+          <option value="Económicas">Económicas</option>
+          <option value="Premium">Premium</option>
+        </select>
+      </div>
+
+      {topGlobalWeapons.length > 0 && (
+        <section className="weapons-global-ranking">
+          <h2>Ranking global de armas</h2>
+          <div className="weapons-global-list">
+            {topGlobalWeapons.map((weapon) => (
+              <article key={weapon.id} className="weapons-global-item">
+                <span>{weapon.weapon_name ?? "Arma"}</span>
+                <strong>{weapon.kills ?? 0} kills</strong>
+                <small>{weapon.headshot_pct?.toFixed(1) ?? "-"}% HS</small>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* =============================
          DETALLE DEL ARMA
       ============================== */}
@@ -238,11 +353,41 @@ export default function Armas() {
                   {normalizarCategoria(armaSeleccionada.category)}
                 </span>
                 <span className="weapon-cost">
-                  {armaSeleccionada.cost
-                    ? `${armaSeleccionada.cost} créditos`
-                    : "Gratis"}
+                  {formatearCoste(armaSeleccionada.cost)}
                 </span>
               </div>
+
+              {getWeaponGlobalStats(armaSeleccionada) && (
+                <div className="weapon-global-stats">
+                  <div>
+                    <span>Kills globales</span>
+                    <strong>
+                      {getWeaponGlobalStats(armaSeleccionada)?.kills ?? "-"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Rondas equipada</span>
+                    <strong>
+                      {getWeaponGlobalStats(armaSeleccionada)?.rounds_equipped ??
+                        "-"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Headshot global</span>
+                    <strong>
+                      {getWeaponGlobalStats(armaSeleccionada)?.headshot_pct
+                        ? `${getWeaponGlobalStats(armaSeleccionada)?.headshot_pct?.toFixed(1)}%`
+                        : "-"}
+                    </strong>
+                  </div>
+                </div>
+              )}
+
+              {armaSeleccionada.description && (
+                <p className="weapon-description">
+                  {armaSeleccionada.description}
+                </p>
+              )}
 
               {/* =============================
                  ESTADÍSTICAS
@@ -361,6 +506,12 @@ export default function Armas() {
                   )}
 
                   <h2 className="weapon-card-name">{arma.displayName}</h2>
+                  {getWeaponGlobalStats(arma)?.kills ? (
+                    <p className="weapon-card-meta">
+                      {getWeaponGlobalStats(arma)?.kills} kills ·{" "}
+                      {getWeaponGlobalStats(arma)?.headshot_pct?.toFixed(1)}% HS
+                    </p>
+                  ) : null}
                 </div>
               );
             })}

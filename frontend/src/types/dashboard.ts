@@ -306,9 +306,11 @@ export type DashboardPayload = {
     rounds_with_kill: number;
     rounds_with_assist: number;
     rounds_with_death: number;
+    rounds_with_kast?: number;
     rounds_with_kill_pct: number;
     rounds_with_assist_pct: number;
     rounds_with_death_pct: number;
+    rounds_with_kast_pct?: number;
     first_bloods: number;
     aces: number;
     plants?: number;
@@ -341,6 +343,12 @@ export type DashboardPayload = {
     distribution_combined_or_none_pct: number;
   };
   currentActId?: string | null;
+  matchPagination?: {
+    page: number;
+    pageSize: number;
+    totalMatches: number;
+    totalPages: number;
+  };
   currentRank: RankInfo;
   rankComparison?: RankComparisonPayload;
   headerShowcase: HeaderVisualCard[];

@@ -39,6 +39,33 @@ def local_weapon_image(weapon_uuid: str | None) -> str | None:
     return f"/content/weapons/{weapon_uuid}/displayIcon.png"
 
 
+def local_content_image(
+    collection: str | None,
+    item_uuid: str | None,
+    field_name: str | None,
+    extension: str = "png",
+) -> str | None:
+    if not collection or not item_uuid or not field_name:
+        return None
+    safe_extension = extension.lstrip(".") or "png"
+    return f"/content/{collection}/{item_uuid}/{field_name}.{safe_extension}"
+
+
+def local_weapon_skin_image(
+    weapon_uuid: str | None,
+    skin_uuid: str | None,
+    field_name: str | None,
+    extension: str = "png",
+) -> str | None:
+    if not weapon_uuid or not skin_uuid or not field_name:
+        return None
+    safe_extension = extension.lstrip(".") or "png"
+    return (
+        f"/content/weapons/{weapon_uuid}/skins/{skin_uuid}/"
+        f"{field_name}.{safe_extension}"
+    )
+
+
 def local_competitive_tier_icon(
     tier_set_uuid: str | None,
     tier_name_sanitized: str | None,
@@ -65,10 +92,24 @@ def classify_maps(raw_maps: list[dict]) -> dict[str, list[dict]]:
 
     for mp in raw_maps:
         name = mp.get("displayName", "") or mp.get("name", "")
+        uuid = mp.get("uuid") or mp.get("mapUrl", "").rsplit("/", 1)[-1]
         mapa_data = {
+            "uuid": uuid,
             "displayName": mp.get("displayName", "—"),
             "coordinates": mp.get("coordinates", "—"),
+            "narrativeDescription": mp.get("narrativeDescription"),
             "tacticalDescription": mp.get("tacticalDescription", "—"),
+            "callouts": mp.get("callouts") or [],
+            "displayIcon": local_content_image("maps", uuid, "displayIcon"),
+            "listViewIcon": local_content_image("maps", uuid, "listViewIcon"),
+            "listViewIconTall": local_content_image("maps", uuid, "listViewIconTall"),
+            "splash": local_content_image("maps", uuid, "splash"),
+            "stylizedBackgroundImage": local_content_image(
+                "maps", uuid, "stylizedBackgroundImage"
+            ),
+            "premierBackgroundImage": local_content_image(
+                "maps", uuid, "premierBackgroundImage"
+            ),
         }
 
         if any(k in name for k in _TRAINING_KEYWORDS):

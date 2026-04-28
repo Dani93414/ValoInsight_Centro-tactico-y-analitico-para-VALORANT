@@ -100,6 +100,13 @@ def finalize_core_stats(stats: dict) -> dict:
         0,
         int(stats.get("rounds_with_death", stats.get("deaths", 0)) or 0),
     )
+    has_exact_kast = "rounds_with_kast" in stats and stats.get("rounds_with_kast") is not None
+    rounds_with_kast = 0
+    if has_exact_kast:
+        rounds_with_kast = max(
+            0,
+            int(stats.get("rounds_with_kast", 0) or 0),
+        )
     rounds_with_direct = max(
         0,
         int(
@@ -114,6 +121,7 @@ def finalize_core_stats(stats: dict) -> dict:
     rounds_with_kill = min(rounds_with_kill, rounds)
     rounds_with_assist = min(rounds_with_assist, rounds)
     rounds_with_death = min(rounds_with_death, rounds)
+    rounds_with_kast = min(rounds_with_kast, rounds)
     rounds_with_direct = min(rounds_with_direct, rounds)
 
     rounds_without_direct_raw = stats.get("rounds_without_direct_participation")
@@ -198,6 +206,8 @@ def finalize_core_stats(stats: dict) -> dict:
     stats["rounds_with_kill"] = rounds_with_kill
     stats["rounds_with_assist"] = rounds_with_assist
     stats["rounds_with_death"] = rounds_with_death
+    if has_exact_kast:
+        stats["rounds_with_kast"] = rounds_with_kast
     stats["rounds_with_direct_participation"] = rounds_with_direct
     stats["rounds_without_direct_participation"] = rounds_without_direct
     stats["rounds_only_kill"] = rounds_only_kill
@@ -213,6 +223,12 @@ def finalize_core_stats(stats: dict) -> dict:
     stats["rounds_with_kill_pct"] = _sd(rounds_with_kill * 100.0, rounds)
     stats["rounds_with_assist_pct"] = _sd(rounds_with_assist * 100.0, rounds)
     stats["rounds_with_death_pct"] = _sd(rounds_with_death * 100.0, rounds)
+    if has_exact_kast:
+        kast_pct = _sd(rounds_with_kast * 100.0, rounds)
+        stats["rounds_with_kast_pct"] = kast_pct
+        stats["kast"] = kast_pct
+        stats["kast_pct"] = kast_pct
+        stats["kill_assist_survive_trade_pct"] = kast_pct
     stats["rounds_with_direct_participation_pct"] = _sd(
         rounds_with_direct * 100.0,
         rounds,

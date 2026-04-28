@@ -5528,6 +5528,24 @@ body {
   margin: 0 0 0.65rem;
 }
 
+.heatmap-truncation-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 0.65rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 8px;
+  background: rgba(255, 196, 87, 0.12);
+  color: #ffe8b3;
+  font-size: 0.76rem;
+  line-height: 1.45;
+
+  p {
+    margin: 0;
+  }
+}
+
 .heatmap-tooltip {
   position: absolute;
   z-index: 20;

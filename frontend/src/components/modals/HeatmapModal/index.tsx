@@ -34,6 +34,24 @@ function formatNormValue(value: number): string {
   return value.toFixed(4);
 }
 
+function buildTruncationMessage(
+  label: string,
+  meta: {
+    is_truncated?: boolean;
+    total_matches_available?: number;
+    total_matches_queried?: number;
+    max_matches_per_map?: number;
+  },
+): string | null {
+  if (!meta.is_truncated) return null;
+
+  const totalAvailable = meta.total_matches_available ?? 0;
+  const totalQueried = meta.total_matches_queried ?? 0;
+  const maxMatchesPerMap = meta.max_matches_per_map ?? totalQueried;
+
+  return `${label}: se han usado las ${totalQueried} partidas mas recientes de ${totalAvailable} disponibles (limite ${maxMatchesPerMap} por mapa).`;
+}
+
 export default function HeatmapModal(props: Props) {
   const {
     onClose,
@@ -137,6 +155,15 @@ export default function HeatmapModal(props: Props) {
   const selectedMapName =
     availableMaps.find((mapItem) => mapItem.uuid === selectedMapId)
       ?.displayName ?? undefined;
+  const truncationMessages = [
+    buildTruncationMessage(
+      needsSecondary ? leftCanvasLabel : "Heatmap",
+      mainMeta,
+    ),
+    ...(needsSecondary
+      ? [buildTruncationMessage(rightCanvasLabel, secondaryMeta)]
+      : []),
+  ].filter((message): message is string => Boolean(message));
 
   const handleEnterHeatmap = () => {
     const nextFilters: HeatmapEntryFilters = {
@@ -518,6 +545,14 @@ export default function HeatmapModal(props: Props) {
                   Datos: izquierda={mainEvents.length}
                   {needsSecondary ? ` | derecha=${secondaryEvents.length}` : ""}
                 </span>
+              </div>
+            )}
+
+            {truncationMessages.length > 0 && (
+              <div className="heatmap-truncation-warning" role="status">
+                {truncationMessages.map((message) => (
+                  <p key={message}>{message}</p>
+                ))}
               </div>
             )}
 

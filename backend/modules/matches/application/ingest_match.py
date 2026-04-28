@@ -31,6 +31,25 @@ def _embed_analytics(match_obj: dict) -> int:
     return len(analytics_by_puuid)
 
 
+def _sync_derived_state(match_obj: dict) -> list[str]:
+    """Best-effort repair/sync of all derived data generated from one match."""
+    match_id = _safe_match_id(match_obj) or "unknown"
+    failures: list[str] = []
+
+    for name, operation in (
+        ("players", update_players_from_match),
+        ("analytics", _embed_analytics),
+        ("regions", update_region_from_match),
+    ):
+        try:
+            operation(match_obj)
+        except Exception as exc:
+            failures.append(name)
+            logger.error("Derived %s sync failed for match %s: %s", name, match_id, exc)
+
+    return failures
+
+
 def process_single_match_with_status(match_obj: dict) -> str:
     """
     Ingest a single match object and return one of:
@@ -51,20 +70,15 @@ def process_single_match_with_status(match_obj: dict) -> str:
         existing_match = mongo_match_repo.find_raw_by_match_id(match_id)
 
         if existing_match:
-            logger.info("Match %s already present. Skip insert.", match_id)
-            try:
-                _embed_analytics(existing_match)
-            except Exception as analytics_exc:
-                logger.warning(
-                    "Analytics embed skipped/failed for existing match %s: %s",
-                    match_id,
-                    analytics_exc,
-                )
-            return "already_exists"
+            logger.info("Match %s already present. Repairing derived state.", match_id)
+            failures = _sync_derived_state(existing_match)
+            return "failed" if failures else "already_exists"
 
         if not mongo_match_repo.insert(match_obj):
-            logger.info("Match %s inserted by concurrent process. Skip.", match_id)
-            return "already_exists"
+            logger.info("Match %s inserted by concurrent process. Repairing derived state.", match_id)
+            concurrent_match = mongo_match_repo.find_raw_by_match_id(match_id) or match_obj
+            failures = _sync_derived_state(concurrent_match)
+            return "failed" if failures else "already_exists"
 
         logger.info("Match %s stored in MongoDB.", match_id)
 
@@ -73,15 +87,8 @@ def process_single_match_with_status(match_obj: dict) -> str:
         return "failed"
 
     try:
-        update_players_from_match(match_obj)
-
-        try:
-            _embed_analytics(match_obj)
-        except Exception as analytics_exc:
-            logger.error("Analytics embed failed for match %s: %s", match_id, analytics_exc)
-
-        update_region_from_match(match_obj)
-        return "inserted"
+        failures = _sync_derived_state(match_obj)
+        return "failed" if failures else "inserted"
 
     except Exception as exc:
         logger.error("Error updating derived stats for %s: %s", match_id, exc)

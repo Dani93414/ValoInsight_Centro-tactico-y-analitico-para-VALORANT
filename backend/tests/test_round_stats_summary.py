@@ -449,6 +449,38 @@ class RoundStatsSummaryTest(unittest.TestCase):
         self.assertEqual(round_overview["missed_trade_opportunities"], 0)
         self.assertEqual(round_overview["trade_conversion_rate"], 100.0)
 
+    def test_round_overview_counts_traded_death_as_exact_kast(self):
+        puuid = "P1"
+        teammate = "P2"
+        enemy = "E1"
+
+        match_obj = {
+            "players": [
+                {"puuid": puuid, "teamId": "Blue"},
+                {"puuid": teammate, "teamId": "Blue"},
+                {"puuid": enemy, "teamId": "Red"},
+            ],
+            "roundResults": [
+                {
+                    "playerStats": [
+                        _pstat(enemy, [_kill(1000, enemy, puuid)]),
+                        _pstat(teammate, [_kill(1500, teammate, enemy)]),
+                    ]
+                },
+                {
+                    "playerStats": [
+                        _pstat(enemy, [_kill(1000, enemy, puuid)]),
+                    ]
+                },
+            ],
+        }
+
+        round_overview = _compute_round_overview_from_round_results(match_obj, puuid)
+
+        self.assertEqual(round_overview["rounds"], 2)
+        self.assertEqual(round_overview["traded_deaths"], 1)
+        self.assertEqual(round_overview["rounds_with_kast"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

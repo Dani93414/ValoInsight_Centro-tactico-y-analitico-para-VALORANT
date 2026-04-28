@@ -260,6 +260,51 @@ body {
   font-family: var(--font-reading);
 }
 
+.home-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+
+.home-stat-card {
+  min-height: 112px;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #1a1d23, #13161b);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28);
+}
+
+.home-stat-card span,
+.home-stat-card small {
+  display: block;
+}
+
+.home-stat-card span {
+  margin-bottom: 0.6rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.home-stat-card strong {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--text-primary);
+  font-size: 1.7rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.home-stat-card small {
+  color: var(--text-secondary);
+  font-family: var(--font-reading);
+  font-size: 0.82rem;
+}
+
 /* =====================================================
    PANELES DE NAVEGACIÓN
    ===================================================== */
@@ -292,6 +337,40 @@ body {
 
 .home-panel--armas {
   background-image: url("/content/FondoArmasHome.png");
+}
+
+.home-panel--mapas {
+  background-image: url("/content/Fondo_Menu_Mapas.png");
+}
+
+.home-panel--actos {
+  background-image: url("/content/Fondo_Menu_Actos.png");
+}
+
+.home-panel--global-stats {
+  background-image: url("/content/Fondo_Menu_Info.png");
+}
+
+.home-panel--eventos {
+  background-image: url("/content/Fondo_Menu_Eventos.jpg");
+}
+
+.home-panel--modos {
+  background-image: url("/content/FondoHeatmap.png");
+}
+
+.home-panel--cosmeticos {
+  background-image: url("/content/Fondo_Menu_Cosmeticos.png");
+}
+
+.home-panel--informacion {
+  background-image: url("/content/Fondo_Menu_Info.png");
+}
+
+.home-panel--plain {
+  background:
+    radial-gradient(circle at top right, rgba(255, 70, 85, 0.14), transparent 45%),
+    linear-gradient(145deg, #1a1d23, #12151b);
 }
 
 /* Overlay oscuro + gradiente inferior */
@@ -410,6 +489,85 @@ body {
   transform: translateX(4px);
 }
 
+.home-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(5, 6, 9, 0.78);
+  backdrop-filter: blur(8px);
+  animation: expandFade 0.2s ease;
+}
+
+.home-cosmetics-modal {
+  position: relative;
+  width: min(100%, 620px);
+  padding: 2rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, #1a1d23, #11141a);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65);
+}
+
+.home-cosmetics-modal h2 {
+  margin-bottom: 1.2rem;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.home-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.home-modal-close:hover {
+  color: var(--valorant-red);
+}
+
+.home-cosmetics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.home-cosmetic-option {
+  min-height: 76px;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(15, 17, 21, 0.85);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-align: left;
+  text-transform: uppercase;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.home-cosmetic-option:hover {
+  border-color: var(--valorant-red);
+  background: rgba(255, 70, 85, 0.14);
+  transform: translateY(-2px);
+}
+
 /* =====================================================
    RESPONSIVE
    ===================================================== */
@@ -417,6 +575,10 @@ body {
 @media (max-width: 900px) {
   .home-panels {
     grid-template-columns: 1fr;
+  }
+
+  .home-stats-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .home-panel {
@@ -437,8 +599,16 @@ body {
     min-height: 200px;
   }
 
+  .home-stats-strip {
+    grid-template-columns: 1fr;
+  }
+
   .home-panel-title {
     font-size: 1.6rem;
+  }
+
+  .home-cosmetics-grid {
+    grid-template-columns: 1fr;
   }
 }
 

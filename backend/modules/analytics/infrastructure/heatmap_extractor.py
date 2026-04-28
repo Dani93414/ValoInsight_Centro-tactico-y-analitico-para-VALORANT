@@ -160,7 +160,7 @@ def _determine_side(
     """
     Determine if a team is on attack or defense for a given round.
     Standard Valorant: first 12 rounds the team roles stay,
-    after round 12 they swap.  In overtime they alternate every 2 rounds.
+    after round 12 they swap.  In overtime they alternate every round.
     The attacking team in the first half is always 'Red' (convention from Riot API).
     """
     first_half = round_num < 12
@@ -171,11 +171,9 @@ def _determine_side(
     elif round_num < 24:
         return "defense" if is_red else "attack"
     else:
-        ot_set = (round_num - 24) // 2
-        if ot_set % 2 == 0:
+        if (round_num - 24) % 2 == 0:
             return "attack" if is_red else "defense"
-        else:
-            return "defense" if is_red else "attack"
+        return "defense" if is_red else "attack"
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -418,11 +416,12 @@ def extract_spatial_events(
                                 "y": ny,
                                 "weight": DEFAULT_WEIGHT,
                                 "round_num": round_num,
-                                "round_phase": "plant",
+                                "round_phase": phase,
                                 "side": side,
                                 "match_id": match_id,
                                 "agent_id": player_agent,
                                 "plant_site": rnd.get("plantSite", ""),
+                                "objective_event": EVENT_PLANT,
                                 "timestamp_ms": 0,
                             })
 
@@ -447,10 +446,11 @@ def extract_spatial_events(
                                 "y": ny,
                                 "weight": DEFAULT_WEIGHT,
                                 "round_num": round_num,
-                                "round_phase": "defuse",
+                                "round_phase": phase,
                                 "side": side,
                                 "match_id": match_id,
                                 "agent_id": player_agent,
+                                "objective_event": EVENT_DEFUSE,
                                 "timestamp_ms": 0,
                             })
 

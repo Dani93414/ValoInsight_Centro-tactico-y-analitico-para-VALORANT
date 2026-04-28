@@ -91,6 +91,7 @@ def new_scope_stats() -> dict:
         "rounds_with_kill": 0,
         "rounds_with_assist": 0,
         "rounds_with_death": 0,
+        "rounds_with_kast": 0,
         "rounds_with_direct_participation": 0,
         "rounds_without_direct_participation": 0,
         "rounds_only_kill": 0,
@@ -139,6 +140,8 @@ def _new_weapon_scope(weapon_id: str, weapon_name: Optional[str] = None) -> dict
         "opening_duel_wins": 0,
         "opening_duel_losses": 0,
         "trade_kills": 0,
+        "trade_opportunities": 0,
+        "missed_trade_opportunities": 0,
         "traded_deaths": 0,
         "clutch_opportunities": 0,
         "clutches_won": 0,
@@ -156,6 +159,7 @@ def _new_weapon_scope(weapon_id: str, weapon_name: Optional[str] = None) -> dict
         "rounds_with_kill": 0,
         "rounds_with_assist": 0,
         "rounds_with_death": 0,
+        "rounds_with_kast": 0,
         "rounds_with_direct_participation": 0,
         "rounds_without_direct_participation": 0,
         "rounds_only_kill": 0,
@@ -627,6 +631,7 @@ def _update_weapon_scope(weapon_scope: dict, round_payload: dict) -> None:
         "rounds_with_kill",
         "rounds_with_assist",
         "rounds_with_death",
+        "rounds_with_kast",
         "rounds_with_direct_participation",
         "rounds_without_direct_participation",
         "rounds_only_kill",
@@ -668,6 +673,8 @@ def _update_scope(scope: dict, weapon_id: str, round_payload: dict, spent: int) 
         "opening_duel_wins",
         "opening_duel_losses",
         "trade_kills",
+        "trade_opportunities",
+        "missed_trade_opportunities",
         "traded_deaths",
         "clutch_opportunities",
         "clutches_won",
@@ -685,6 +692,7 @@ def _update_scope(scope: dict, weapon_id: str, round_payload: dict, spent: int) 
         "rounds_with_kill",
         "rounds_with_assist",
         "rounds_with_death",
+        "rounds_with_kast",
         "rounds_with_direct_participation",
         "rounds_without_direct_participation",
         "rounds_only_kill",
@@ -941,6 +949,16 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             rounds_with_kill = 1 if kills_round > 0 else 0
             rounds_with_assist = 1 if assists_round > 0 else 0
             rounds_with_death = 1 if deaths_round > 0 else 0
+            rounds_with_kast = (
+                1
+                if (
+                    survival_rounds > 0
+                    or rounds_with_kill > 0
+                    or rounds_with_assist > 0
+                    or int(trade_metrics["traded_deaths"]) > 0
+                )
+                else 0
+            )
             rounds_with_direct_participation = (
                 1 if (rounds_with_kill > 0 or rounds_with_assist > 0) else 0
             )
@@ -1062,6 +1080,7 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
                 "rounds_with_kill": rounds_with_kill,
                 "rounds_with_assist": rounds_with_assist,
                 "rounds_with_death": rounds_with_death,
+                "rounds_with_kast": rounds_with_kast,
                 "rounds_with_direct_participation": rounds_with_direct_participation,
                 "rounds_without_direct_participation": rounds_without_direct_participation,
                 "rounds_only_kill": rounds_only_kill,
