@@ -57,7 +57,10 @@ export type HeatmapDebugMeta = {
 };
 
 export type HeatmapMeta = {
+  max_matches_per_map?: number;
+  total_matches_available?: number;
   total_matches_queried?: number;
+  is_truncated?: boolean;
   total_matches_with_events?: number;
   total_rounds_with_events?: number;
   total_events?: number;

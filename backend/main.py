@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -14,6 +15,7 @@ from modules.leaderboards.interfaces.routes import router as leaderboards_router
 from modules.matches.interfaces.routes import router as matches_router
 from modules.players.interfaces.routes import router as players_router
 from modules.regions.interfaces.routes import router as regions_router
+from infrastructure.mongo_client import ensure_indexes
 
 load_dotenv()
 
@@ -22,18 +24,27 @@ CORS_ORIGINS = [
     for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
     if origin.strip()
 ]
+CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    ensure_indexes()
+    yield
+
 
 app = FastAPI(
     title="Valorant API",
     version="1.0.0",
-    description="API de contenido, leaderboards, jugadores y regiones de Valorant"
+    description="API de contenido, leaderboards, jugadores y regiones de Valorant",
+    lifespan=lifespan,
 )
 
 # CORS configurable por entorno
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -46,7 +57,8 @@ _CACHE_RULES: list[tuple[str, str]] = [
     ("/leaderboards/", "public, max-age=3600"),    # 1 h for leaderboards
     ("/regions/", "public, max-age=3600"),          # 1 h for region stats
     ("/matches/", "public, max-age=600"),           # 10 min for match list
-    ("/players/", "public, max-age=300"),            # 5 min for player data
+    ("/players/", "private, no-store"),             # dynamic player metrics
+    ("/analytics/", "private, no-store"),           # dynamic metric/heatmap data
 ]
 
 
@@ -54,6 +66,9 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         response: Response = await call_next(request)
         path = request.url.path
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("X-Frame-Options", "DENY")
         if request.method == "GET" and response.status_code == 200:
             for prefix, header_value in _CACHE_RULES:
                 if path.startswith(prefix):

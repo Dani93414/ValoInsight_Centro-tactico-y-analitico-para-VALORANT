@@ -5,6 +5,8 @@ from typing import Any
 
 from infrastructure.mongo_client import content_collection, matches_collection
 
+QUERY_MAX_TIME_MS = 5_000
+
 
 _DASHBOARD_CONTENT_PROJECTION = {
     "_id": 0,
@@ -60,7 +62,7 @@ def find_ranked_matches_cursor(puuid: str, projection: dict | None = None):
     query = {"players.puuid": puuid, "matchInfo.isRanked": True}
     cursor = matches_collection.find(query, projection).sort(
         "matchInfo.gameStartMillis", -1
-    )
+    ).max_time_ms(QUERY_MAX_TIME_MS)
     return cursor
 
 
@@ -76,6 +78,7 @@ def find_recent_matches_with_rank(puuid: str, limit: int = 50):
         matches_collection.find({"players.puuid": puuid}, projection)
         .sort("matchInfo.gameStartMillis", -1)
         .limit(limit)
+        .max_time_ms(QUERY_MAX_TIME_MS)
     )
 
 
@@ -96,7 +99,7 @@ def find_match_durations(match_ids: list[str]):
             "matchInfo.matchId": 1,
             "matchInfo.gameLengthMillis": 1,
         },
-    )
+    ).max_time_ms(QUERY_MAX_TIME_MS)
 
 
 def find_match_parties(match_ids: list[str]):
@@ -117,11 +120,17 @@ def find_match_parties(match_ids: list[str]):
             "players.puuid": 1,
             "players.partyId": 1,
         },
-    )
+    ).max_time_ms(QUERY_MAX_TIME_MS)
 
 
 def aggregate_weapon_usage(pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return list(matches_collection.aggregate(pipeline, allowDiskUse=True))
+    return list(
+        matches_collection.aggregate(
+            pipeline,
+            allowDiskUse=True,
+            maxTimeMS=QUERY_MAX_TIME_MS,
+        )
+    )
 
 
 def _party_size_match_condition(party_size: str | None) -> dict[str, Any] | None:
@@ -633,7 +642,13 @@ def find_player_latest_rank_reference(
         ]
     )
 
-    rows = list(matches_collection.aggregate(pipeline, allowDiskUse=True))
+    rows = list(
+        matches_collection.aggregate(
+            pipeline,
+            allowDiskUse=True,
+            maxTimeMS=QUERY_MAX_TIME_MS,
+        )
+    )
     return rows[0] if rows else {}
 
 
@@ -715,7 +730,13 @@ def aggregate_rank_cohort_players(
         ]
     )
 
-    return list(matches_collection.aggregate(pipeline, allowDiskUse=True))
+    return list(
+        matches_collection.aggregate(
+            pipeline,
+            allowDiskUse=True,
+            maxTimeMS=QUERY_MAX_TIME_MS,
+        )
+    )
 
 
 def count_player_matches(puuid: str) -> int:

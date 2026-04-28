@@ -28,6 +28,46 @@ class HeadshotCalculationTest(unittest.TestCase):
 
         self.assertEqual(finalized["headshot_pct"], 0.0)
 
+    def test_kast_uses_exact_round_count_when_available(self):
+        stats = new_scope_stats()
+        stats["rounds"] = 4
+        stats["rounds_with_kast"] = 3
+
+        finalized = _finalize_stats_block(stats)
+
+        self.assertEqual(finalized["rounds_with_kast"], 3)
+        self.assertAlmostEqual(finalized["kast"], 75.0, places=4)
+        self.assertAlmostEqual(finalized["kast_pct"], 75.0, places=4)
+        self.assertAlmostEqual(
+            finalized["kill_assist_survive_trade_pct"],
+            75.0,
+            places=4,
+        )
+
+    def test_weapon_scope_contains_trade_opportunity_counters(self):
+        stats = new_scope_stats()
+        stats["rounds"] = 1
+        stats["trade_kills"] = 1
+        stats["trade_opportunities"] = 2
+        stats["missed_trade_opportunities"] = 1
+        stats["weapon_stats"]["rifle"] = {
+            "weapon_id": "rifle",
+            "weapon_name": "Rifle",
+            "rounds": 1,
+            "kills": 1,
+            "deaths": 0,
+            "trade_kills": 1,
+            "trade_opportunities": 2,
+            "missed_trade_opportunities": 1,
+        }
+
+        finalized = _finalize_stats_block(stats)
+
+        weapon = finalized["weapon_stats"]["rifle"]
+        self.assertEqual(weapon["trade_opportunities"], 2)
+        self.assertEqual(weapon["missed_trade_opportunities"], 1)
+        self.assertAlmostEqual(weapon["trade_conversion_rate"], 50.0, places=4)
+
 
 if __name__ == "__main__":
     unittest.main()

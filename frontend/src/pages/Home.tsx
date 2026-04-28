@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useContentSummary, useRegions } from "../api/hooks";
 import { searchPlayers } from "../api/stats.ts";
 import "./Home.css";
+
+function formatCompact(value?: number) {
+  if (value === undefined || value === null || Number.isNaN(value)) return "-";
+  return new Intl.NumberFormat("es-ES", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
 
 export default function Home() {
   const [gameName, setGameName] = useState("");
@@ -15,9 +24,50 @@ export default function Home() {
     }>
   >([]);
   const [loading, setLoading] = useState(false);
+  const [cosmeticsOpen, setCosmeticsOpen] = useState(false);
+  const { data: contentSummary } = useContentSummary();
+  const { data: regions } = useRegions();
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
   const navigate = useNavigate();
+
+  const cosmeticCategories = [
+    { label: "Skins", path: "/cosmeticos/skins" },
+    { label: "Llaveros", path: "/cosmeticos/llaveros" },
+    { label: "Flex", path: "/cosmeticos/flex" },
+    { label: "Bordes de Nivel", path: "/cosmeticos/bordes" },
+    { label: "Titulos y Tarjetas", path: "/cosmeticos/titulos-tarjetas" },
+    { label: "Sprays", path: "/cosmeticos/sprays" },
+  ];
+
+  const primaryRegion = regions?.[0];
+  const contentCounts = contentSummary?.counts ?? {};
+  const summaryStats = [
+    {
+      label: "Jugadores",
+      value: formatCompact(primaryRegion?.uniquePlayers),
+      detail: primaryRegion?.region ? `Región ${primaryRegion.region}` : "Global",
+    },
+    {
+      label: "Partidas",
+      value: formatCompact(primaryRegion?.totalMatches),
+      detail: "ranked analizadas",
+    },
+    {
+      label: "Rondas",
+      value: formatCompact(primaryRegion?.totalRounds),
+      detail: "eventos agregados",
+    },
+    {
+      label: "Contenido",
+      value: formatCompact(
+        (contentCounts.agents ?? 0) +
+          (contentCounts.maps ?? 0) +
+          (contentCounts.weapons ?? 0),
+      ),
+      detail: "agentes, mapas y armas",
+    },
+  ];
 
   const handleSearch = (nextGameName: string, nextTagLine: string) => {
     setGameName(nextGameName);
@@ -64,6 +114,19 @@ export default function Home() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!cosmeticsOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setCosmeticsOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [cosmeticsOpen]);
 
   return (
     <main className="home-container">
@@ -168,6 +231,16 @@ export default function Home() {
           )}
       </section>
 
+      <section className="home-stats-strip" aria-label="Resumen global">
+        {summaryStats.map((stat) => (
+          <article key={stat.label} className="home-stat-card">
+            <span>{stat.label}</span>
+            <strong>{stat.value}</strong>
+            <small>{stat.detail}</small>
+          </article>
+        ))}
+      </section>
+
       {/* =============================
          PANELES DE NAVEGACIÓN
       ============================== */}
@@ -231,7 +304,182 @@ export default function Home() {
             </svg>
           </div>
         </div>
+
+        <div
+          className="home-panel home-panel--mapas"
+          onClick={() => navigate("/mapas")}
+        >
+          <div className="home-panel-overlay" />
+          <div className="home-panel-content">
+            <span className="home-panel-eyebrow">Explorar</span>
+            <h3 className="home-panel-title">Mapas</h3>
+            <p className="home-panel-description">
+              Revisa mapas, zonas y clasificacion por modo
+            </p>
+          </div>
+          <div className="home-panel-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="24" height="24">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div
+          className="home-panel home-panel--actos"
+          onClick={() => navigate("/actos")}
+        >
+          <div className="home-panel-overlay" />
+          <div className="home-panel-content">
+            <span className="home-panel-eyebrow">Competitivo</span>
+            <h3 className="home-panel-title">Actos</h3>
+            <p className="home-panel-description">
+              Explora actos y leaderboards disponibles
+            </p>
+          </div>
+          <div className="home-panel-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="24" height="24">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div
+          className="home-panel home-panel--global-stats"
+          onClick={() => navigate("/estadisticas-globales")}
+        >
+          <div className="home-panel-overlay" />
+          <div className="home-panel-content">
+            <span className="home-panel-eyebrow">Global</span>
+            <h3 className="home-panel-title">Estadísticas</h3>
+            <p className="home-panel-description">
+              Rankings por región, agentes, mapas, armas y economía
+            </p>
+          </div>
+          <div className="home-panel-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="24" height="24">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div
+          className="home-panel home-panel--eventos"
+          onClick={() => navigate("/eventos")}
+        >
+          <div className="home-panel-overlay" />
+          <div className="home-panel-content">
+            <span className="home-panel-eyebrow">Contenido</span>
+            <h3 className="home-panel-title">Eventos</h3>
+            <p className="home-panel-description">
+              Consulta fechas y disponibilidad
+            </p>
+          </div>
+          <div className="home-panel-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="24" height="24">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div
+          className="home-panel home-panel--modos"
+          onClick={() => navigate("/modos")}
+        >
+          <div className="home-panel-overlay" />
+          <div className="home-panel-content">
+            <span className="home-panel-eyebrow">Jugar</span>
+            <h3 className="home-panel-title">Modos</h3>
+            <p className="home-panel-description">
+              Lee reglas, duracion y descripcion
+            </p>
+          </div>
+          <div className="home-panel-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="24" height="24">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div
+          className="home-panel home-panel--cosmeticos"
+          onClick={() => setCosmeticsOpen(true)}
+        >
+          <div className="home-panel-overlay" />
+          <div className="home-panel-content">
+            <span className="home-panel-eyebrow">Coleccion</span>
+            <h3 className="home-panel-title">Cosmeticos</h3>
+            <p className="home-panel-description">
+              Abre skins, llaveros, sprays y tarjetas
+            </p>
+          </div>
+          <div className="home-panel-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="24" height="24">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div
+          className="home-panel home-panel--informacion"
+          onClick={() => navigate("/informacion")}
+        >
+          <div className="home-panel-overlay" />
+          <div className="home-panel-content">
+            <span className="home-panel-eyebrow">Datos</span>
+            <h3 className="home-panel-title">Informacion</h3>
+            <p className="home-panel-description">
+              Version, rangos, monedas y contratos
+            </p>
+          </div>
+          <div className="home-panel-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="24" height="24">
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
       </section>
+
+      {cosmeticsOpen && (
+        <div
+          className="home-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setCosmeticsOpen(false)}
+        >
+          <div
+            className="home-cosmetics-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cosmetics-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="home-modal-close"
+              type="button"
+              aria-label="Cerrar cosmeticos"
+              onClick={() => setCosmeticsOpen(false)}
+            >
+              x
+            </button>
+            <span className="home-panel-eyebrow">Coleccion</span>
+            <h2 id="cosmetics-modal-title">Cosmeticos</h2>
+            <div className="home-cosmetics-grid">
+              {cosmeticCategories.map((category) => (
+                <button
+                  key={category.path}
+                  className="home-cosmetic-option"
+                  type="button"
+                  onClick={() => {
+                    setCosmeticsOpen(false);
+                    navigate(category.path);
+                  }}
+                >
+                  {category.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

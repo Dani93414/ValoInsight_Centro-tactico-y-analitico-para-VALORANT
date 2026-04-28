@@ -1,9 +1,22 @@
 """MongoDB repository for player documents."""
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from infrastructure.mongo_client import players_collection, matches_collection
+
+MAX_SEARCH_TERM_LENGTH = 64
+QUERY_MAX_TIME_MS = 3_000
+
+
+def _safe_prefix_regex(value: Optional[str]) -> Optional[dict[str, str]]:
+    """Build a bounded, escaped prefix regex suitable for autocomplete queries."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = text[:MAX_SEARCH_TERM_LENGTH]
+    return {"$regex": f"^{re.escape(text)}", "$options": "i"}
 
 
 def list_players(
@@ -14,11 +27,17 @@ def list_players(
 ) -> list[dict[str, Any]]:
     """List players optionally filtered by game name / tag line (regex, case-insensitive)."""
     query: dict[str, Any] = {}
-    if game_name:
-        query["gameName"] = {"$regex": game_name, "$options": "i"}
-    if tag_line:
-        query["tagLine"] = {"$regex": tag_line, "$options": "i"}
-    return list(players_collection.find(query, {"_id": 0}).limit(limit))
+    game_name_regex = _safe_prefix_regex(game_name)
+    tag_line_regex = _safe_prefix_regex(tag_line)
+    if game_name_regex:
+        query["gameName"] = game_name_regex
+    if tag_line_regex:
+        query["tagLine"] = tag_line_regex
+    return list(
+        players_collection.find(query, {"_id": 0})
+        .limit(limit)
+        .max_time_ms(QUERY_MAX_TIME_MS)
+    )
 
 
 def search_players(
@@ -32,16 +51,18 @@ def search_players(
         return []
 
     players_query: dict[str, Any] = {}
-    if game_name:
-        players_query["gameName"] = {"$regex": game_name, "$options": "i"}
-    if tag_line:
-        players_query["tagLine"] = {"$regex": tag_line, "$options": "i"}
+    game_name_regex = _safe_prefix_regex(game_name)
+    tag_line_regex = _safe_prefix_regex(tag_line)
+    if game_name_regex:
+        players_query["gameName"] = game_name_regex
+    if tag_line_regex:
+        players_query["tagLine"] = tag_line_regex
 
     analytics_match: dict[str, Any] = {}
-    if game_name:
-        analytics_match["players.gameName"] = {"$regex": game_name, "$options": "i"}
-    if tag_line:
-        analytics_match["players.tagLine"] = {"$regex": tag_line, "$options": "i"}
+    if game_name_regex:
+        analytics_match["players.gameName"] = game_name_regex
+    if tag_line_regex:
+        analytics_match["players.tagLine"] = tag_line_regex
 
     pipeline: list[dict[str, Any]] = [
         {"$match": analytics_match},
@@ -50,10 +71,10 @@ def search_players(
     ]
 
     unwind_match: dict[str, Any] = {}
-    if game_name:
-        unwind_match["players.gameName"] = {"$regex": game_name, "$options": "i"}
-    if tag_line:
-        unwind_match["players.tagLine"] = {"$regex": tag_line, "$options": "i"}
+    if game_name_regex:
+        unwind_match["players.gameName"] = game_name_regex
+    if tag_line_regex:
+        unwind_match["players.tagLine"] = tag_line_regex
     if unwind_match:
         pipeline.append({"$match": unwind_match})
 
@@ -79,14 +100,14 @@ def search_players(
         },
     ])
 
-    results = list(matches_collection.aggregate(pipeline))
+    results = list(matches_collection.aggregate(pipeline, maxTimeMS=QUERY_MAX_TIME_MS))
     seen_puuids = {row.get("puuid") for row in results if row.get("puuid")}
 
     if len(results) < limit:
         fallback_cursor = players_collection.find(
             players_query,
             {"_id": 0, "puuid": 1, "gameName": 1, "tagLine": 1},
-        ).limit(limit)
+        ).limit(limit).max_time_ms(QUERY_MAX_TIME_MS)
 
         for fallback in fallback_cursor:
             puuid = fallback.get("puuid")
@@ -106,7 +127,7 @@ def search_players(
 
 def find_by_puuid(puuid: str) -> Optional[dict[str, Any]]:
     """Return a single player document, or None."""
-    return players_collection.find_one({"puuid": puuid}, {"_id": 0})
+    return players_collection.find_one({"puuid": puuid}, {"_id": 0}, max_time_ms=QUERY_MAX_TIME_MS)
 
 
 def aggregate_player_overview(player_docs: list[dict]) -> dict:
@@ -141,7 +162,7 @@ def find_ranked_matches_for_player(puuid: str) -> list[dict[str, Any]]:
     """Return ranked match sub-documents for a player with embedded analytics."""
     matches_cursor = matches_collection.find(
         {"players.puuid": puuid, "matchInfo.isRanked": True},
-    ).sort("matchInfo.gameStartMillis", -1)
+    ).sort("matchInfo.gameStartMillis", -1).max_time_ms(QUERY_MAX_TIME_MS)
 
     player_docs: list[dict[str, Any]] = []
     for match_obj in matches_cursor:
@@ -184,7 +205,7 @@ def find_ranked_matches_for_player(puuid: str) -> list[dict[str, Any]]:
 
 def find_raw_by_puuid(puuid: str) -> Optional[dict[str, Any]]:
     """Return player document including _id for internal processing."""
-    return players_collection.find_one({"puuid": puuid})
+    return players_collection.find_one({"puuid": puuid}, max_time_ms=QUERY_MAX_TIME_MS)
 
 
 def insert_player(doc: dict[str, Any]) -> None:

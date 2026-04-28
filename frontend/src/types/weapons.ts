@@ -33,10 +33,15 @@ export type AdsStats = {
 };
 
 export type Arma = {
+  uuid?: string | null;
   displayName: string;
   displayIcon?: string | null;
+  killStreamIcon?: string | null;
+  defaultSkinUuid?: string | null;
   category: string;
-  cost?: number | null;
+  cost?: number | string | null;
+  description?: string | null;
+  isShield?: boolean;
   stats?: WeaponStats | null;
   adsStats?: AdsStats | null;
   damageRanges?: DamageRange[] | null;

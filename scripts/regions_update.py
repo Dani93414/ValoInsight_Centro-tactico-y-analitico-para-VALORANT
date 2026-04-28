@@ -8,6 +8,7 @@ from datetime import datetime, UTC
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.infrastructure.mongo_client import (
+    ensure_indexes,
     matches_collection,
     regions_collection,
 )
@@ -22,7 +23,8 @@ _SUM_FIELDS = (
     "damage_dealt", "damage_received", "headshots", "bodyshots", "legshots",
     "first_kills", "first_deaths", "opening_duel_wins", "opening_duel_losses",
     "trade_kills", "traded_deaths", "clutch_opportunities", "clutches_won",
-    "survival_rounds", "rounds_with_kill", "rounds_with_multikill",
+    "survival_rounds", "rounds_with_kill", "rounds_with_assist", "rounds_with_death",
+    "rounds_with_kast", "rounds_with_multikill",
     "multi_2k", "multi_3k", "multi_4k", "multi_5k",
     "econ_spent", "loadout_value_total",
 )
@@ -61,6 +63,7 @@ def _derive_ratios(t):
         "deaths_per_round": _safe_div(deaths, rounds),
         "assists_per_round": _safe_div(assists, rounds),
         "survival_rate": _safe_div(t.get("survival_rounds", 0) * 100.0, rounds),
+        "kast_pct": _safe_div(t.get("rounds_with_kast", 0) * 100.0, rounds),
         "fk_rate": _safe_div(t.get("first_kills", 0) * 100.0, rounds),
         "fd_rate": _safe_div(t.get("first_deaths", 0) * 100.0, rounds),
         "fkfd_diff_per_round": _safe_div(
@@ -333,6 +336,7 @@ def rebuild_regions(*, force: bool = False):
         # ── Final document ──
         region_doc = {
             "region": region,
+            "processedMatchIds": sorted(mid for mid in rd["match_ids"] if mid),
             "totalMatches": len(rd["match_ids"]),
             "uniquePlayers": len(rd["puuids"]),
             "totalRounds": totals.get("rounds", 0),
@@ -372,23 +376,42 @@ def update_region_from_match(match_obj):
     Only touches basic counters. Run rebuild_regions() for full stats.
     """
     match_info = match_obj.get("matchInfo") or {}
+    match_id = str(match_info.get("matchId") or "").strip()
+    if not match_id:
+        logger.warning("Skipping region update for match without matchInfo.matchId")
+        return
+
     region = _normalize_region(match_info.get("region"))
 
     players = match_obj.get("players") or []
     total_kills = sum(int((p.get("stats") or {}).get("kills", 0) or 0) for p in players)
     total_deaths = sum(int((p.get("stats") or {}).get("deaths", 0) or 0) for p in players)
 
+    update = {
+        "$inc": {
+            "totalMatches": 1,
+            "totals.kills": total_kills,
+            "totals.deaths": total_deaths,
+        },
+        "$addToSet": {"processedMatchIds": match_id},
+        "$set": {"updatedAt": datetime.now(UTC)},
+        "$setOnInsert": {"region": region},
+    }
+
+    result = regions_collection.update_one(
+        {"region": region, "processedMatchIds": {"$ne": match_id}},
+        update,
+        upsert=False,
+    )
+    if result.matched_count:
+        return
+
+    if regions_collection.find_one({"region": region}, {"_id": 1}):
+        return
+
     regions_collection.update_one(
         {"region": region},
-        {
-            "$inc": {
-                "totalMatches": 1,
-                "totals.kills": total_kills,
-                "totals.deaths": total_deaths,
-            },
-            "$set": {"updatedAt": datetime.now(UTC)},
-            "$setOnInsert": {"region": region},
-        },
+        update,
         upsert=True,
     )
 
@@ -414,6 +437,7 @@ def main() -> None:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    ensure_indexes()
 
     if args.mode == "rebuild":
         if not args.force:

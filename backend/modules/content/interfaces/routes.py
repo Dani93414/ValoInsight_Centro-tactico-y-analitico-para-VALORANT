@@ -7,6 +7,7 @@ from modules.content.application.content_services import (
     get_mapas_clasificados,
     get_mapas_geo,
     get_armas_detalladas,
+    get_skins,
     get_buddies,
     get_bundles_filtrados,
     get_ceremonies,
@@ -62,6 +63,13 @@ def mapas_geo():
 @router.get("/armas")
 def armas():
     return get_armas_detalladas()
+
+
+@router.get("/skins")
+def skins(
+    limit: int | None = Query(default=None, ge=1)
+):
+    return get_skins(limit)
 
 
 @router.get("/buddies")

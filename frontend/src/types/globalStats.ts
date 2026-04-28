@@ -1,0 +1,149 @@
+export type RegionMetricTotals = {
+  rounds?: number;
+  wins?: number;
+  kills?: number;
+  deaths?: number;
+  assists?: number;
+  score?: number;
+  damage_dealt?: number;
+  damage_received?: number;
+  headshots?: number;
+  bodyshots?: number;
+  legshots?: number;
+  first_kills?: number;
+  first_deaths?: number;
+  survival_rounds?: number;
+  rounds_with_kast?: number;
+  clutch_opportunities?: number;
+  clutches_won?: number;
+  trade_kills?: number;
+  multi_2k?: number;
+  multi_3k?: number;
+  multi_4k?: number;
+  multi_5k?: number;
+  econ_spent?: number;
+  loadout_value_total?: number;
+};
+
+export type RegionAverages = {
+  kd_ratio?: number;
+  kda_ratio?: number;
+  acs?: number;
+  adr?: number;
+  headshot_pct?: number;
+  kast_pct?: number;
+  survival_rate?: number;
+  clutch_win_rate?: number;
+  opening_duel_win_pct?: number;
+  multikill_rate?: number;
+  damage_per_1000_credits?: number;
+  kills_per_round?: number;
+  deaths_per_round?: number;
+  assists_per_round?: number;
+  fk_rate?: number;
+  fd_rate?: number;
+  trade_kills_per_round?: number;
+  average_loadout_value?: number;
+};
+
+export type RegionSideStats = {
+  rounds?: number;
+  wins?: number;
+  win_rate?: number;
+  kills?: number;
+  deaths?: number;
+  adr?: number;
+  kills_per_round?: number;
+};
+
+export type RegionAgentStats = {
+  agent_name?: string;
+  role?: string;
+  picks?: number;
+  wins?: number;
+  pick_rate?: number;
+  win_rate?: number;
+  avg_kd?: number;
+  avg_acs?: number;
+  avg_adr?: number;
+  avg_headshot_pct?: number;
+  avg_fk_rate?: number;
+  avg_survival_rate?: number;
+  avg_clutch_win_rate?: number;
+};
+
+export type RegionMapStats = {
+  map_name?: string;
+  matches?: number;
+  total_rounds?: number;
+  avg_rounds_per_match?: number;
+  averages?: Pick<
+    RegionAverages,
+    "kd_ratio" | "acs" | "adr" | "headshot_pct"
+  >;
+  sides?: {
+    attack?: RegionSideStats;
+    defense?: RegionSideStats;
+  };
+};
+
+export type RegionWeaponStats = {
+  weapon_name?: string;
+  rounds_equipped?: number;
+  kills?: number;
+  deaths?: number;
+  headshots?: number;
+  headshot_pct?: number;
+  damage_dealt?: number;
+};
+
+export type RegionEconomyStats = {
+  rounds?: number;
+  wins?: number;
+  win_rate?: number;
+  kd_ratio?: number;
+  adr?: number;
+};
+
+export type RegionTopAgent = {
+  agentId?: string;
+  agent_name?: string;
+  role?: string;
+  picks?: number;
+  win_rate?: number;
+};
+
+export type RegionTopMap = {
+  mapId?: string;
+  map_name?: string;
+  matches?: number;
+};
+
+export type RegionTopWeapon = {
+  weaponId?: string;
+  weapon_name?: string;
+  kills?: number;
+  headshot_pct?: number;
+};
+
+export type RegionStats = {
+  region: string;
+  totalMatches?: number;
+  uniquePlayers?: number;
+  totalRounds?: number;
+  avgRoundsPerMatch?: number;
+  totals?: RegionMetricTotals;
+  averages?: RegionAverages;
+  sides?: {
+    attack?: RegionSideStats;
+    defense?: RegionSideStats;
+  };
+  economy?: Record<string, RegionEconomyStats>;
+  agentStats?: Record<string, RegionAgentStats>;
+  mapStats?: Record<string, RegionMapStats>;
+  weaponStats?: Record<string, RegionWeaponStats>;
+  mostPlayedAgents?: RegionTopAgent[];
+  mostPlayedMaps?: RegionTopMap[];
+  mostLethalWeapons?: RegionTopWeapon[];
+  updatedAt?: string;
+};

@@ -12,9 +12,11 @@ for path in (str(project_root), str(backend_root)):
         sys.path.append(path)
 
 from backend.modules.matches.application.match_processor import process_single_match_with_status
+from backend.infrastructure.mongo_client import ensure_indexes
 
 
 VALID_STATUSES = {"inserted", "already_exists", "failed"}
+DEFAULT_SAFE_INPUT_ROOT = project_root / "data" / "BaseDatos_Partidas"
 
 
 def iter_match_files(base_dir: Path, recursive: bool):
@@ -41,6 +43,16 @@ def main():
         action="store_true",
         help="Do not delete files after successful insert.",
     )
+    parser.add_argument(
+        "--delete-duplicates",
+        action="store_true",
+        help="Delete files whose match already exists after derived-state repair succeeds.",
+    )
+    parser.add_argument(
+        "--allow-external-dir",
+        action="store_true",
+        help="Allow deleting files outside data/BaseDatos_Partidas.",
+    )
     args = parser.parse_args()
 
     # Resolve input directory relative to project root when a relative path is provided.
@@ -55,10 +67,20 @@ def main():
         print(f"[ERROR] Invalid input directory: {input_dir}")
         raise SystemExit(1)
 
+    safe_root = DEFAULT_SAFE_INPUT_ROOT.resolve()
+    if not args.allow_external_dir and not input_dir.is_relative_to(safe_root):
+        print(
+            "[ERROR] Refusing to delete/process an external input directory without "
+            f"--allow-external-dir: {input_dir}"
+        )
+        raise SystemExit(1)
+
     files = list(iter_match_files(input_dir, args.recursive))
     if not files:
         print(f"[INFO] No JSON files found in: {input_dir}")
         return
+
+    ensure_indexes()
 
     stats = {
         "processed": 0,
@@ -91,10 +113,16 @@ def main():
 
         stats[status] += 1
 
+        should_delete = status == "inserted" or (
+            status == "already_exists" and args.delete_duplicates
+        )
+
         if status == "inserted":
             print(f"[{idx}/{len(files)}] [INSERTED] {file_path.name}")
-            if not args.no_delete:
+            if should_delete and not args.no_delete:
                 try:
+                    if not file_path.resolve().is_relative_to(input_dir):
+                        raise RuntimeError("resolved file path escaped input directory")
                     file_path.unlink()
                     stats["deleted"] += 1
                 except Exception as exc:
@@ -102,6 +130,15 @@ def main():
                     print(f"[{idx}/{len(files)}] [WARN] Could not delete {file_path.name}: {exc}")
         elif status == "already_exists":
             print(f"[{idx}/{len(files)}] [DUPLICATE] {file_path.name}")
+            if should_delete and not args.no_delete:
+                try:
+                    if not file_path.resolve().is_relative_to(input_dir):
+                        raise RuntimeError("resolved file path escaped input directory")
+                    file_path.unlink()
+                    stats["deleted"] += 1
+                except Exception as exc:
+                    stats["delete_errors"] += 1
+                    print(f"[{idx}/{len(files)}] [WARN] Could not delete {file_path.name}: {exc}")
         else:
             print(f"[{idx}/{len(files)}] [FAILED] {file_path.name}")
 

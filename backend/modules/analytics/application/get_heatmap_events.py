@@ -96,6 +96,7 @@ def get_heatmap_events(
         map_id=map_id,
         season_ids=season_ids or None,
         agent_id=agent_id,
+        limit=mongo_analytics_repo.MAX_HEATMAP_MATCHES_PER_MAP,
     )
     allowed_match_ids = {
         str(row.get("match_id") or "").strip()
@@ -104,6 +105,7 @@ def get_heatmap_events(
     }
     if requested_match_ids:
         allowed_match_ids &= requested_match_ids
+    total_matches_available = len(allowed_match_ids)
 
     if allowed_match_ids:
         matches = mongo_analytics_repo.find_heatmap_matches(
@@ -146,7 +148,10 @@ def get_heatmap_events(
     map_label = (map_catalog.get(map_id) or {}).get("displayName") or map_id
 
     response_meta: dict[str, Any] = {
+        "max_matches_per_map": mongo_analytics_repo.MAX_HEATMAP_MATCHES_PER_MAP,
+        "total_matches_available": total_matches_available,
         "total_matches_queried": len(matches),
+        "is_truncated": total_matches_available > len(matches),
         "total_matches_with_events": len(seen_matches),
         "total_rounds_with_events": len(seen_rounds),
         "total_events": len(events),
