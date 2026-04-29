@@ -192,7 +192,10 @@ export default function Armas() {
     [arsenal],
   );
 
-  const regionWeaponStats = regions?.[0]?.weaponStats ?? {};
+  const regionWeaponStats = useMemo(
+    () => regions?.[0]?.weaponStats ?? {},
+    [regions],
+  );
   const weaponStatsByName = useMemo(() => {
     const map = new Map<string, (typeof regionWeaponStats)[string]>();
     Object.values(regionWeaponStats).forEach((stats) => {

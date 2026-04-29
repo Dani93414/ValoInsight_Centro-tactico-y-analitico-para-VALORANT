@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useActos, useLeaderboard, useRegions } from "../api/hooks";
 import type { ActContent } from "../types/content";
 import {
@@ -42,13 +42,10 @@ export default function Actos() {
       .filter((region): region is string => Boolean(region));
     return values.length > 0 ? values : ["eu"];
   }, [regions]);
-  const leaderboardQuery = useLeaderboard(currentActId, selectedRegion);
-
-  useEffect(() => {
-    if (!regionOptions.includes(selectedRegion)) {
-      setSelectedRegion(regionOptions[0] ?? "eu");
-    }
-  }, [regionOptions, selectedRegion]);
+  const effectiveSelectedRegion = regionOptions.includes(selectedRegion)
+    ? selectedRegion
+    : regionOptions[0] ?? "eu";
+  const leaderboardQuery = useLeaderboard(currentActId, effectiveSelectedRegion);
 
   const filtered = acts.filter((act) =>
     normalizeText(`${getActLabel(act)} ${act.parentName ?? ""} ${act.type ?? ""}`)
@@ -89,7 +86,7 @@ export default function Actos() {
               Region
               <select
                 className="content-select"
-                value={selectedRegion}
+                value={effectiveSelectedRegion}
                 onChange={(event) => setSelectedRegion(event.target.value)}
               >
                 {regionOptions.map((region) => (
@@ -121,7 +118,7 @@ export default function Actos() {
                       <span className="content-badge">Activo</span>
                     )}
                     <span className="content-badge">
-                      Region {selectedRegion.toUpperCase()}
+                      Region {effectiveSelectedRegion.toUpperCase()}
                     </span>
                   </div>
                 </div>
@@ -131,7 +128,7 @@ export default function Actos() {
                       <h2>Cargando leaderboard</h2>
                       <p>
                         Consultando top 100 del acto en{" "}
-                        {selectedRegion.toUpperCase()}.
+                        {effectiveSelectedRegion.toUpperCase()}.
                       </p>
                     </div>
                   )}
@@ -146,7 +143,7 @@ export default function Actos() {
                     <div className="content-panel">
                       <h3 className="content-panel-title">
                         Leaderboard {leaderboardQuery.data.act_name} ·{" "}
-                        {selectedRegion.toUpperCase()}
+                        {effectiveSelectedRegion.toUpperCase()}
                       </h3>
                       <p className="content-panel-subtitle">
                         {leaderboardQuery.data.returned_players} de{" "}

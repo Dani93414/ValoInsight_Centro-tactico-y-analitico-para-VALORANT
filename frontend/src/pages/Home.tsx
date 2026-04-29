@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowRight,
   CalendarDays,
@@ -44,6 +44,17 @@ type GlobalInsightCard = {
   detail: string;
   accent: "red" | "teal" | "gold" | "white";
 };
+
+type RevealStyle = CSSProperties & {
+  "--reveal-index"?: number;
+};
+
+const numberFormatters = new globalThis.Map<number, Intl.NumberFormat>();
+const dateFormatter = new Intl.DateTimeFormat("es-ES", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
 
 const topbarLinks = [
   { label: "Estadísticas", path: "/estadisticas-globales" },
@@ -142,12 +153,21 @@ const cosmeticCards: NavItem[] = [
   },
 ];
 
+function revealStyle(index: number): RevealStyle {
+  return { "--reveal-index": index };
+}
+
 function formatNumber(value?: number, decimals = 0) {
   if (value === undefined || value === null || Number.isNaN(value)) return "-";
-  return new Intl.NumberFormat("es-ES", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(value);
+  let formatter = numberFormatters.get(decimals);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("es-ES", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    numberFormatters.set(decimals, formatter);
+  }
+  return formatter.format(value);
 }
 
 function formatPercent(value?: number, decimals = 1) {
@@ -159,11 +179,7 @@ function formatDate(value?: string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("es-ES", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  return dateFormatter.format(date);
 }
 
 export default function Home() {
@@ -262,7 +278,8 @@ export default function Home() {
   const isGlobalLoading = regionsQuery.isLoading;
   const updatedAt = formatDate(primaryRegion?.updatedAt);
 
-  const globalInsightCards: GlobalInsightCard[] = [
+  const globalInsightCards = useMemo<GlobalInsightCard[]>(
+    () => [
     {
       label: "Agente más jugado",
       value: isGlobalLoading ? "Cargando..." : topAgent?.agent_name ?? "-",
@@ -295,7 +312,22 @@ export default function Home() {
         : `${formatNumber(averages?.adr, 1)} ADR · ${formatPercent(averages?.headshot_pct)} HS`,
       accent: "white",
     },
-  ];
+    ],
+    [
+      averages?.acs,
+      averages?.adr,
+      averages?.headshot_pct,
+      isGlobalLoading,
+      topAgent?.agent_name,
+      topAgent?.picks,
+      topAgent?.win_rate,
+      topMap?.map_name,
+      topMap?.matches,
+      topWeapon?.headshot_pct,
+      topWeapon?.kills,
+      topWeapon?.weapon_name,
+    ],
+  );
 
   return (
     <main className="home-page">
@@ -412,8 +444,8 @@ export default function Home() {
 
           {results.length > 0 && (
             <ul className="home-search-results">
-              {results.map((result) => (
-                <li key={result.id}>
+              {results.map((result, index) => (
+                <li key={result.id} style={revealStyle(index)}>
                   <button
                     type="button"
                     onClick={() => navigate(`/estadisticas/${result.id}`)}
@@ -447,6 +479,7 @@ export default function Home() {
           <button
             className="home-global-card home-reveal"
             type="button"
+            style={revealStyle(0)}
             onClick={() => navigate("/estadisticas-globales")}
           >
             <div className="home-global-card__content">
@@ -468,27 +501,28 @@ export default function Home() {
             </div>
 
             <div className="home-global-card__insights" aria-label="Resumen global">
-              {globalInsightCards.map((card) => (
+              {globalInsightCards.map((card, index) => (
                 <div
                   key={card.label}
                   className={`home-global-insight home-global-insight--${card.accent}`}
+                  style={revealStyle(index)}
                 >
                   <span>{card.label}</span>
                   <strong>{card.value}</strong>
                   <small>{card.detail}</small>
-                  <i aria-hidden="true" />
                 </div>
               ))}
             </div>
           </button>
 
-          {analysisCards.map((card) => {
+          {analysisCards.map((card, index) => {
             const Icon = card.icon;
             return (
               <button
                 key={card.path}
                 className={`home-analysis-card home-reveal ${card.className ?? ""}`}
                 type="button"
+                style={revealStyle(index + 1)}
                 onClick={() => navigate(card.path)}
               >
                 <div className="home-card-overlay" />
@@ -516,13 +550,14 @@ export default function Home() {
         </div>
 
         <div className="home-explore-grid">
-          {exploreCards.map((card) => {
+          {exploreCards.map((card, index) => {
             const Icon = card.icon;
             return (
               <button
                 key={card.path}
                 className="home-explore-card home-reveal"
                 type="button"
+                style={revealStyle(index)}
                 onClick={() => navigate(card.path)}
               >
                 <span className="home-explore-card__icon">
@@ -549,7 +584,7 @@ export default function Home() {
         </div>
 
         <div className="home-cosmetics-showcase">
-          <article className="home-cosmetics-feature home-reveal">
+          <article className="home-cosmetics-feature home-reveal" style={revealStyle(0)}>
             <span className="home-panel-label">Colección premium</span>
             <h3>Cosméticos</h3>
             <p>
@@ -559,21 +594,24 @@ export default function Home() {
           </article>
 
           <div className="home-cosmetics-grid">
-            {cosmeticCards.map((card) => {
+            {cosmeticCards.map((card, index) => {
               const Icon = card.icon;
               return (
                 <button
                   key={card.path}
                   className="home-cosmetic-card home-reveal"
                   type="button"
+                  style={revealStyle(index + 1)}
                   onClick={() => navigate(card.path)}
                 >
-                  <Icon size={22} aria-hidden="true" />
-                  <span>
+                  <span className="home-cosmetic-card__icon">
+                    <Icon size={21} aria-hidden="true" />
+                  </span>
+                  <span className="home-cosmetic-card__text">
                     <strong>{card.title}</strong>
                     <small>{card.description}</small>
                   </span>
-                  <ArrowRight size={17} aria-hidden="true" />
+                  <ArrowRight size={18} aria-hidden="true" />
                 </button>
               );
             })}

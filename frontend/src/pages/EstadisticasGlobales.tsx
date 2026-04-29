@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useArmas, useRegions } from "../api/hooks";
 import type {
   RegionAgentStats,
@@ -81,16 +81,12 @@ export default function EstadisticasGlobales() {
   const [weaponCategoryFilter, setWeaponCategoryFilter] = useState("all");
   const [minSample, setMinSample] = useState(0);
 
-  const regions = regionsQuery.data ?? [];
-
-  useEffect(() => {
-    if (!selectedRegion && regions.length > 0) {
-      setSelectedRegion(regions[0].region);
-    }
-  }, [regions, selectedRegion]);
+  const regions = useMemo(() => regionsQuery.data ?? [], [regionsQuery.data]);
+  const effectiveSelectedRegion = selectedRegion || regions[0]?.region || "";
 
   const region =
-    regions.find((entry) => entry.region === selectedRegion) ?? regions[0];
+    regions.find((entry) => entry.region === effectiveSelectedRegion) ??
+    regions[0];
 
   const weaponsByName = useMemo(() => {
     const map = new Map<string, Arma>();
