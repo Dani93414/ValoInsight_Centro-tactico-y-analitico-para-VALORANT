@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useRegions } from "../api/hooks";
 import { searchPlayers } from "../api/stats.ts";
 import "./Home.css";
 
@@ -37,8 +38,15 @@ type NavItem = {
   className?: string;
 };
 
+type GlobalInsightCard = {
+  label: string;
+  value: string;
+  detail: string;
+  accent: "red" | "teal" | "gold" | "white";
+};
+
 const topbarLinks = [
-  { label: "Estadisticas", path: "/estadisticas-globales" },
+  { label: "Estadísticas", path: "/estadisticas-globales" },
   { label: "Agentes", path: "/agentes" },
   { label: "Armas", path: "/armas" },
   { label: "Mapas", path: "/mapas" },
@@ -47,14 +55,14 @@ const topbarLinks = [
 const analysisCards: NavItem[] = [
   {
     title: "Agentes",
-    description: "Roles, habilidades y lectura tactica para cada composicion.",
+    description: "Roles, habilidades y lectura táctica para cada composición.",
     path: "/agentes",
     icon: Shield,
     className: "home-analysis-card--agents",
   },
   {
     title: "Armas",
-    description: "Dano, cadencia, economia y rendimiento por rango.",
+    description: "Daño, cadencia, economía y rendimiento por rango.",
     path: "/armas",
     icon: Crosshair,
     className: "home-analysis-card--weapons",
@@ -71,25 +79,25 @@ const analysisCards: NavItem[] = [
 const exploreCards: NavItem[] = [
   {
     title: "Actos",
-    description: "Temporadas, episodios y contexto competitivo.",
+    description: "Episodios competitivos, rangos y leaderboards.",
     path: "/actos",
     icon: Trophy,
   },
   {
     title: "Eventos",
-    description: "Contenido temporal y disponibilidad.",
+    description: "Contenido temporal, fechas y recompensas disponibles.",
     path: "/eventos",
     icon: CalendarDays,
   },
   {
     title: "Modos",
-    description: "Reglas, duracion y variantes jugables.",
+    description: "Reglas, duración y variantes de juego.",
     path: "/modos",
     icon: Swords,
   },
   {
-    title: "Informacion",
-    description: "Rangos, monedas, contratos y datos base.",
+    title: "Información",
+    description: "Versión actual, monedas, rangos, contratos y tiers.",
     path: "/informacion",
     icon: Info,
   },
@@ -121,24 +129,49 @@ const cosmeticCards: NavItem[] = [
     icon: Medal,
   },
   {
-    title: "Titulos y tarjetas",
+    title: "Títulos y tarjetas",
     description: "Identidad de perfil",
     path: "/cosmeticos/titulos-tarjetas",
     icon: Layers3,
   },
   {
     title: "Sprays",
-    description: "Graffiti y expresion",
+    description: "Graffiti y expresión",
     path: "/cosmeticos/sprays",
     icon: Crosshair,
   },
 ];
+
+function formatNumber(value?: number, decimals = 0) {
+  if (value === undefined || value === null || Number.isNaN(value)) return "-";
+  return new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+}
+
+function formatPercent(value?: number, decimals = 1) {
+  if (value === undefined || value === null || Number.isNaN(value)) return "-";
+  return `${formatNumber(value, decimals)}%`;
+}
+
+function formatDate(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
 
 export default function Home() {
   const [gameName, setGameName] = useState("");
   const [tagLine, setTagLine] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const regionsQuery = useRegions();
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
   const navigate = useNavigate();
@@ -181,6 +214,18 @@ export default function Home() {
     }, 400);
   };
 
+  const handleSubmitSearch = () => {
+    const firstResult = results[0];
+    if (firstResult) {
+      navigate(`/estadisticas/${firstResult.id}`);
+      return;
+    }
+
+    if (gameName.trim() || tagLine.trim()) {
+      handleSearch(gameName, tagLine);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) {
@@ -189,25 +234,90 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const targets = document.querySelectorAll<HTMLElement>(".home-reveal");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("home-is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -12% 0px", threshold: 0.12 },
+    );
+
+    targets.forEach((target) => observer.observe(target));
+    return () => observer.disconnect();
+  }, []);
+
   const hasSearch = Boolean(gameName.trim() || tagLine.trim());
+  const regions = regionsQuery.data;
+  const primaryRegion = regions?.[0];
+  const topAgent = primaryRegion?.mostPlayedAgents?.[0];
+  const topMap = primaryRegion?.mostPlayedMaps?.[0];
+  const topWeapon = primaryRegion?.mostLethalWeapons?.[0];
+  const averages = primaryRegion?.averages;
+  const isGlobalLoading = regionsQuery.isLoading;
+  const updatedAt = formatDate(primaryRegion?.updatedAt);
+
+  const globalInsightCards: GlobalInsightCard[] = [
+    {
+      label: "Agente más jugado",
+      value: isGlobalLoading ? "Cargando..." : topAgent?.agent_name ?? "-",
+      detail: isGlobalLoading
+        ? "Sincronizando datos globales"
+        : `${formatNumber(topAgent?.picks)} picks · ${formatPercent(topAgent?.win_rate)} win rate`,
+      accent: "red",
+    },
+    {
+      label: "Mapa más jugado",
+      value: isGlobalLoading ? "Cargando..." : topMap?.map_name ?? "-",
+      detail: isGlobalLoading
+        ? "Sincronizando datos globales"
+        : `${formatNumber(topMap?.matches)} partidas`,
+      accent: "teal",
+    },
+    {
+      label: "Arma más letal",
+      value: isGlobalLoading ? "Cargando..." : topWeapon?.weapon_name ?? "-",
+      detail: isGlobalLoading
+        ? "Sincronizando datos globales"
+        : `${formatNumber(topWeapon?.kills)} kills · ${formatPercent(topWeapon?.headshot_pct)} HS`,
+      accent: "gold",
+    },
+    {
+      label: "Media global",
+      value: isGlobalLoading ? "Cargando..." : `${formatNumber(averages?.acs, 1)} ACS`,
+      detail: isGlobalLoading
+        ? "Sincronizando datos globales"
+        : `${formatNumber(averages?.adr, 1)} ADR · ${formatPercent(averages?.headshot_pct)} HS`,
+      accent: "white",
+    },
+  ];
 
   return (
     <main className="home-page">
-      <header className="home-topbar" aria-label="Navegacion principal">
+      <header className="home-topbar" aria-label="Navegación principal">
         <button
-          className="home-brand"
+          className="home-brand home-topbar__nav-button home-topbar__nav-button--active"
           type="button"
           onClick={() => navigate("/")}
           aria-label="Ir al inicio de ValoInsight"
         >
-          <span className="home-brand__mark">VI</span>
+          <span className="home-brand__mark">
+            <span>VALO</span>
+            <span>INSIGHT</span>
+          </span>
           <span>ValoInsight</span>
         </button>
 
-        <nav className="home-topbar__nav" aria-label="Accesos rapidos">
+        <nav className="home-topbar__nav" aria-label="Accesos rápidos">
           {topbarLinks.map((link) => (
             <button
               key={link.path}
+              className="home-topbar__nav-button"
               type="button"
               onClick={() => navigate(link.path)}
             >
@@ -218,7 +328,7 @@ export default function Home() {
 
         <button className="home-login-button" type="button">
           <LogIn size={17} aria-hidden="true" />
-          Iniciar sesion
+          Iniciar sesión
         </button>
       </header>
 
@@ -234,7 +344,7 @@ export default function Home() {
 
         <div className="home-hero__content">
           <span className="home-kicker">ValoInsight</span>
-          <h1 id="home-hero-title">Tu centro tactico de Valorant</h1>
+          <h1 id="home-hero-title">Tu centro táctico de Valorant</h1>
           <p>
             Busca jugadores, compara rendimiento y explora datos competitivos
             con una lectura clara.
@@ -244,7 +354,7 @@ export default function Home() {
         <section className="home-search-panel" aria-label="Buscar jugador">
           <div className="home-search-panel__header">
             <div>
-              <span className="home-panel-label">Busqueda competitiva</span>
+              <span className="home-panel-label">Búsqueda competitiva</span>
               <h2>Buscar jugador</h2>
             </div>
             <UserRoundSearch size={24} aria-hidden="true" />
@@ -274,6 +384,15 @@ export default function Home() {
                 />
               </div>
             </label>
+
+            <button
+              className="home-search-button"
+              type="button"
+              onClick={handleSubmitSearch}
+            >
+              <Search size={18} aria-hidden="true" />
+              Buscar
+            </button>
           </div>
 
           <div className="home-search-status" aria-live="polite">
@@ -315,36 +434,51 @@ export default function Home() {
         </section>
       </section>
 
-      <section className="home-section" aria-labelledby="analysis-title">
+      <section
+        className="home-section home-reveal"
+        aria-labelledby="analysis-title"
+      >
         <div className="home-section__header">
-          <span className="home-kicker">Centro de analisis</span>
-          <h2 id="analysis-title">El nucleo competitivo de ValoInsight</h2>
+          <span className="home-kicker">Centro de análisis</span>
+          <h2 id="analysis-title">El núcleo competitivo de ValoInsight</h2>
         </div>
 
         <div className="home-analysis-grid">
           <button
-            className="home-global-card"
+            className="home-global-card home-reveal"
             type="button"
             onClick={() => navigate("/estadisticas-globales")}
           >
             <div className="home-global-card__content">
-              <span className="home-panel-label">Data center</span>
-              <h3>Estadisticas globales</h3>
+              <div className="home-global-card__meta">
+                <span className="home-panel-label">Data center</span>
+                <span>
+                  Región {primaryRegion?.region ?? "-"}
+                  {updatedAt ? ` · Actualizado ${updatedAt}` : ""}
+                </span>
+              </div>
+              <h3>Estadísticas globales</h3>
               <p>
-                Rankings, regiones, agentes, mapas, armas y economia reunidos
+                Rankings, regiones, agentes, mapas, armas y economía reunidos
                 en una vista pensada para detectar tendencias.
               </p>
               <span className="home-card-link">
                 Abrir panel global <ArrowRight size={18} aria-hidden="true" />
               </span>
             </div>
-            <div className="home-global-card__dashboard" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
+
+            <div className="home-global-card__insights" aria-label="Resumen global">
+              {globalInsightCards.map((card) => (
+                <div
+                  key={card.label}
+                  className={`home-global-insight home-global-insight--${card.accent}`}
+                >
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <small>{card.detail}</small>
+                  <i aria-hidden="true" />
+                </div>
+              ))}
             </div>
           </button>
 
@@ -353,7 +487,7 @@ export default function Home() {
             return (
               <button
                 key={card.path}
-                className={`home-analysis-card ${card.className ?? ""}`}
+                className={`home-analysis-card home-reveal ${card.className ?? ""}`}
                 type="button"
                 onClick={() => navigate(card.path)}
               >
@@ -370,7 +504,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="home-section" aria-labelledby="explore-title">
+      <section
+        className="home-section home-reveal"
+        aria-labelledby="explore-title"
+      >
         <div className="home-section__header home-section__header--inline">
           <div>
             <span className="home-kicker">Explorar Valorant</span>
@@ -384,7 +521,7 @@ export default function Home() {
             return (
               <button
                 key={card.path}
-                className="home-explore-card"
+                className="home-explore-card home-reveal"
                 type="button"
                 onClick={() => navigate(card.path)}
               >
@@ -402,16 +539,19 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="home-section" aria-labelledby="cosmetics-title">
+      <section
+        className="home-section home-reveal"
+        aria-labelledby="cosmetics-title"
+      >
         <div className="home-section__header">
-          <span className="home-kicker">Coleccion cosmetica</span>
+          <span className="home-kicker">Colección cosmética</span>
           <h2 id="cosmetics-title">Inventario visual de Valorant</h2>
         </div>
 
         <div className="home-cosmetics-showcase">
-          <article className="home-cosmetics-feature">
-            <span className="home-panel-label">Coleccion premium</span>
-            <h3>Cosmeticos</h3>
+          <article className="home-cosmetics-feature home-reveal">
+            <span className="home-panel-label">Colección premium</span>
+            <h3>Cosméticos</h3>
             <p>
               Explora skins, llaveros, sprays, flex y elementos de perfil desde
               un bloque visual dedicado.
@@ -424,7 +564,7 @@ export default function Home() {
               return (
                 <button
                   key={card.path}
-                  className="home-cosmetic-card"
+                  className="home-cosmetic-card home-reveal"
                   type="button"
                   onClick={() => navigate(card.path)}
                 >
