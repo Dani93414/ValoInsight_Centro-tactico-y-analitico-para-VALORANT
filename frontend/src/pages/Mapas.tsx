@@ -64,7 +64,7 @@ export default function Mapas() {
     return matchesGroup && matchesSearch;
   });
 
-  const regionMapStats = regions?.[0]?.mapStats ?? {};
+  const regionMapStats = useMemo(() => regions?.[0]?.mapStats ?? {}, [regions]);
   const mapStatsByName = useMemo(() => {
     const statsMap = new Map<string, (typeof regionMapStats)[string]>();
     Object.values(regionMapStats).forEach((stats) => {
