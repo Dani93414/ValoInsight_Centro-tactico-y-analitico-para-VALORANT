@@ -6,6 +6,7 @@ import {
   Gem,
   Info,
   Layers3,
+  Lock,
   LogIn,
   Map,
   Medal,
@@ -28,6 +29,9 @@ type SearchResult = {
   gameName: string;
   tagLine: string;
   displayName: string;
+  accountLevel?: number | null;
+  lastMatchStartMillis?: number | null;
+  lastMatchDurationMillis?: number | null;
 };
 
 type NavItem = {
@@ -43,6 +47,13 @@ type GlobalInsightCard = {
   value: string;
   detail: string;
   accent: "red" | "teal" | "gold" | "white";
+};
+
+type SearchSectionId = "search" | "favorites" | "recent" | "frequent" | "premier";
+
+type SearchSection = {
+  id: SearchSectionId;
+  label: string;
 };
 
 type RevealStyle = CSSProperties & {
@@ -153,6 +164,14 @@ const cosmeticCards: NavItem[] = [
   },
 ];
 
+const searchSections: SearchSection[] = [
+  { id: "search", label: "Búsqueda" },
+  { id: "favorites", label: "Favoritos" },
+  { id: "recent", label: "Recientes" },
+  { id: "frequent", label: "Jugadores más frecuentes" },
+  { id: "premier", label: "Equipo de premier" },
+];
+
 function revealStyle(index: number): RevealStyle {
   return { "--reveal-index": index };
 }
@@ -182,11 +201,38 @@ function formatDate(value?: string) {
   return dateFormatter.format(date);
 }
 
+function formatLastSeen(
+  startMillis?: number | null,
+  durationMillis?: number | null,
+) {
+  if (typeof startMillis !== "number" || !Number.isFinite(startMillis)) {
+    return "Sin partidas registradas";
+  }
+
+  const safeDuration =
+    typeof durationMillis === "number" && Number.isFinite(durationMillis)
+      ? durationMillis
+      : 0;
+  const elapsedMillis = Math.max(0, Date.now() - (startMillis + safeDuration));
+  const elapsedHours = Math.floor(elapsedMillis / (60 * 60 * 1000));
+
+  if (elapsedHours < 1) return "Hace menos de 1 hora";
+  if (elapsedHours < 24) {
+    return elapsedHours === 1 ? "Hace 1 hora" : `Hace ${elapsedHours} horas`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return elapsedDays === 1 ? "Hace 1 día" : `Hace ${elapsedDays} días`;
+}
+
 export default function Home() {
+  const isLoggedIn = false;
   const [gameName, setGameName] = useState("");
   const [tagLine, setTagLine] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activeSearchSection, setActiveSearchSection] =
+    useState<SearchSectionId>("search");
   const regionsQuery = useRegions();
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
@@ -203,7 +249,16 @@ export default function Home() {
       searchTimeoutRef.current = null;
     }
 
-    if (!nextGameName.trim() && !nextTagLine.trim()) {
+    const trimmedGameName = nextGameName.trim();
+    const trimmedTagLine = nextTagLine.trim();
+
+    if (!trimmedGameName && !trimmedTagLine) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
+    if (trimmedGameName.length < 3 && trimmedTagLine.length < 3) {
       setResults([]);
       setLoading(false);
       return;
@@ -237,9 +292,15 @@ export default function Home() {
       return;
     }
 
-    if (gameName.trim() || tagLine.trim()) {
+    if (gameName.trim().length >= 3 || tagLine.trim().length >= 3) {
       handleSearch(gameName, tagLine);
     }
+  };
+
+  const handleSelectSearchSection = (section: SearchSection) => {
+    const isLocked = !isLoggedIn && section.id !== "search";
+    if (isLocked) return;
+    setActiveSearchSection(section.id);
   };
 
   useEffect(() => {
@@ -268,7 +329,11 @@ export default function Home() {
     return () => observer.disconnect();
   }, []);
 
-  const hasSearch = Boolean(gameName.trim() || tagLine.trim());
+  const trimmedGameName = gameName.trim();
+  const trimmedTagLine = tagLine.trim();
+  const hasSearch = Boolean(trimmedGameName || trimmedTagLine);
+  const canSearch = trimmedGameName.length >= 3 || trimmedTagLine.length >= 3;
+  const showMinCharactersMessage = hasSearch && !canSearch;
   const regions = regionsQuery.data;
   const primaryRegion = regions?.[0];
   const topAgent = primaryRegion?.mostPlayedAgents?.[0];
@@ -385,11 +450,10 @@ export default function Home() {
 
         <section className="home-search-panel" aria-label="Buscar jugador">
           <div className="home-search-panel__header">
-            <div>
-              <span className="home-panel-label">Búsqueda competitiva</span>
+            <div className="home-search-panel__title">
+              <UserRoundSearch size={24} aria-hidden="true" />
               <h2>Buscar jugador</h2>
             </div>
-            <UserRoundSearch size={24} aria-hidden="true" />
           </div>
 
           <div className="home-search-grid">
@@ -427,41 +491,95 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="home-search-status" aria-live="polite">
-            {loading && (
-              <div className="home-search-loading">
-                <span className="home-search-spinner" />
-                Buscando jugador...
-              </div>
-            )}
-
-            {!loading && hasSearch && results.length === 0 && (
-              <div className="home-search-empty">
-                No se encontraron jugadores con esos filtros.
-              </div>
-            )}
+          <div className="home-search-tabs" role="tablist" aria-label="Apartados del buscador">
+            {searchSections.map((section) => {
+              const isLocked = !isLoggedIn && section.id !== "search";
+              const isActive = activeSearchSection === section.id;
+              return (
+                <button
+                  key={section.id}
+                  className={`home-search-tab${isActive ? " home-search-tab--active" : ""}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-disabled={isLocked}
+                  disabled={isLocked}
+                  onClick={() => handleSelectSearchSection(section)}
+                >
+                  <span>{section.label}</span>
+                  {isLocked && <Lock size={14} aria-hidden="true" />}
+                </button>
+              );
+            })}
           </div>
 
-          {results.length > 0 && (
-            <ul className="home-search-results">
-              {results.map((result, index) => (
-                <li key={result.id} style={revealStyle(index)}>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/estadisticas/${result.id}`)}
-                  >
-                    <span>
-                      <strong>{result.displayName}</strong>
-                      <small>
-                        {result.gameName}
-                        {result.tagLine ? `#${result.tagLine}` : ""}
-                      </small>
-                    </span>
-                    <ArrowRight size={18} aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {activeSearchSection === "search" ? (
+            <>
+              <div className="home-search-status" aria-live="polite">
+                {loading && (
+                  <div className="home-search-loading">
+                    <span className="home-search-spinner" />
+                    Buscando jugador...
+                  </div>
+                )}
+
+                {!loading && showMinCharactersMessage && (
+                  <div className="home-search-empty">Mínimo escribe 3 letras</div>
+                )}
+
+                {!loading && !showMinCharactersMessage && hasSearch && results.length === 0 && (
+                  <div className="home-search-empty">
+                    No se encontraron jugadores con esos filtros.
+                  </div>
+                )}
+              </div>
+
+              {results.length > 0 && (
+                <ul className="home-search-results">
+                  {results.map((result, index) => {
+                    const playerNameTag = result.tagLine
+                      ? `${result.gameName}#${result.tagLine}`
+                      : result.gameName;
+                    const displayTitle = result.displayName || playerNameTag;
+
+                    return (
+                      <li key={result.id} style={revealStyle(index)}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/estadisticas/${result.id}`)}
+                        >
+                          <span className="home-search-result__main">
+                            <strong>{displayTitle}</strong>
+                          </span>
+
+                          <span className="home-search-result__last-seen">
+                            Última conexión ·{" "}
+                            {formatLastSeen(
+                              result.lastMatchStartMillis,
+                              result.lastMatchDurationMillis,
+                            )}
+                          </span>
+
+                          <span className="home-search-result__level">
+                            {typeof result.accountLevel === "number"
+                              ? `Nivel ${result.accountLevel}`
+                              : "Nivel -"}
+                          </span>
+
+                          <ArrowRight
+                            className="home-search-result__arrow"
+                            size={18}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          ) : (
+            <div className="home-search-coming-soon">Disponible próximamente</div>
           )}
         </section>
       </section>

@@ -8,6 +8,9 @@ type PlayerSummary = {
   puuid: string;
   gameName?: string;
   tagLine?: string;
+  accountLevel?: number | null;
+  lastMatchStartMillis?: number | null;
+  lastMatchDurationMillis?: number | null;
 };
 
 export async function searchPlayers(gameName: string, tagLine: string) {
@@ -25,6 +28,9 @@ export async function searchPlayers(gameName: string, tagLine: string) {
     id: p.puuid,
     gameName: p.gameName ?? "Unknown",
     tagLine: p.tagLine ?? "",
+    accountLevel: p.accountLevel ?? null,
+    lastMatchStartMillis: p.lastMatchStartMillis ?? null,
+    lastMatchDurationMillis: p.lastMatchDurationMillis ?? null,
     displayName: p.tagLine
       ? `${p.gameName ?? "Unknown"}#${p.tagLine}`
       : (p.gameName ?? "Unknown"),
