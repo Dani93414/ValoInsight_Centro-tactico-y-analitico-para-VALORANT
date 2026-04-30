@@ -85,10 +85,12 @@ def search_players(
                 "puuid": {"$first": "$players.puuid"},
                 "gameName": {"$first": "$players.gameName"},
                 "tagLine": {"$first": "$players.tagLine"},
-                "gameStartMillis": {"$first": "$matchInfo.gameStartMillis"},
+                "accountLevel": {"$first": "$players.accountLevel"},
+                "lastMatchStartMillis": {"$first": "$matchInfo.gameStartMillis"},
+                "lastMatchDurationMillis": {"$first": "$matchInfo.gameLengthMillis"},
             }
         },
-        {"$sort": {"gameStartMillis": -1}},
+        {"$sort": {"lastMatchStartMillis": -1}},
         {"$limit": limit},
         {
             "$project": {
@@ -96,6 +98,9 @@ def search_players(
                 "puuid": 1,
                 "gameName": {"$ifNull": ["$gameName", "Unknown"]},
                 "tagLine": {"$ifNull": ["$tagLine", ""]},
+                "accountLevel": {"$ifNull": ["$accountLevel", None]},
+                "lastMatchStartMillis": {"$ifNull": ["$lastMatchStartMillis", None]},
+                "lastMatchDurationMillis": {"$ifNull": ["$lastMatchDurationMillis", None]},
             }
         },
     ])
@@ -106,7 +111,7 @@ def search_players(
     if len(results) < limit:
         fallback_cursor = players_collection.find(
             players_query,
-            {"_id": 0, "puuid": 1, "gameName": 1, "tagLine": 1},
+            {"_id": 0, "puuid": 1, "gameName": 1, "tagLine": 1, "accountLevel": 1},
         ).limit(limit).max_time_ms(QUERY_MAX_TIME_MS)
 
         for fallback in fallback_cursor:
@@ -117,6 +122,9 @@ def search_players(
                 "puuid": puuid,
                 "gameName": fallback.get("gameName") or "Unknown",
                 "tagLine": fallback.get("tagLine") or "",
+                "accountLevel": fallback.get("accountLevel"),
+                "lastMatchStartMillis": None,
+                "lastMatchDurationMillis": None,
             })
             seen_puuids.add(puuid)
             if len(results) >= limit:
