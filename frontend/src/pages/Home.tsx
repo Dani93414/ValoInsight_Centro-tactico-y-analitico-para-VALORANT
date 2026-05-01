@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
 import {
   ArrowRight,
   CalendarDays,
+  ChevronDown,
   Crosshair,
   Gem,
   Info,
@@ -128,19 +136,19 @@ const exploreCards: NavItem[] = [
 const cosmeticCards: NavItem[] = [
   {
     title: "Skins",
-    description: "Colecciones y acabados",
+    description: "Aspectos de armas",
     path: "/cosmeticos/skins",
     icon: Sparkles,
   },
   {
     title: "Llaveros",
-    description: "Buddies para armas",
+    description: "Detalles para tus armas",
     path: "/cosmeticos/llaveros",
     icon: Gem,
   },
   {
     title: "Flex",
-    description: "Objetos flexibles",
+    description: "Equipables animados",
     path: "/cosmeticos/flex",
     icon: Zap,
   },
@@ -158,7 +166,7 @@ const cosmeticCards: NavItem[] = [
   },
   {
     title: "Sprays",
-    description: "Graffiti y expresión",
+    description: "Expresión durante el juego",
     path: "/cosmeticos/sprays",
     icon: Crosshair,
   },
@@ -231,6 +239,8 @@ export default function Home() {
   const [tagLine, setTagLine] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState("");
+  const [showScrollHint, setShowScrollHint] = useState(false);
   const [activeSearchSection, setActiveSearchSection] =
     useState<SearchSectionId>("search");
   const regionsQuery = useRegions();
@@ -303,6 +313,21 @@ export default function Home() {
     setActiveSearchSection(section.id);
   };
 
+  const handleGlobalCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      navigate("/estadisticas-globales");
+    }
+  };
+
+  const handleScrollHintClick = () => {
+    window.scrollBy({
+      top: window.innerHeight * 0.85,
+      behavior: "smooth",
+    });
+  };
+
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) {
@@ -329,19 +354,48 @@ export default function Home() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const updateScrollHintVisibility = () => {
+      const isNearBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 80;
+
+      setShowScrollHint(!isNearBottom);
+    };
+
+    updateScrollHintVisibility();
+    window.addEventListener("scroll", updateScrollHintVisibility, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateScrollHintVisibility);
+
+    return () => {
+      window.removeEventListener("scroll", updateScrollHintVisibility);
+      window.removeEventListener("resize", updateScrollHintVisibility);
+    };
+  }, []);
+
   const trimmedGameName = gameName.trim();
   const trimmedTagLine = tagLine.trim();
   const hasSearch = Boolean(trimmedGameName || trimmedTagLine);
   const canSearch = trimmedGameName.length >= 3 || trimmedTagLine.length >= 3;
   const showMinCharactersMessage = hasSearch && !canSearch;
-  const regions = regionsQuery.data;
-  const primaryRegion = regions?.[0];
-  const topAgent = primaryRegion?.mostPlayedAgents?.[0];
-  const topMap = primaryRegion?.mostPlayedMaps?.[0];
-  const topWeapon = primaryRegion?.mostLethalWeapons?.[0];
-  const averages = primaryRegion?.averages;
+  const regions = useMemo(() => regionsQuery.data ?? [], [regionsQuery.data]);
+  const activeRegionCode = selectedRegion || regions[0]?.region || "";
+  const activeRegion =
+    regions.find((region) => region.region === activeRegionCode) ?? regions[0];
+  const topAgent = activeRegion?.mostPlayedAgents?.[0];
+  const topMap = activeRegion?.mostPlayedMaps?.[0];
+  const topWeapon = activeRegion?.mostLethalWeapons?.[0];
+  const averages = activeRegion?.averages;
   const isGlobalLoading = regionsQuery.isLoading;
-  const updatedAt = formatDate(primaryRegion?.updatedAt);
+  const updatedAt = formatDate(activeRegion?.updatedAt);
+
+  useEffect(() => {
+    if (!selectedRegion && regions.length > 0) {
+      setSelectedRegion(regions[0].region);
+    }
+  }, [regions, selectedRegion]);
 
   const globalInsightCards = useMemo<GlobalInsightCard[]>(
     () => [
@@ -590,24 +644,51 @@ export default function Home() {
       >
         <div className="home-section__header">
           <span className="home-kicker">Centro de análisis</span>
-          <h2 id="analysis-title">El núcleo competitivo de ValoInsight</h2>
+          <h2 id="analysis-title">Análisis competitivo y datos del juego</h2>
         </div>
 
         <div className="home-analysis-grid">
-          <button
+          <article
             className="home-global-card home-reveal"
-            type="button"
+            role="button"
+            tabIndex={0}
             style={revealStyle(0)}
             onClick={() => navigate("/estadisticas-globales")}
+            onKeyDown={handleGlobalCardKeyDown}
           >
             <div className="home-global-card__content">
               <div className="home-global-card__meta">
                 <span className="home-panel-label">Data center</span>
                 <span>
-                  Región {primaryRegion?.region ?? "-"}
+                  Región {activeRegion?.region ?? "-"}
                   {updatedAt ? ` · Actualizado ${updatedAt}` : ""}
                 </span>
               </div>
+              <label
+                className="home-region-select"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <span>Región activa</span>
+                <select
+                  value={activeRegionCode}
+                  disabled={regions.length === 0}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    event.stopPropagation();
+                    setSelectedRegion(event.target.value);
+                  }}
+                >
+                  {regions.length === 0 ? (
+                    <option value="">Sin regiones</option>
+                  ) : (
+                    regions.map((region) => (
+                      <option key={region.region} value={region.region}>
+                        {region.region}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
               <h3>Estadísticas globales</h3>
               <p>
                 Rankings, regiones, agentes, mapas, armas y economía reunidos
@@ -631,7 +712,7 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          </button>
+          </article>
 
           {analysisCards.map((card, index) => {
             const Icon = card.icon;
@@ -703,7 +784,6 @@ export default function Home() {
 
         <div className="home-cosmetics-showcase">
           <article className="home-cosmetics-feature home-reveal" style={revealStyle(0)}>
-            <span className="home-panel-label">Colección premium</span>
             <h3>Cosméticos</h3>
             <p>
               Explora skins, llaveros, sprays, flex y elementos de perfil desde
@@ -736,6 +816,17 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {showScrollHint && (
+        <button
+          className="home-scroll-hint"
+          type="button"
+          aria-label="Ver más contenido"
+          onClick={handleScrollHintClick}
+        >
+          <ChevronDown size={24} aria-hidden="true" />
+        </button>
+      )}
     </main>
   );
 }
