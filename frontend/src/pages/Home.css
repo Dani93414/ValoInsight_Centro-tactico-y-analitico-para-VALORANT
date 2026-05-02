@@ -30,7 +30,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -749,6 +750,22 @@ button {
   min-width: 0;
 }
 
+.home-search-result__level-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 7px;
+}
+
+.home-search-result__rank-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.3));
+}
+
 .home-search-result__level {
   display: inline-flex;
   align-items: center;
@@ -969,6 +986,7 @@ button {
   position: relative;
   z-index: 2;
   max-width: 680px;
+  padding-right: min(260px, 26vw);
 }
 
 .home-global-card__meta {
@@ -986,15 +1004,31 @@ button {
   text-transform: uppercase;
 }
 
-.home-region-select {
+.home-global-card__region-selector {
+  position: absolute;
+  top: clamp(22px, 3vw, 34px);
+  right: clamp(22px, 3vw, 34px);
+  z-index: 4;
   display: inline-grid;
-  min-width: min(100%, 220px);
-  margin-top: 16px;
+  width: min(220px, calc(100% - 44px));
   gap: 8px;
   cursor: default;
 }
 
-.home-region-select span {
+.home-global-card__region-selector::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  bottom: 16px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--home-red);
+  border-bottom: 2px solid var(--home-red);
+  pointer-events: none;
+  transform: rotate(45deg);
+}
+
+.home-global-card__region-selector span {
   color: var(--home-muted);
   font-size: 0.68rem;
   font-weight: 950;
@@ -1002,8 +1036,12 @@ button {
   text-transform: uppercase;
 }
 
-.home-region-select select {
-  min-height: 42px;
+.home-global-card__region-selector select {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: var(--home-radius);
   background:
@@ -1011,10 +1049,12 @@ button {
     rgba(3, 5, 9, 0.74);
   color: var(--home-text);
   cursor: pointer;
+  font-size: 0.78rem;
   font-weight: 900;
   letter-spacing: 0.08em;
+  line-height: 1;
   outline: 0;
-  padding: 0 12px;
+  padding: 0 34px 0 12px;
   text-transform: uppercase;
   transition:
     border-color var(--home-ease),
@@ -1022,14 +1062,70 @@ button {
     background var(--home-ease);
 }
 
-.home-region-select select:focus {
+.home-global-card__region-selector select:hover {
+  border-color: rgba(255, 70, 85, 0.34);
+  background:
+    linear-gradient(145deg, rgba(255, 70, 85, 0.13), rgba(255, 255, 255, 0.035)),
+    rgba(3, 5, 9, 0.82);
+}
+
+.home-global-card__region-selector select:focus {
   border-color: var(--home-border-red);
   box-shadow: 0 0 0 3px rgba(255, 70, 85, 0.15);
 }
 
-.home-region-select select:disabled {
+.home-global-card__region-selector select:disabled {
   cursor: not-allowed;
   opacity: 0.66;
+}
+
+.home-global-card__region-selector select option {
+  background: #0b0f16;
+  color: var(--home-text);
+  font-weight: 900;
+  line-height: 1.4;
+  padding: 10px 12px;
+  text-transform: uppercase;
+}
+
+@supports (appearance: base-select) {
+  .home-global-card__region-selector select {
+    appearance: base-select;
+    align-items: center;
+    line-height: 1;
+    padding-block: 0;
+  }
+
+  .home-global-card__region-selector select selectedcontent {
+    display: flex;
+    align-items: center;
+    min-height: 100%;
+    line-height: 1;
+  }
+
+  .home-global-card__region-selector select::picker-icon {
+    color: var(--home-red);
+    align-self: center;
+  }
+
+  .home-global-card__region-selector::after {
+    display: none;
+  }
+
+  .home-global-card__region-selector select option {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 10px 12px;
+  }
+
+  .home-global-card__region-selector select::picker(select) {
+    appearance: base-select;
+    border: 1px solid var(--home-border-red);
+    border-radius: var(--home-radius);
+    background: #0b0f16;
+    color: var(--home-text);
+  }
 }
 
 .home-global-card h3 {
@@ -1314,6 +1410,8 @@ button {
 }
 
 .home-cosmetics-feature {
+  display: flex;
+  align-items: flex-end;
   min-height: 430px;
   padding: clamp(24px, 4vw, 38px);
   background:
@@ -1343,9 +1441,16 @@ button {
   transform: skewX(-28deg);
 }
 
-.home-cosmetics-feature h3 {
+.home-cosmetics-feature__content {
   position: relative;
   z-index: 2;
+  display: grid;
+  align-content: end;
+  justify-items: start;
+  max-width: 500px;
+}
+
+.home-cosmetics-feature h3 {
   max-width: 500px;
   margin: 14px 0 14px;
   color: #fff;
@@ -1357,9 +1462,8 @@ button {
 }
 
 .home-cosmetics-feature p {
-  position: relative;
-  z-index: 2;
   max-width: 440px;
+  margin: 0;
   color: var(--home-soft);
   font-size: 1rem;
   line-height: 1.7;
@@ -1380,26 +1484,23 @@ button {
   background:
     linear-gradient(145deg, rgba(18, 22, 30, 0.92), rgba(8, 10, 15, 0.94)),
     radial-gradient(circle at 20% 0, rgba(255, 70, 85, 0.16), transparent 10rem);
-  grid-template-rows: auto minmax(14px, 1fr) auto;
-  align-items: start;
-  min-height: 132px;
+  align-items: center;
+  min-height: 112px;
 }
 
 .home-cosmetic-card__icon {
   grid-column: 1;
-  grid-row: 1;
 }
 
-.home-cosmetic-card__text {
-  grid-column: 1 / -1;
-  grid-row: 3;
-  align-self: end;
-  justify-self: start;
+.home-cosmetic-card__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .home-cosmetic-card > svg:last-child {
   grid-column: 3;
-  grid-row: 1;
   justify-self: end;
 }
 
@@ -1556,6 +1657,18 @@ button {
     padding: 22px;
   }
 
+  .home-global-card__content {
+    padding-right: 0;
+  }
+
+  .home-global-card__region-selector {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 100%;
+    margin-bottom: 18px;
+  }
+
   .home-global-card p,
   .home-cosmetics-feature p {
     font-size: 0.98rem;
@@ -1596,9 +1709,10 @@ button {
     grid-row: 2;
   }
 
-  .home-search-result__level {
+  .home-search-result__level-wrap {
     grid-column: 2;
     grid-row: 1;
+    justify-self: end;
   }
 
   .home-search-result__arrow {
@@ -1623,6 +1737,11 @@ button {
   .home-search-result__level {
     max-width: 96px;
     padding-inline: 7px;
+  }
+
+  .home-search-result__rank-icon {
+    width: 28px;
+    height: 28px;
   }
 
   .home-explore-card,

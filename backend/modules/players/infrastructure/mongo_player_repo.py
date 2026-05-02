@@ -88,6 +88,8 @@ def search_players(
                 "accountLevel": {"$first": "$players.accountLevel"},
                 "lastMatchStartMillis": {"$first": "$matchInfo.gameStartMillis"},
                 "lastMatchDurationMillis": {"$first": "$matchInfo.gameLengthMillis"},
+                "lastCompetitiveTier": {"$first": "$players.competitiveTier"},
+                "lastCompetitiveTierImage": {"$first": "$players.competitiveTierImage"},
             }
         },
         {"$sort": {"lastMatchStartMillis": -1}},
@@ -101,6 +103,8 @@ def search_players(
                 "accountLevel": {"$ifNull": ["$accountLevel", None]},
                 "lastMatchStartMillis": {"$ifNull": ["$lastMatchStartMillis", None]},
                 "lastMatchDurationMillis": {"$ifNull": ["$lastMatchDurationMillis", None]},
+                "lastCompetitiveTier": {"$ifNull": ["$lastCompetitiveTier", None]},
+                "lastCompetitiveTierImage": {"$ifNull": ["$lastCompetitiveTierImage", None]},
             }
         },
     ])
@@ -125,6 +129,8 @@ def search_players(
                 "accountLevel": fallback.get("accountLevel"),
                 "lastMatchStartMillis": None,
                 "lastMatchDurationMillis": None,
+                "lastCompetitiveTier": None,
+                "lastCompetitiveTierImage": None,
             })
             seen_puuids.add(puuid)
             if len(results) >= limit:
