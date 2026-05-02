@@ -28,8 +28,12 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useRegions } from "../api/hooks";
+import { useCompetitiveTiers, useRegions } from "../api/hooks";
 import { searchPlayers } from "../api/stats.ts";
+import {
+  getRankNameFromTier,
+  normalizeCompetitiveTierIconPath,
+} from "../utils/rankUtils";
 import "./Home.css";
 
 type SearchResult = {
@@ -40,6 +44,8 @@ type SearchResult = {
   accountLevel?: number | null;
   lastMatchStartMillis?: number | null;
   lastMatchDurationMillis?: number | null;
+  lastCompetitiveTier?: number | null;
+  lastCompetitiveTierImage?: string | null;
 };
 
 type NavItem = {
@@ -244,6 +250,7 @@ export default function Home() {
   const [activeSearchSection, setActiveSearchSection] =
     useState<SearchSectionId>("search");
   const regionsQuery = useRegions();
+  const competitiveTiersQuery = useCompetitiveTiers();
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
   const navigate = useNavigate();
@@ -381,6 +388,22 @@ export default function Home() {
   const canSearch = trimmedGameName.length >= 3 || trimmedTagLine.length >= 3;
   const showMinCharactersMessage = hasSearch && !canSearch;
   const regions = useMemo(() => regionsQuery.data ?? [], [regionsQuery.data]);
+  const rankIconByTier = useMemo(() => {
+    const iconMap = new globalThis.Map<number, string>();
+    for (const tier of competitiveTiersQuery.data ?? []) {
+      const numericTier = Number(tier.tier);
+      if (!Number.isFinite(numericTier)) continue;
+
+      const icon = normalizeCompetitiveTierIconPath(
+        tier.smallIcon ||
+          tier.largeIcon ||
+          tier.rankTriangleUpIcon ||
+          tier.rankTriangleDownIcon,
+      );
+      if (icon) iconMap.set(numericTier, icon);
+    }
+    return iconMap;
+  }, [competitiveTiersQuery.data]);
   const activeRegionCode = selectedRegion || regions[0]?.region || "";
   const activeRegion =
     regions.find((region) => region.region === activeRegionCode) ?? regions[0];
@@ -595,6 +618,21 @@ export default function Home() {
                       ? `${result.gameName}#${result.tagLine}`
                       : result.gameName;
                     const displayTitle = result.displayName || playerNameTag;
+                    const competitiveTier = result.lastCompetitiveTier;
+                    const hasRank =
+                      typeof competitiveTier === "number" &&
+                      competitiveTier >= 3;
+                    const rankIcon =
+                      hasRank
+                        ? (normalizeCompetitiveTierIconPath(
+                            result.lastCompetitiveTierImage,
+                          ) ??
+                          rankIconByTier.get(competitiveTier) ??
+                          null)
+                        : null;
+                    const rankName = getRankNameFromTier(
+                      competitiveTier,
+                    );
 
                     return (
                       <li key={result.id} style={revealStyle(index)}>
@@ -614,10 +652,19 @@ export default function Home() {
                             )}
                           </span>
 
-                          <span className="home-search-result__level">
-                            {typeof result.accountLevel === "number"
-                              ? `Nivel ${result.accountLevel}`
-                              : "Nivel -"}
+                          <span className="home-search-result__level-wrap">
+                            {rankIcon && (
+                              <img
+                                className="home-search-result__rank-icon"
+                                src={rankIcon}
+                                alt={rankName}
+                              />
+                            )}
+                            <span className="home-search-result__level">
+                              {typeof result.accountLevel === "number"
+                                ? `Nivel ${result.accountLevel}`
+                                : "Nivel -"}
+                            </span>
                           </span>
 
                           <ArrowRight
@@ -656,6 +703,32 @@ export default function Home() {
             onClick={() => navigate("/estadisticas-globales")}
             onKeyDown={handleGlobalCardKeyDown}
           >
+            <label
+              className="home-global-card__region-selector"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <span>Región activa</span>
+              <select
+                value={activeRegionCode}
+                disabled={regions.length === 0}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                  event.stopPropagation();
+                  setSelectedRegion(event.target.value);
+                }}
+              >
+                {regions.length === 0 ? (
+                  <option value="">Sin regiones</option>
+                ) : (
+                  regions.map((region) => (
+                    <option key={region.region} value={region.region}>
+                      {region.region}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
             <div className="home-global-card__content">
               <div className="home-global-card__meta">
                 <span className="home-panel-label">Data center</span>
@@ -664,31 +737,6 @@ export default function Home() {
                   {updatedAt ? ` · Actualizado ${updatedAt}` : ""}
                 </span>
               </div>
-              <label
-                className="home-region-select"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <span>Región activa</span>
-                <select
-                  value={activeRegionCode}
-                  disabled={regions.length === 0}
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={(event) => {
-                    event.stopPropagation();
-                    setSelectedRegion(event.target.value);
-                  }}
-                >
-                  {regions.length === 0 ? (
-                    <option value="">Sin regiones</option>
-                  ) : (
-                    regions.map((region) => (
-                      <option key={region.region} value={region.region}>
-                        {region.region}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </label>
               <h3>Estadísticas globales</h3>
               <p>
                 Rankings, regiones, agentes, mapas, armas y economía reunidos
@@ -775,20 +823,17 @@ export default function Home() {
 
       <section
         className="home-section home-reveal"
-        aria-labelledby="cosmetics-title"
+        aria-label="Cosméticos"
       >
-        <div className="home-section__header">
-          <span className="home-kicker">Colección cosmética</span>
-          <h2 id="cosmetics-title">Inventario visual de Valorant</h2>
-        </div>
-
         <div className="home-cosmetics-showcase">
           <article className="home-cosmetics-feature home-reveal" style={revealStyle(0)}>
-            <h3>Cosméticos</h3>
-            <p>
-              Explora skins, llaveros, sprays, flex y elementos de perfil desde
-              un bloque visual dedicado.
-            </p>
+            <div className="home-cosmetics-feature__content">
+              <h3>Cosméticos</h3>
+              <p>
+                Explora skins, llaveros, sprays, flex y elementos de perfil desde
+                un bloque visual dedicado.
+              </p>
+            </div>
           </article>
 
           <div className="home-cosmetics-grid">
@@ -806,7 +851,9 @@ export default function Home() {
                     <Icon size={21} aria-hidden="true" />
                   </span>
                   <span className="home-cosmetic-card__text">
-                    <strong>{card.title}</strong>
+                    <strong className="home-cosmetic-card__name">
+                      {card.title}
+                    </strong>
                     <small>{card.description}</small>
                   </span>
                   <ArrowRight size={18} aria-hidden="true" />

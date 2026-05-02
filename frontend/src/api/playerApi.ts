@@ -11,6 +11,8 @@ type PlayerSummary = {
   accountLevel?: number | null;
   lastMatchStartMillis?: number | null;
   lastMatchDurationMillis?: number | null;
+  lastCompetitiveTier?: number | null;
+  lastCompetitiveTierImage?: string | null;
 };
 
 export async function searchPlayers(gameName: string, tagLine: string) {
@@ -31,6 +33,8 @@ export async function searchPlayers(gameName: string, tagLine: string) {
     accountLevel: p.accountLevel ?? null,
     lastMatchStartMillis: p.lastMatchStartMillis ?? null,
     lastMatchDurationMillis: p.lastMatchDurationMillis ?? null,
+    lastCompetitiveTier: p.lastCompetitiveTier ?? null,
+    lastCompetitiveTierImage: p.lastCompetitiveTierImage ?? null,
     displayName: p.tagLine
       ? `${p.gameName ?? "Unknown"}#${p.tagLine}`
       : (p.gameName ?? "Unknown"),
