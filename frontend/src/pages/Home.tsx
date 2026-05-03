@@ -525,6 +525,16 @@ export default function Home() {
           ))}
         </nav>
 
+        {isLoggedIn && user?.puuid && (
+          <button
+            className="home-topbar__nav-button"
+            type="button"
+            onClick={() => navigate(`/estadisticas/${user.puuid}`)}
+          >
+            Mi Perfil
+          </button>
+        )}
+
         <button className="home-login-button" type="button" onClick={handleAuthAction}>
           {isLoggedIn ? (
             <LogOut size={17} aria-hidden="true" />
