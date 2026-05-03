@@ -30,3 +30,13 @@ CORS_ORIGINS: list[str] = [
     for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
     if origin.strip()
 ]
+
+# Auth
+JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-change-me")
+JWT_EXPIRES_MINUTES: int = int(os.getenv("JWT_EXPIRES_MINUTES", "1440"))
+AUTH_COOKIE_SECURE: bool = os.getenv("AUTH_COOKIE_SECURE", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
