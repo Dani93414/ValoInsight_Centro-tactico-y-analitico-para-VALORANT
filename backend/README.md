@@ -17,6 +17,9 @@ Copia `backend/.env.example` a `.env` en la raiz del repo (o exporta variables e
 - `RIOT_API_KEY`
 - `HENRY_API_KEY`
 - `CORS_ORIGINS`
+- `JWT_SECRET_KEY`
+- `JWT_EXPIRES_MINUTES`
+- `AUTH_COOKIE_SECURE`
 - `API_HOST` (opcional, por defecto `0.0.0.0`)
 - `API_PORT` (opcional, por defecto `8000`)
 

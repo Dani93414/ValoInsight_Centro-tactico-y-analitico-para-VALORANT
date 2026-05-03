@@ -10,6 +10,7 @@ import uvicorn
 
 # 1. Importar routers desde módulos hexagonales
 from modules.analytics.interfaces.routes import router as analytics_router
+from modules.auth.interfaces.routes import router as auth_router
 from modules.content.interfaces.routes import router as content_router
 from modules.leaderboards.interfaces.routes import router as leaderboards_router
 from modules.matches.interfaces.routes import router as matches_router
@@ -59,6 +60,7 @@ _CACHE_RULES: list[tuple[str, str]] = [
     ("/matches/", "public, max-age=600"),           # 10 min for match list
     ("/players/", "private, no-store"),             # dynamic player metrics
     ("/analytics/", "private, no-store"),           # dynamic metric/heatmap data
+    ("/auth/", "private, no-store"),                # session endpoints
 ]
 
 
@@ -85,6 +87,7 @@ app.add_middleware(CacheControlMiddleware)
 app.include_router(content_router, prefix="/content", tags=["Content"])
 app.include_router(leaderboards_router, prefix="/leaderboards", tags=["Leaderboards"])
 app.include_router(matches_router, prefix="/matches", tags=["Matches"])
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
 # 2. Registrar los nuevos routers
 app.include_router(players_router, prefix="/players", tags=["Players"])
@@ -104,7 +107,8 @@ def root():
             "/matches",
             "/players",
             "/regions",
-            "/analytics"
+            "/analytics",
+            "/auth"
         ]
     }
 

@@ -31,6 +31,7 @@ matches_collection = db["matches"]
 content_collection = db["content"]
 leaderboards_collection = db["leaderboards"]
 regions_collection = db["regions"]
+users_collection = db["users"]
 
 
 def _index_exists(collection, key_spec) -> bool:
@@ -143,5 +144,10 @@ def ensure_indexes() -> None:
 
         if not _index_exists(regions_collection, "region"):
             regions_collection.create_index("region", unique=True)
+
+        if not _index_exists(users_collection, "email"):
+            users_collection.create_index("email", unique=True)
+        if not _index_exists(users_collection, "puuid"):
+            users_collection.create_index("puuid", unique=True)
 
         _indexes_ready = True

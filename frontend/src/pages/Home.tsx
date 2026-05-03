@@ -16,6 +16,7 @@ import {
   Layers3,
   Lock,
   LogIn,
+  LogOut,
   Map,
   Medal,
   Search,
@@ -30,6 +31,8 @@ import type { LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCompetitiveTiers, useRegions } from "../api/hooks";
 import { searchPlayers } from "../api/stats.ts";
+import { AuthModal } from "../components/auth/AuthModal";
+import { useAuth } from "../context/AuthContext";
 import {
   getRankNameFromTier,
   normalizeCompetitiveTierIconPath,
@@ -186,6 +189,13 @@ const searchSections: SearchSection[] = [
   { id: "premier", label: "Equipo de premier" },
 ];
 
+const authenticatedSectionMessages: Record<Exclude<SearchSectionId, "search">, string> = {
+  favorites: "Todavia no tienes favoritos",
+  recent: "Todavia no hay jugadores recientes",
+  frequent: "Todavia no hay datos suficientes",
+  premier: "Todavia no has configurado tu equipo premier",
+};
+
 function revealStyle(index: number): RevealStyle {
   return { "--reveal-index": index };
 }
@@ -240,7 +250,7 @@ function formatLastSeen(
 }
 
 export default function Home() {
-  const isLoggedIn = false;
+  const { user, isLoggedIn, logout } = useAuth();
   const [gameName, setGameName] = useState("");
   const [tagLine, setTagLine] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -249,6 +259,7 @@ export default function Home() {
   const [showScrollHint, setShowScrollHint] = useState(false);
   const [activeSearchSection, setActiveSearchSection] =
     useState<SearchSectionId>("search");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const regionsQuery = useRegions();
   const competitiveTiersQuery = useCompetitiveTiers();
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -320,6 +331,14 @@ export default function Home() {
     setActiveSearchSection(section.id);
   };
 
+  const handleAuthAction = async () => {
+    if (!isLoggedIn) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    await logout();
+  };
+
   const handleGlobalCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
@@ -342,6 +361,12 @@ export default function Home() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn && activeSearchSection !== "search") {
+      setActiveSearchSection("search");
+    }
+  }, [activeSearchSection, isLoggedIn]);
 
   useEffect(() => {
     const targets = document.querySelectorAll<HTMLElement>(".home-reveal");
@@ -500,9 +525,17 @@ export default function Home() {
           ))}
         </nav>
 
-        <button className="home-login-button" type="button">
-          <LogIn size={17} aria-hidden="true" />
-          Iniciar sesión
+        <button className="home-login-button" type="button" onClick={handleAuthAction}>
+          {isLoggedIn ? (
+            <LogOut size={17} aria-hidden="true" />
+          ) : (
+            <LogIn size={17} aria-hidden="true" />
+          )}
+          <span className="home-login-button__label">
+            {isLoggedIn
+              ? `${user?.gameName ?? "Jugador"}${user?.tagLine ? `#${user.tagLine}` : ""}`
+              : "Iniciar sesion"}
+          </span>
         </button>
       </header>
 
@@ -680,7 +713,13 @@ export default function Home() {
               )}
             </>
           ) : (
-            <div className="home-search-coming-soon">Disponible próximamente</div>
+            <div className="home-search-coming-soon">
+              {
+                authenticatedSectionMessages[
+                  activeSearchSection as Exclude<SearchSectionId, "search">
+                ]
+              }
+            </div>
           )}
         </section>
       </section>
@@ -863,6 +902,11 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
 
       {showScrollHint && (
         <button
