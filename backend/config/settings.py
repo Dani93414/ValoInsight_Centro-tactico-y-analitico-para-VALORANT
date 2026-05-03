@@ -32,7 +32,11 @@ CORS_ORIGINS: list[str] = [
 ]
 
 # Auth
-JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-change-me")
+_JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not _JWT_SECRET_KEY:
+    raise ValueError("Missing required environment variable: JWT_SECRET_KEY")
+JWT_SECRET_KEY: str = _JWT_SECRET_KEY
+
 JWT_EXPIRES_MINUTES: int = int(os.getenv("JWT_EXPIRES_MINUTES", "1440"))
 AUTH_COOKIE_SECURE: bool = os.getenv("AUTH_COOKIE_SECURE", "false").strip().lower() in {
     "1",
