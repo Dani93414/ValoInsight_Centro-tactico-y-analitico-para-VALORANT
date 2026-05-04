@@ -100,6 +100,9 @@ def register_user(email: str, password: str, puuid: str) -> dict[str, Any]:
         "puuid": normalized_puuid,
         "gameName": player.get("gameName") or "Unknown",
         "tagLine": player.get("tagLine") or "",
+        "favorites": [],
+        "recentPlayers": [],
+        "frequentPlayers": {},
         "createdAt": now,
         "lastLoginAt": now,
     }

@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AppTopbar } from "./components/layout/AppTopbar";
 
 const Home = lazy(() => import("./pages/Home"));
 const Agentes = lazy(() => import("./pages/Agentes"));
@@ -25,6 +26,7 @@ function App() {
   return (
     <BrowserRouter>
       <div className="page-scale">
+        <AppTopbar />
         <Suspense fallback={<div className="loading-screen">Cargando...</div>}>
           <Routes>
             <Route path="/" element={<Home />} />
