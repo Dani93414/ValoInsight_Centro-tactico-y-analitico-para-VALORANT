@@ -28,7 +28,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useCompetitiveTiers, useRegions } from "../api/hooks";
 import { searchPlayers } from "../api/stats.ts";
 import { AuthModal } from "../components/auth/AuthModal";
@@ -84,11 +84,22 @@ const dateFormatter = new Intl.DateTimeFormat("es-ES", {
   year: "numeric",
 });
 
+const LOGO_SRC = "/logo-valoinsight.svg";
+
 const topbarLinks = [
+  { label: "Inicio", path: "/" },
   { label: "Estadísticas", path: "/estadisticas-globales" },
   { label: "Agentes", path: "/agentes" },
   { label: "Armas", path: "/armas" },
   { label: "Mapas", path: "/mapas" },
+];
+
+const topbarMoreLinks = [
+  { label: "Actos", path: "/actos" },
+  { label: "Eventos", path: "/eventos" },
+  { label: "Modos", path: "/modos" },
+  { label: "Cosméticos", path: "/cosmeticos/skins" },
+  { label: "Información", path: "/informacion" },
 ];
 
 const analysisCards: NavItem[] = [
@@ -265,6 +276,7 @@ export default function Home() {
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSearch = (nextGameName: string, nextTagLine: string) => {
     setGameName(nextGameName);
@@ -438,6 +450,15 @@ export default function Home() {
   const averages = activeRegion?.averages;
   const isGlobalLoading = regionsQuery.isLoading;
   const updatedAt = formatDate(activeRegion?.updatedAt);
+  const isTopbarPathActive = (path: string) => {
+    if (path === "/") return location.pathname === "/";
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  };
+  const isMoreActive = topbarMoreLinks.some((link) =>
+    isTopbarPathActive(link.path),
+  );
+  const profilePath = user?.puuid ? `/estadisticas/${user.puuid}` : "";
+  const isProfileActive = Boolean(profilePath && location.pathname === profilePath);
 
   useEffect(() => {
     if (!selectedRegion && regions.length > 0) {
@@ -500,53 +521,92 @@ export default function Home() {
     <main className="home-page">
       <header className="home-topbar" aria-label="Navegación principal">
         <button
-          className="home-brand home-topbar__nav-button home-topbar__nav-button--active"
+          className="home-brand"
           type="button"
           onClick={() => navigate("/")}
           aria-label="Ir al inicio de ValoInsight"
         >
-          <span className="home-brand__mark">
-            <span>VALO</span>
-            <span>INSIGHT</span>
+          <span className="home-brand__logo-slot">
+            <img src={LOGO_SRC} alt="ValoInsight" className="home-brand__logo" />
           </span>
-          <span>ValoInsight</span>
         </button>
 
         <nav className="home-topbar__nav" aria-label="Accesos rápidos">
           {topbarLinks.map((link) => (
             <button
               key={link.path}
-              className="home-topbar__nav-button"
+              className={`home-topbar__nav-button${
+                isTopbarPathActive(link.path)
+                  ? " home-topbar__nav-button--active"
+                  : ""
+              }`}
               type="button"
+              aria-current={isTopbarPathActive(link.path) ? "page" : undefined}
               onClick={() => navigate(link.path)}
             >
               {link.label}
             </button>
           ))}
+
+          <div className="home-topbar__more">
+            <button
+              className={`home-topbar__nav-button${
+                isMoreActive ? " home-topbar__nav-button--active" : ""
+              }`}
+              type="button"
+              aria-haspopup="menu"
+            >
+              Más
+              <ChevronDown size={15} aria-hidden="true" />
+            </button>
+
+            <div className="home-topbar__more-menu" role="menu">
+              {topbarMoreLinks.map((link) => (
+                <button
+                  key={link.path}
+                  className={`home-topbar__nav-button${
+                    isTopbarPathActive(link.path)
+                      ? " home-topbar__nav-button--active"
+                      : ""
+                  }`}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => navigate(link.path)}
+                >
+                  {link.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </nav>
 
-        {isLoggedIn && user?.puuid && (
-          <button
-            className="home-topbar__nav-button"
-            type="button"
-            onClick={() => navigate(`/estadisticas/${user.puuid}`)}
-          >
-            Mi Perfil
-          </button>
-        )}
-
-        <button className="home-login-button" type="button" onClick={handleAuthAction}>
-          {isLoggedIn ? (
-            <LogOut size={17} aria-hidden="true" />
-          ) : (
-            <LogIn size={17} aria-hidden="true" />
+        <div className="home-topbar__actions">
+          {isLoggedIn && user?.puuid && (
+            <button
+              className={`home-topbar__nav-button${
+                isProfileActive ? " home-topbar__nav-button--active" : ""
+              }`}
+              type="button"
+              aria-current={isProfileActive ? "page" : undefined}
+              onClick={() => navigate(`/estadisticas/${user.puuid}`)}
+            >
+              Mi Perfil
+            </button>
           )}
-          <span className="home-login-button__label">
-            {isLoggedIn
-              ? `${user?.gameName ?? "Jugador"}${user?.tagLine ? `#${user.tagLine}` : ""}`
-              : "Iniciar sesion"}
-          </span>
-        </button>
+
+          <button className="home-login-button" type="button" onClick={handleAuthAction}>
+            {isLoggedIn ? (
+              <LogOut size={17} aria-hidden="true" />
+            ) : (
+              <LogIn size={17} aria-hidden="true" />
+            )}
+            <span className="home-login-button__label">
+              {isLoggedIn
+                ? `${user?.gameName ?? "Jugador"}${user?.tagLine ? `#${user.tagLine}` : ""}`
+                : "Iniciar sesion"}
+            </span>
+          </button>
+        </div>
       </header>
 
       <section className="home-hero" aria-labelledby="home-hero-title">

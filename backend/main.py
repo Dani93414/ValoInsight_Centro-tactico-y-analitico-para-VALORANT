@@ -1,5 +1,12 @@
 import os
+import subprocess
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+ensure_env_script = Path(__file__).resolve().parent / "scripts" / "ensure_env.py"
+if ensure_env_script.exists():
+    subprocess.run([sys.executable, str(ensure_env_script)], check=True)
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
