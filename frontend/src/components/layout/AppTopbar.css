@@ -1,0 +1,436 @@
+:root {
+  --app-topbar-red: #ff4655;
+  --app-topbar-border: rgba(255, 255, 255, 0.1);
+  --app-topbar-border-strong: rgba(255, 255, 255, 0.16);
+  --app-topbar-border-red: rgba(255, 70, 85, 0.42);
+  --app-topbar-muted: #94a1b5;
+  --app-topbar-radius: 8px;
+  --app-topbar-radius-lg: 12px;
+  --app-topbar-ease: 180ms ease;
+  --app-topbar-premium-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-topbar {
+  position: sticky;
+  top: 14px;
+  z-index: 80;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: 14px;
+  width: min(1480px, calc(100% - clamp(32px, 8vw, 120px)));
+  max-width: 1480px;
+  min-height: 68px;
+  margin: 18px auto 0;
+  border: 1px solid var(--app-topbar-border);
+  border-radius: var(--app-topbar-radius-lg);
+  background:
+    linear-gradient(135deg, rgba(21, 27, 39, 0.82), rgba(6, 9, 14, 0.9)),
+    rgba(8, 11, 17, 0.82);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px);
+  padding: 10px 12px 10px 14px;
+  animation: app-topbar-in 760ms var(--app-topbar-premium-ease) both;
+}
+
+.app-topbar::before {
+  content: "";
+  position: absolute;
+  left: 22px;
+  bottom: -1px;
+  width: 220px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--app-topbar-red), transparent);
+  pointer-events: none;
+  transform-origin: left center;
+  animation: app-header-line 7s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.app-topbar__brand,
+.app-topbar__login-button,
+.app-topbar__nav-button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.app-topbar__brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  width: 232px;
+  min-height: 48px;
+  border-radius: var(--app-topbar-radius);
+  color: #fff;
+  gap: 10px;
+  padding: 0 8px 0 0;
+  transition:
+    background var(--app-topbar-ease),
+    transform var(--app-topbar-ease);
+}
+
+.app-topbar__brand:hover {
+  background: rgba(255, 255, 255, 0.045);
+  transform: translateY(-1px);
+}
+
+.app-topbar__brand:focus-visible {
+  outline: 3px solid rgba(255, 70, 85, 0.24);
+  outline-offset: 3px;
+}
+
+.app-topbar__logo {
+  display: block;
+  width: 54px;
+  height: 42px;
+  flex: 0 0 54px;
+  object-fit: contain;
+}
+
+.app-topbar__brand-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 950;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.app-topbar__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: visible;
+  gap: 6px;
+  scrollbar-width: none;
+}
+
+.app-topbar__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.app-topbar__nav-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 38px;
+  border-radius: var(--app-topbar-radius);
+  color: var(--app-topbar-muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  gap: 7px;
+  letter-spacing: 0.08em;
+  max-width: 190px;
+  overflow: hidden;
+  padding: 0 13px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition:
+    color var(--app-topbar-ease),
+    background var(--app-topbar-ease),
+    transform var(--app-topbar-ease);
+}
+
+.app-topbar__nav-button:hover,
+.app-topbar__nav-button--active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.075);
+  transform: translateY(-1px);
+}
+
+.app-topbar__nav-button--active {
+  border: 1px solid rgba(255, 70, 85, 0.36);
+  background: rgba(255, 70, 85, 0.12);
+  box-shadow: inset 0 -2px 0 rgba(255, 70, 85, 0.72);
+}
+
+.app-topbar__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 8px;
+}
+
+.app-topbar__actions .app-topbar__nav-button {
+  max-width: 132px;
+}
+
+.app-topbar__more {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.app-topbar__more > .app-topbar__nav-button svg {
+  transition: transform var(--app-topbar-ease);
+}
+
+.app-topbar__more:hover > .app-topbar__nav-button svg,
+.app-topbar__more:focus-within > .app-topbar__nav-button svg,
+.app-topbar__more--open > .app-topbar__nav-button svg {
+  transform: rotate(180deg);
+}
+
+.app-topbar__more-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 90;
+  display: grid;
+  min-width: 210px;
+  border: 1px solid var(--app-topbar-border-strong);
+  border-radius: var(--app-topbar-radius);
+  background:
+    linear-gradient(145deg, rgba(18, 24, 35, 0.98), rgba(5, 8, 13, 0.98)),
+    rgba(8, 11, 17, 0.98);
+  box-shadow:
+    0 22px 44px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 70, 85, 0.08);
+  opacity: 0;
+  padding: 8px;
+  pointer-events: none;
+  transform: translateY(-6px) scale(0.98);
+  transform-origin: top right;
+  visibility: hidden;
+  transition:
+    opacity var(--app-topbar-ease),
+    transform var(--app-topbar-ease),
+    visibility var(--app-topbar-ease);
+}
+
+.app-topbar__more-menu::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  width: 100%;
+  height: 12px;
+}
+
+.app-topbar__more:hover .app-topbar__more-menu,
+.app-topbar__more:focus-within .app-topbar__more-menu,
+.app-topbar__more--open .app-topbar__more-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+}
+
+.app-topbar__more--closed:hover .app-topbar__more-menu,
+.app-topbar__more--closed:focus-within .app-topbar__more-menu {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px) scale(0.98);
+  visibility: hidden;
+}
+
+.app-topbar__more--closed:hover > .app-topbar__nav-button svg,
+.app-topbar__more--closed:focus-within > .app-topbar__nav-button svg {
+  transform: none;
+}
+
+.app-topbar__more-menu .app-topbar__nav-button {
+  justify-content: flex-start;
+  width: 100%;
+  max-width: none;
+  min-height: 40px;
+  border: 1px solid transparent;
+  padding-inline: 12px;
+  text-align: left;
+}
+
+.app-topbar__more-menu .app-topbar__nav-button:hover,
+.app-topbar__more-menu .app-topbar__nav-button--active {
+  border-color: rgba(255, 70, 85, 0.28);
+  background: rgba(255, 70, 85, 0.13);
+}
+
+.app-topbar__login-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 40px;
+  max-width: min(280px, 24vw);
+  border: 1px solid var(--app-topbar-border-red);
+  border-radius: var(--app-topbar-radius);
+  background: rgba(255, 70, 85, 0.1);
+  color: #fff;
+  font-size: 0;
+  font-weight: 950;
+  gap: 9px;
+  letter-spacing: 0.08em;
+  padding: 0 15px;
+  text-transform: uppercase;
+  transition:
+    background var(--app-topbar-ease),
+    box-shadow var(--app-topbar-ease),
+    transform var(--app-topbar-ease);
+}
+
+.app-topbar__login-button:hover {
+  background: rgba(255, 70, 85, 0.18);
+  box-shadow: 0 0 28px rgba(255, 70, 85, 0.18);
+  transform: translateY(-1px);
+}
+
+.app-topbar__login-button svg {
+  flex: 0 0 auto;
+}
+
+.app-topbar__login-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .app-topbar {
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .app-topbar__nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .app-topbar__actions {
+    justify-self: end;
+  }
+
+  .app-topbar__more {
+    display: contents;
+  }
+
+  .app-topbar__more > .app-topbar__nav-button {
+    display: none;
+  }
+
+  .app-topbar__more-menu {
+    position: static;
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    opacity: 1;
+    padding: 0;
+    pointer-events: auto;
+    transform: none;
+    visibility: visible;
+  }
+
+  .app-topbar__more-menu::before {
+    display: none;
+  }
+
+  .app-topbar__more-menu .app-topbar__nav-button {
+    width: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-topbar {
+    position: relative;
+    top: 0;
+    grid-template-columns: 1fr;
+    margin: 14px 14px 0;
+    padding: 12px;
+  }
+
+  .app-topbar__brand,
+  .app-topbar__actions,
+  .app-topbar__login-button {
+    width: 100%;
+  }
+
+  .app-topbar__brand {
+    justify-content: center;
+    max-width: none;
+  }
+
+  .app-topbar__actions {
+    justify-content: stretch;
+  }
+
+  .app-topbar__actions > * {
+    flex: 1 1 0;
+  }
+
+  .app-topbar__actions .app-topbar__nav-button {
+    max-width: none;
+  }
+
+  .app-topbar__login-button {
+    min-height: 44px;
+    max-width: none;
+  }
+
+  .app-topbar__nav {
+    grid-column: auto;
+    grid-row: auto;
+    width: 100%;
+  }
+
+  .app-topbar__nav-button {
+    flex: 0 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-topbar::before {
+    animation: none !important;
+  }
+
+  .app-topbar {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    animation: none !important;
+    transition: none;
+  }
+}
+
+@keyframes app-topbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.99);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes app-header-line {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translate3d(0, 0, 0) scaleX(0.72);
+  }
+  50% {
+    opacity: 1;
+    transform: translate3d(42px, 0, 0) scaleX(1.15);
+  }
+}

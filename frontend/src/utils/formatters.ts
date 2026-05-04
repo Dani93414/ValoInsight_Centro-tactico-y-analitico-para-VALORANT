@@ -20,6 +20,14 @@ export function safeDivide(a: number, b: number, fallback = 0): number {
   return b > 0 ? a / b : fallback;
 }
 
+export function getSampleReliabilityLabel(sample?: number | null): string {
+  const value = sample ?? 0;
+  if (value <= 0) return "Sin muestra";
+  if (value <= 3) return "Muestra baja";
+  if (value <= 9) return "Muestra media";
+  return "Muestra alta";
+}
+
 export function normalizeLabel(value?: unknown): string {
   const text = String(value || "")
     .trim()

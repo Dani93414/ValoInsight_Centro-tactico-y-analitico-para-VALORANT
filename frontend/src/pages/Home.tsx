@@ -15,24 +15,31 @@ import {
   Info,
   Layers3,
   Lock,
-  LogIn,
-  LogOut,
   Map,
   Medal,
   Search,
   Shield,
   Sparkles,
+  Star,
   Swords,
   Trophy,
   UserRoundSearch,
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useCompetitiveTiers, useRegions } from "../api/hooks";
 import { searchPlayers } from "../api/stats.ts";
-import { AuthModal } from "../components/auth/AuthModal";
 import { useAuth } from "../context/AuthContext";
+import {
+  addFavorite,
+  addRecentPlayer,
+  getFavorites,
+  getFrequentPlayers,
+  getRecentPlayers,
+  removeFavorite,
+  type UserPlayer,
+} from "../api/userApi";
 import {
   getRankNameFromTier,
   normalizeCompetitiveTierIconPath,
@@ -83,24 +90,6 @@ const dateFormatter = new Intl.DateTimeFormat("es-ES", {
   month: "short",
   year: "numeric",
 });
-
-const LOGO_SRC = "/logo-valoinsight.svg";
-
-const topbarLinks = [
-  { label: "Inicio", path: "/" },
-  { label: "Estadísticas", path: "/estadisticas-globales" },
-  { label: "Agentes", path: "/agentes" },
-  { label: "Armas", path: "/armas" },
-  { label: "Mapas", path: "/mapas" },
-];
-
-const topbarMoreLinks = [
-  { label: "Actos", path: "/actos" },
-  { label: "Eventos", path: "/eventos" },
-  { label: "Modos", path: "/modos" },
-  { label: "Cosméticos", path: "/cosmeticos/skins" },
-  { label: "Información", path: "/informacion" },
-];
 
 const analysisCards: NavItem[] = [
   {
@@ -261,7 +250,7 @@ function formatLastSeen(
 }
 
 export default function Home() {
-  const { user, isLoggedIn, logout } = useAuth();
+  const { isLoggedIn } = useAuth();
   const [gameName, setGameName] = useState("");
   const [tagLine, setTagLine] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -270,13 +259,17 @@ export default function Home() {
   const [showScrollHint, setShowScrollHint] = useState(false);
   const [activeSearchSection, setActiveSearchSection] =
     useState<SearchSectionId>("search");
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [favoritePlayers, setFavoritePlayers] = useState<UserPlayer[]>([]);
+  const [recentPlayers, setRecentPlayers] = useState<UserPlayer[]>([]);
+  const [frequentPlayers, setFrequentPlayers] = useState<UserPlayer[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [loadingUserSection, setLoadingUserSection] =
+    useState<SearchSectionId | null>(null);
   const regionsQuery = useRegions();
   const competitiveTiersQuery = useCompetitiveTiers();
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const handleSearch = (nextGameName: string, nextTagLine: string) => {
     setGameName(nextGameName);
@@ -325,10 +318,57 @@ export default function Home() {
     }, 400);
   };
 
+  const refreshFavorites = async () => {
+    const players = await getFavorites();
+    setFavoritePlayers(players);
+    setFavoriteIds(new Set(players.map((player) => player.puuid || player.id)));
+  };
+
+  const handleOpenPlayer = (puuid: string) => {
+    if (!puuid) return;
+    if (isLoggedIn) {
+      void addRecentPlayer(puuid).catch(() => {
+        // Navigation should not be blocked by private activity tracking.
+      });
+    }
+    navigate(`/estadisticas/${puuid}`);
+  };
+
+  const handleToggleFavorite = async (puuid: string) => {
+    if (!isLoggedIn || !puuid) return;
+
+    const wasFavorite = favoriteIds.has(puuid);
+    setFavoriteIds((current) => {
+      const next = new Set(current);
+      if (wasFavorite) next.delete(puuid);
+      else next.add(puuid);
+      return next;
+    });
+
+    try {
+      if (wasFavorite) {
+        await removeFavorite(puuid);
+        setFavoritePlayers((current) =>
+          current.filter((player) => (player.puuid || player.id) !== puuid),
+        );
+      } else {
+        await addFavorite(puuid);
+        await refreshFavorites();
+      }
+    } catch {
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+        if (wasFavorite) next.add(puuid);
+        else next.delete(puuid);
+        return next;
+      });
+    }
+  };
+
   const handleSubmitSearch = () => {
     const firstResult = results[0];
     if (firstResult) {
-      navigate(`/estadisticas/${firstResult.id}`);
+      handleOpenPlayer(firstResult.id);
       return;
     }
 
@@ -341,14 +381,6 @@ export default function Home() {
     const isLocked = !isLoggedIn && section.id !== "search";
     if (isLocked) return;
     setActiveSearchSection(section.id);
-  };
-
-  const handleAuthAction = async () => {
-    if (!isLoggedIn) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-    await logout();
   };
 
   const handleGlobalCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -378,6 +410,62 @@ export default function Home() {
     if (!isLoggedIn && activeSearchSection !== "search") {
       setActiveSearchSection("search");
     }
+    if (!isLoggedIn) {
+      setFavoritePlayers([]);
+      setRecentPlayers([]);
+      setFrequentPlayers([]);
+      setFavoriteIds(new Set());
+      setLoadingUserSection(null);
+    }
+  }, [activeSearchSection, isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    let isCancelled = false;
+
+    const loadPrivateSection = async () => {
+      const sectionsToLoad =
+        activeSearchSection === "search"
+          ? (["favorites"] as const)
+          : ([activeSearchSection] as const);
+
+      setLoadingUserSection(activeSearchSection === "premier" ? null : activeSearchSection);
+
+      try {
+        for (const section of sectionsToLoad) {
+          if (section === "favorites") {
+            const players = await getFavorites();
+            if (!isCancelled) {
+              setFavoritePlayers(players);
+              setFavoriteIds(new Set(players.map((player) => player.puuid || player.id)));
+            }
+          }
+          if (section === "recent") {
+            const players = await getRecentPlayers();
+            if (!isCancelled) setRecentPlayers(players);
+          }
+          if (section === "frequent") {
+            const players = await getFrequentPlayers();
+            if (!isCancelled) setFrequentPlayers(players);
+          }
+        }
+      } catch {
+        if (!isCancelled) {
+          if (activeSearchSection === "favorites") setFavoritePlayers([]);
+          if (activeSearchSection === "recent") setRecentPlayers([]);
+          if (activeSearchSection === "frequent") setFrequentPlayers([]);
+        }
+      } finally {
+        if (!isCancelled) setLoadingUserSection(null);
+      }
+    };
+
+    void loadPrivateSection();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeSearchSection, isLoggedIn]);
 
   useEffect(() => {
@@ -450,15 +538,6 @@ export default function Home() {
   const averages = activeRegion?.averages;
   const isGlobalLoading = regionsQuery.isLoading;
   const updatedAt = formatDate(activeRegion?.updatedAt);
-  const isTopbarPathActive = (path: string) => {
-    if (path === "/") return location.pathname === "/";
-    return location.pathname === path || location.pathname.startsWith(`${path}/`);
-  };
-  const isMoreActive = topbarMoreLinks.some((link) =>
-    isTopbarPathActive(link.path),
-  );
-  const profilePath = user?.puuid ? `/estadisticas/${user.puuid}` : "";
-  const isProfileActive = Boolean(profilePath && location.pathname === profilePath);
 
   useEffect(() => {
     if (!selectedRegion && regions.length > 0) {
@@ -517,98 +596,116 @@ export default function Home() {
     ],
   );
 
+  const renderPlayerList = (
+    players: Array<SearchResult | UserPlayer>,
+    emptyMessage: string,
+    options: { showFavoriteButton?: boolean; showSharedMatches?: boolean } = {},
+  ) => {
+    if (players.length === 0) {
+      return <div className="home-search-coming-soon">{emptyMessage}</div>;
+    }
+
+    return (
+      <ul className="home-search-results">
+        {players.map((player, index) => {
+          const puuid = "puuid" in player ? player.puuid : player.id;
+          const playerNameTag = player.tagLine
+            ? `${player.gameName}#${player.tagLine}`
+            : player.gameName;
+          const displayTitle = player.displayName || playerNameTag;
+          const competitiveTier = player.lastCompetitiveTier;
+          const hasRank =
+            typeof competitiveTier === "number" && competitiveTier >= 3;
+          const rankIcon = hasRank
+            ? (normalizeCompetitiveTierIconPath(
+                player.lastCompetitiveTierImage,
+              ) ??
+              rankIconByTier.get(competitiveTier) ??
+              null)
+            : null;
+          const rankName = getRankNameFromTier(competitiveTier);
+          const isFavorite = favoriteIds.has(puuid);
+
+          return (
+            <li key={puuid} style={revealStyle(index)}>
+              <button type="button" onClick={() => handleOpenPlayer(puuid)}>
+                <span className="home-search-result__main">
+                  <strong>{displayTitle}</strong>
+                </span>
+
+                <span className="home-search-result__last-seen">
+                  Ultima conexion ·{" "}
+                  {formatLastSeen(
+                    player.lastMatchStartMillis,
+                    player.lastMatchDurationMillis,
+                  )}
+                </span>
+
+                <span className="home-search-result__level-wrap">
+                  {rankIcon && (
+                    <img
+                      className="home-search-result__rank-icon"
+                      src={rankIcon}
+                      alt={rankName}
+                    />
+                  )}
+                  {options.showSharedMatches && "sharedMatches" in player ? (
+                    <span className="home-search-result__meta-pill">
+                      {player.sharedMatches ?? 0} partidas juntos
+                    </span>
+                  ) : (
+                    <span className="home-search-result__level">
+                      {typeof player.accountLevel === "number"
+                        ? `Nivel ${player.accountLevel}`
+                        : "Nivel -"}
+                    </span>
+                  )}
+                </span>
+
+                {options.showFavoriteButton && isLoggedIn && (
+                  <span
+                    className={`home-search-result__favorite-button${
+                      isFavorite
+                        ? " home-search-result__favorite-button--active"
+                        : ""
+                    }`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={
+                      isFavorite
+                        ? "Quitar jugador de favoritos"
+                        : "Anadir jugador a favoritos"
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleToggleFavorite(puuid);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void handleToggleFavorite(puuid);
+                    }}
+                  >
+                    <Star size={16} aria-hidden="true" />
+                  </span>
+                )}
+
+                <ArrowRight
+                  className="home-search-result__arrow"
+                  size={18}
+                  aria-hidden="true"
+                />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
   return (
     <main className="home-page">
-      <header className="home-topbar" aria-label="Navegación principal">
-        <button
-          className="home-brand"
-          type="button"
-          onClick={() => navigate("/")}
-          aria-label="Ir al inicio de ValoInsight"
-        >
-          <span className="home-brand__logo-slot">
-            <img src={LOGO_SRC} alt="ValoInsight" className="home-brand__logo" />
-          </span>
-        </button>
-
-        <nav className="home-topbar__nav" aria-label="Accesos rápidos">
-          {topbarLinks.map((link) => (
-            <button
-              key={link.path}
-              className={`home-topbar__nav-button${
-                isTopbarPathActive(link.path)
-                  ? " home-topbar__nav-button--active"
-                  : ""
-              }`}
-              type="button"
-              aria-current={isTopbarPathActive(link.path) ? "page" : undefined}
-              onClick={() => navigate(link.path)}
-            >
-              {link.label}
-            </button>
-          ))}
-
-          <div className="home-topbar__more">
-            <button
-              className={`home-topbar__nav-button${
-                isMoreActive ? " home-topbar__nav-button--active" : ""
-              }`}
-              type="button"
-              aria-haspopup="menu"
-            >
-              Más
-              <ChevronDown size={15} aria-hidden="true" />
-            </button>
-
-            <div className="home-topbar__more-menu" role="menu">
-              {topbarMoreLinks.map((link) => (
-                <button
-                  key={link.path}
-                  className={`home-topbar__nav-button${
-                    isTopbarPathActive(link.path)
-                      ? " home-topbar__nav-button--active"
-                      : ""
-                  }`}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => navigate(link.path)}
-                >
-                  {link.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </nav>
-
-        <div className="home-topbar__actions">
-          {isLoggedIn && user?.puuid && (
-            <button
-              className={`home-topbar__nav-button${
-                isProfileActive ? " home-topbar__nav-button--active" : ""
-              }`}
-              type="button"
-              aria-current={isProfileActive ? "page" : undefined}
-              onClick={() => navigate(`/estadisticas/${user.puuid}`)}
-            >
-              Mi Perfil
-            </button>
-          )}
-
-          <button className="home-login-button" type="button" onClick={handleAuthAction}>
-            {isLoggedIn ? (
-              <LogOut size={17} aria-hidden="true" />
-            ) : (
-              <LogIn size={17} aria-hidden="true" />
-            )}
-            <span className="home-login-button__label">
-              {isLoggedIn
-                ? `${user?.gameName ?? "Jugador"}${user?.tagLine ? `#${user.tagLine}` : ""}`
-                : "Iniciar sesion"}
-            </span>
-          </button>
-        </div>
-      </header>
-
       <section className="home-hero" aria-labelledby="home-hero-title">
         <div className="home-hero__visual" aria-hidden="true">
           <span className="home-tactical-line home-tactical-line--one" />
@@ -741,7 +838,7 @@ export default function Home() {
                       <li key={result.id} style={revealStyle(index)}>
                         <button
                           type="button"
-                          onClick={() => navigate(`/estadisticas/${result.id}`)}
+                          onClick={() => handleOpenPlayer(result.id)}
                         >
                           <span className="home-search-result__main">
                             <strong>{displayTitle}</strong>
@@ -770,6 +867,35 @@ export default function Home() {
                             </span>
                           </span>
 
+                          {isLoggedIn && (
+                            <span
+                              className={`home-search-result__favorite-button${
+                                favoriteIds.has(result.id)
+                                  ? " home-search-result__favorite-button--active"
+                                  : ""
+                              }`}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={
+                                favoriteIds.has(result.id)
+                                  ? "Quitar jugador de favoritos"
+                                  : "Anadir jugador a favoritos"
+                              }
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleToggleFavorite(result.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key !== "Enter" && event.key !== " ") return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void handleToggleFavorite(result.id);
+                              }}
+                            >
+                              <Star size={16} aria-hidden="true" />
+                            </span>
+                          )}
+
                           <ArrowRight
                             className="home-search-result__arrow"
                             size={18}
@@ -783,13 +909,44 @@ export default function Home() {
               )}
             </>
           ) : (
-            <div className="home-search-coming-soon">
-              {
-                authenticatedSectionMessages[
-                  activeSearchSection as Exclude<SearchSectionId, "search">
-                ]
-              }
-            </div>
+            <>
+              {loadingUserSection === activeSearchSection && (
+                <div className="home-search-loading">
+                  <span className="home-search-spinner" />
+                  Cargando datos...
+                </div>
+              )}
+
+              {loadingUserSection !== activeSearchSection &&
+                activeSearchSection === "favorites" &&
+                renderPlayerList(
+                  favoritePlayers,
+                  authenticatedSectionMessages.favorites,
+                  { showFavoriteButton: true },
+                )}
+
+              {loadingUserSection !== activeSearchSection &&
+                activeSearchSection === "recent" &&
+                renderPlayerList(
+                  recentPlayers,
+                  authenticatedSectionMessages.recent,
+                  { showFavoriteButton: true },
+                )}
+
+              {loadingUserSection !== activeSearchSection &&
+                activeSearchSection === "frequent" &&
+                renderPlayerList(
+                  frequentPlayers,
+                  authenticatedSectionMessages.frequent,
+                  { showFavoriteButton: true, showSharedMatches: true },
+                )}
+
+              {activeSearchSection === "premier" && (
+                <div className="home-search-coming-soon">
+                  {authenticatedSectionMessages.premier}
+                </div>
+              )}
+            </>
           )}
         </section>
       </section>
@@ -972,11 +1129,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
 
       {showScrollHint && (
         <button

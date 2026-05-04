@@ -23,6 +23,7 @@ from modules.leaderboards.interfaces.routes import router as leaderboards_router
 from modules.matches.interfaces.routes import router as matches_router
 from modules.players.interfaces.routes import router as players_router
 from modules.regions.interfaces.routes import router as regions_router
+from modules.users.interfaces.routes import router as users_router
 from infrastructure.mongo_client import ensure_indexes
 
 load_dotenv()
@@ -66,6 +67,7 @@ _CACHE_RULES: list[tuple[str, str]] = [
     ("/regions/", "public, max-age=3600"),          # 1 h for region stats
     ("/matches/", "public, max-age=600"),           # 10 min for match list
     ("/players/", "private, no-store"),             # dynamic player metrics
+    ("/users/", "private, no-store"),               # private user activity
     ("/analytics/", "private, no-store"),           # dynamic metric/heatmap data
     ("/auth/", "private, no-store"),                # session endpoints
 ]
@@ -95,6 +97,7 @@ app.include_router(content_router, prefix="/content", tags=["Content"])
 app.include_router(leaderboards_router, prefix="/leaderboards", tags=["Leaderboards"])
 app.include_router(matches_router, prefix="/matches", tags=["Matches"])
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(users_router, prefix="/users", tags=["Users"])
 
 # 2. Registrar los nuevos routers
 app.include_router(players_router, prefix="/players", tags=["Players"])
@@ -115,7 +118,8 @@ def root():
             "/players",
             "/regions",
             "/analytics",
-            "/auth"
+            "/auth",
+            "/users"
         ]
     }
 
