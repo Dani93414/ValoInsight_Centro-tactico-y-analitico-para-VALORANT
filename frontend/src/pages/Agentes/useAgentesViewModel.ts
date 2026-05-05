@@ -250,6 +250,14 @@ function formatDiff(
   return `${sign}${formatNumber(diff, 2)}`;
 }
 
+function getDiffValue(
+  globalValue: number | undefined,
+  personalValue: number | undefined,
+) {
+  if (globalValue === undefined || personalValue === undefined) return undefined;
+  return personalValue - globalValue;
+}
+
 function buildComparisonMetrics(
   globalStats: RegionAgentStats | undefined,
   personalStats: PersonalAgentStats | null | undefined,
@@ -259,16 +267,22 @@ function buildComparisonMetrics(
       const globalValue = getGlobalMetricValue(globalStats, config.key);
       const personalValue = getPersonalMetricValue(personalStats, config);
       if (globalValue === undefined && personalValue === undefined) return null;
-
-      return {
+      const diff = getDiffValue(globalValue, personalValue);
+      const metric: AgentComparisonMetric = {
         key: config.key,
         label: config.label,
         globalLabel: formatComparisonValue(globalValue, config.format),
         personalLabel: formatComparisonValue(personalValue, config.format),
         diffLabel: formatDiff(globalValue, personalValue, config.format),
       };
+
+      if (diff !== undefined) {
+        metric.diff = diff;
+      }
+
+      return metric;
     })
-    .filter((metric): metric is AgentComparisonMetric => Boolean(metric));
+    .filter((metric): metric is AgentComparisonMetric => metric !== null);
 }
 
 function buildTopAgents(agents: EnrichedAgent[]): TopAgentSummary[] {

@@ -64,9 +64,14 @@ export default function Agentes() {
         />
       )}
 
-      <AgentsHeader roles={viewModel.roleSummary} topAgents={viewModel.topAgents} />
-      <AgentFilters
+      <AgentsHeader
         activeRole={viewModel.activeRole}
+        roles={viewModel.roles}
+        roleSummary={viewModel.roleSummary}
+        topAgents={viewModel.topAgents}
+        onRoleChange={viewModel.setActiveRole}
+      />
+      <AgentFilters
         actFilter={viewModel.actFilter}
         actOptions={viewModel.actOptions}
         mapFilter={viewModel.mapFilter}
@@ -75,7 +80,6 @@ export default function Agentes() {
         rankOptions={viewModel.rankOptions}
         regionOptions={viewModel.regionOptions}
         summary={viewModel.filterSummary}
-        roles={viewModel.roles}
         search={viewModel.search}
         selectedRegion={viewModel.selectedRegion}
         sortKey={viewModel.sortKey}
@@ -83,7 +87,6 @@ export default function Agentes() {
         onMapFilterChange={viewModel.setMapFilter}
         onRankFilterChange={viewModel.setRankFilter}
         onRegionChange={viewModel.setSelectedRegion}
-        onRoleChange={viewModel.setActiveRole}
         onSearchChange={viewModel.setSearch}
         onSortChange={viewModel.setSortKey}
         onResetFilters={viewModel.resetFilters}

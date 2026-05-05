@@ -29,6 +29,7 @@ export type AgentComparisonMetric = {
   globalLabel: string;
   personalLabel: string;
   diffLabel: string;
+  diff?: number;
 };
 
 export type AgentFilterSummary = {
