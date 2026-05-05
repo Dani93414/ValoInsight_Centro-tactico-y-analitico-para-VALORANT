@@ -27,6 +27,7 @@ export type Agente = {
   displayIcon?: string | null;
   fullPortrait?: string | null;
   background?: string | null;
+  backgroundGradientColors?: string[] | null;
   role: Role;
   abilities: Ability[];
 };
@@ -46,6 +47,7 @@ export type AgentContent = {
   isAvailableForTest?: boolean | null;
   displayIcon?: string;
   displayIconSmall?: string;
+  backgroundGradientColors?: string[] | null;
   description?: string;
   role?: {
     displayName?: string;

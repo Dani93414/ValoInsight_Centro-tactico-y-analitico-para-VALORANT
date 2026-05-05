@@ -236,6 +236,20 @@ body {
   pointer-events: none;
 }
 
+.agents-header::after {
+  content: "AGENTS";
+  position: absolute;
+  right: clamp(0.8rem, 3vw, 2rem);
+  bottom: -1.25rem;
+  z-index: 0;
+  color: rgba(255, 255, 255, 0.035);
+  font-size: clamp(4rem, 12vw, 9rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 0.9;
+  pointer-events: none;
+}
+
 .agents-header-copy,
 .agents-overview-kpis,
 .agents-role-summary--header {
@@ -274,7 +288,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   background: linear-gradient(180deg, #1d2129 0%, #141820 100%);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.2);
 }
 
 .agents-kpi-card::before {
@@ -344,7 +358,7 @@ body {
   background:
     radial-gradient(circle at top right, rgba(255, 70, 85, 0.12), transparent 42%),
     linear-gradient(180deg, #1a1d23 0%, #13161c 100%);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
   transition:
     transform var(--transition-fast),
     border-color var(--transition-fast),
@@ -354,7 +368,7 @@ body {
 .agents-role-summary-card:hover {
   transform: translateY(-3px);
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
 }
 
 .agents-role-summary-card > img {
@@ -587,6 +601,7 @@ body {
 
 .role-filter-btn {
   appearance: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -626,7 +641,19 @@ body {
   border-color: var(--valorant-red);
   background: rgba(255, 70, 85, 0.16);
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 70, 85, 0.14);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 70, 85, 0.2),
+    0 0 22px rgba(255, 70, 85, 0.16);
+}
+
+.role-filter-btn.active::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--valorant-red);
+  box-shadow: 0 0 12px rgba(255, 70, 85, 0.72);
 }
 
 .agents-search,
@@ -644,7 +671,8 @@ body {
 }
 
 .agents-search {
-  min-width: min(280px, 100%);
+  flex: 1 1 280px;
+  min-width: min(340px, 100%);
   padding: 0.65rem 0.85rem;
   font-size: 0.88rem;
 }
@@ -713,6 +741,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   background: linear-gradient(180deg, var(--surface-05), rgba(255, 255, 255, 0.025));
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
 }
 
 .agents-comparison-card::before {
@@ -846,9 +875,36 @@ body {
 }
 
 .agents-comparison-row em {
-  color: #bbf7d0;
   font-style: normal;
   font-weight: 900;
+}
+
+.metric-diff {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0.18rem 0.52rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text-secondary);
+}
+
+.metric-diff-positive {
+  border-color: rgba(74, 222, 128, 0.34);
+  background: rgba(74, 222, 128, 0.12);
+  color: #bbf7d0;
+}
+
+.metric-diff-negative {
+  border-color: rgba(251, 113, 133, 0.38);
+  background: rgba(251, 113, 133, 0.13);
+  color: #fecdd3;
+}
+
+.metric-diff-neutral {
+  color: #d5dae3;
 }
 
 /* =====================================================
@@ -857,7 +913,7 @@ body {
 
 .agents-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 1rem;
 }
 
@@ -873,7 +929,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 16px;
   background:
-    radial-gradient(circle at 50% 22%, rgba(255, 70, 85, 0.15), transparent 34%),
+    radial-gradient(circle at 50% 22%, color-mix(in srgb, var(--agent-accent, #ff4655) 20%, transparent), transparent 34%),
     linear-gradient(180deg, #1a1d23 0%, #12151b 100%);
   color: inherit;
   text-align: left;
@@ -885,6 +941,7 @@ body {
     box-shadow var(--transition-medium),
     background var(--transition-fast);
   animation: fadeUp 0.35s ease both;
+  animation-delay: var(--delay, 0ms);
 }
 
 .agent-card::before {
@@ -892,7 +949,7 @@ body {
   position: absolute;
   inset: auto 0 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--valorant-red), transparent);
+  background: linear-gradient(90deg, var(--agent-accent, var(--valorant-red)), transparent);
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -901,16 +958,20 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(255, 70, 85, 0.18), transparent 58%);
+  background:
+    radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--agent-accent, #ff4655) 18%, transparent), transparent 44%),
+    linear-gradient(to top, color-mix(in srgb, var(--agent-accent, #ff4655) 16%, transparent), transparent 58%);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--transition-medium);
 }
 
 .agent-card:hover {
-  transform: translateY(-5px);
-  border-color: rgba(255, 70, 85, 0.45);
-  box-shadow: var(--shadow-soft);
+  transform: translateY(-7px);
+  border-color: color-mix(in srgb, var(--agent-accent, #ff4655) 62%, rgba(255, 255, 255, 0.14));
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.34),
+    0 0 26px color-mix(in srgb, var(--agent-accent, #ff4655) 18%, transparent);
 }
 
 .agent-card:hover::after,
@@ -920,21 +981,43 @@ body {
 }
 
 .agent-card.active {
-  border-color: var(--valorant-red);
+  border-color: var(--agent-accent, var(--valorant-red));
   background:
-    radial-gradient(circle at 50% 22%, rgba(255, 70, 85, 0.23), transparent 36%),
+    radial-gradient(circle at 50% 22%, color-mix(in srgb, var(--agent-accent, #ff4655) 28%, transparent), transparent 36%),
     linear-gradient(180deg, #20242c 0%, #141820 100%);
   box-shadow:
-    0 0 0 2px rgba(255, 70, 85, 0.18),
-    var(--shadow-soft);
+    0 0 0 2px color-mix(in srgb, var(--agent-accent, #ff4655) 28%, transparent),
+    0 20px 42px rgba(0, 0, 0, 0.4),
+    0 0 34px color-mix(in srgb, var(--agent-accent, #ff4655) 24%, transparent);
 }
 
 .agent-stat-badge,
+.agent-card-role-chip,
 .agent-card-role-icon,
 .agent-image-frame,
 .agent-card-body {
   position: relative;
   z-index: 1;
+}
+
+.agent-card-role-chip {
+  align-self: flex-start;
+  max-width: calc(100% - 44px);
+  min-height: 26px;
+  padding: 0.28rem 0.58rem;
+  border: 1px solid color-mix(in srgb, var(--agent-accent, #ff4655) 42%, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--agent-accent, #ff4655) 18%, transparent), rgba(10, 12, 16, 0.72));
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.9px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .agent-stat-badge {
@@ -977,7 +1060,7 @@ body {
   overflow: hidden;
   border-radius: 13px;
   background:
-    radial-gradient(circle at center, rgba(255, 70, 85, 0.12), transparent 56%),
+    radial-gradient(circle at center, color-mix(in srgb, var(--agent-accent, #ff4655) 16%, transparent), transparent 56%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent);
 }
 
@@ -987,11 +1070,16 @@ body {
   object-fit: contain;
   object-position: center bottom;
   filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.54));
-  transition: transform var(--transition-medium);
+  transition:
+    transform var(--transition-medium),
+    filter var(--transition-medium);
 }
 
 .agent-card:hover .agent-image {
-  transform: scale(1.045);
+  transform: translateY(-7px) scale(1.075);
+  filter:
+    drop-shadow(0 18px 24px rgba(0, 0, 0, 0.58))
+    drop-shadow(0 0 16px color-mix(in srgb, var(--agent-accent, #ff4655) 24%, transparent));
 }
 
 .agent-card-body {
@@ -1041,15 +1129,32 @@ body {
 .agent-detail {
   position: relative;
   margin: 1rem 0 1.2rem;
-  overflow: hidden;
+  overflow: visible;
   padding: 1.2rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at 78% 18%, rgba(255, 70, 85, 0.16), transparent 30%),
+    radial-gradient(circle at 80% 8%, rgba(255, 70, 85, 0.22), transparent 28%),
+    radial-gradient(circle at 96% 72%, rgba(255, 255, 255, 0.06), transparent 28%),
     linear-gradient(180deg, rgba(26, 29, 35, 0.98), rgba(17, 20, 26, 0.98));
-  box-shadow: var(--shadow-strong);
+  box-shadow:
+    0 26px 60px rgba(0, 0, 0, 0.48),
+    0 0 42px rgba(255, 70, 85, 0.08);
   animation: expandFade 0.3s ease both;
+}
+
+.agent-detail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.055), transparent 20%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 18px);
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .agent-detail-close {
@@ -1061,13 +1166,16 @@ body {
   width: 38px;
   height: 38px;
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  background: rgba(10, 12, 16, 0.72);
-  color: var(--text-secondary);
-  font-size: 1rem;
+  border-radius: 50%;
+  background: rgba(10, 12, 16, 0.82);
+  color: #fff;
+  font-size: 1.45rem;
   font-weight: 900;
+  line-height: 1;
   cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
   transition:
+    transform var(--transition-fast),
     color var(--transition-fast),
     border-color var(--transition-fast),
     background var(--transition-fast);
@@ -1075,13 +1183,16 @@ body {
 
 .agent-detail-close:hover {
   border-color: var(--border-strong);
-  background: rgba(255, 70, 85, 0.13);
+  background: rgba(255, 70, 85, 0.22);
   color: #fff;
+  transform: translateY(-1px);
 }
 
 .agent-detail-content {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  grid-template-columns: minmax(0, 1fr) minmax(390px, 1.05fr);
   gap: 1.2rem;
   align-items: stretch;
 }
@@ -1267,13 +1378,13 @@ body {
 
 .agent-detail-right {
   position: relative;
-  min-height: 0;
+  min-height: 560px;
   height: 100%;
   overflow: hidden;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at center 28%, rgba(255, 70, 85, 0.18), transparent 42%),
+    radial-gradient(circle at center 28%, rgba(255, 70, 85, 0.24), transparent 42%),
     linear-gradient(180deg, #191d24, #0f1115);
   isolation: isolate;
 }
@@ -1295,20 +1406,22 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.26;
-  filter: blur(1px) saturate(0.9);
+  opacity: 0.32;
+  filter: blur(1px) saturate(1.05);
 }
 
 .agent-fullportrait {
   position: absolute;
-  inset: 0;
+  inset: -7% -6% -2%;
   z-index: 1;
-  width: 100%;
-  height: 100%;
+  width: 112%;
+  height: 108%;
   object-fit: contain;
   object-position: center bottom;
-  transform: none;
-  filter: drop-shadow(0 28px 44px rgba(0, 0, 0, 0.68));
+  transform: translateY(1%);
+  filter:
+    drop-shadow(0 34px 44px rgba(0, 0, 0, 0.76))
+    drop-shadow(0 0 34px rgba(255, 70, 85, 0.16));
   pointer-events: none;
 }
 
@@ -1551,6 +1664,8 @@ body {
 .loading-card,
 .agents-empty-state,
 .agents-state-card {
+  position: relative;
+  overflow: hidden;
   padding: 2.2rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -1559,6 +1674,24 @@ body {
     linear-gradient(180deg, rgba(26, 29, 35, 0.98), rgba(17, 20, 26, 0.98));
   text-align: center;
   box-shadow: var(--shadow-soft);
+}
+
+.agents-empty-state::after {
+  content: "Ø";
+  position: absolute;
+  right: clamp(1rem, 5vw, 3rem);
+  bottom: -1.6rem;
+  z-index: 0;
+  color: rgba(255, 255, 255, 0.045);
+  font-size: clamp(5rem, 16vw, 11rem);
+  font-weight: 900;
+  line-height: 0.9;
+  pointer-events: none;
+}
+
+.agents-empty-state > * {
+  position: relative;
+  z-index: 1;
 }
 
 .loading-card {
@@ -1685,7 +1818,7 @@ body {
   }
 
   .agents-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
   }
 }
 
@@ -1746,7 +1879,7 @@ body {
   }
 
   .agents-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 0.75rem;
   }
 
@@ -1812,7 +1945,7 @@ body {
 
 @media (max-width: 460px) {
   .agents-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
   }
 
   .agent-detail-right {
