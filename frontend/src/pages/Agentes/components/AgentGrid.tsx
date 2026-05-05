@@ -1,22 +1,42 @@
-import { AgentCard } from "./AgentCard";
 import type { EnrichedAgent } from "../types";
+import { AgentCard } from "./AgentCard";
 
 type Props = {
   agents: EnrichedAgent[];
   selectedAgent: EnrichedAgent | null;
+  activeFilterLabels: string[];
   onSelect: (agent: EnrichedAgent) => void;
+  onResetFilters: () => void;
 };
 
 function getAgentKey(agent: EnrichedAgent): string {
   return agent.uuid ?? agent.id ?? agent.displayName;
 }
 
-export function AgentGrid({ agents, selectedAgent, onSelect }: Props) {
+export function AgentGrid({
+  agents,
+  selectedAgent,
+  activeFilterLabels,
+  onSelect,
+  onResetFilters,
+}: Props) {
   if (agents.length === 0) {
     return (
       <div className="agents-empty-state">
         <h2>No se encontraron agentes</h2>
-        <p>Prueba con otro nombre o cambia el filtro de rol.</p>
+        <p>
+          No hay agentes que encajen con la busqueda y filtros seleccionados.
+        </p>
+        {activeFilterLabels.length > 0 && (
+          <div className="agents-empty-filters">
+            {activeFilterLabels.map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+        )}
+        <button type="button" className="agents-empty-action" onClick={onResetFilters}>
+          Limpiar filtros
+        </button>
       </div>
     );
   }
@@ -37,4 +57,3 @@ export function AgentGrid({ agents, selectedAgent, onSelect }: Props) {
     </div>
   );
 }
-

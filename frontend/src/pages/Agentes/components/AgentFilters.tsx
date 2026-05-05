@@ -1,5 +1,5 @@
 import type { Role } from "../../../types/agents";
-import type { AgentSortKey, AgentStatsFilter } from "../types";
+import type { AgentFilterSummary, AgentSortKey, AgentStatsFilter } from "../types";
 
 type Props = {
   activeRole: string | null;
@@ -7,10 +7,12 @@ type Props = {
   search: string;
   sortKey: AgentSortKey;
   statsFilter: AgentStatsFilter;
+  summary: AgentFilterSummary;
   onRoleChange: (role: string | null) => void;
   onSearchChange: (value: string) => void;
   onSortChange: (value: AgentSortKey) => void;
   onStatsFilterChange: (value: AgentStatsFilter) => void;
+  onResetFilters: () => void;
 };
 
 const statsFilters: Array<{ value: AgentStatsFilter; label: string }> = [
@@ -35,14 +37,45 @@ export function AgentFilters({
   search,
   sortKey,
   statsFilter,
+  summary,
   onRoleChange,
   onSearchChange,
   onSortChange,
   onStatsFilterChange,
+  onResetFilters,
 }: Props) {
+  const hasActiveFilters = summary.activeLabels.length > 0;
+
   return (
-    <div className="agents-filters">
+    <section className="agents-filters">
+      <div className="agents-filters-header">
+        <div>
+          <span className="agents-section-eyebrow">Filtros</span>
+          <strong>
+            Mostrando {summary.shown} de {summary.total} agentes
+          </strong>
+        </div>
+
+        <button
+          type="button"
+          className="agents-clear-filters"
+          onClick={onResetFilters}
+          disabled={!hasActiveFilters}
+        >
+          Limpiar filtros
+        </button>
+      </div>
+
       <div className="roles-filter" aria-label="Filtrar agentes por rol">
+        <button
+          type="button"
+          className={`role-filter-btn reset ${activeRole ? "" : "active"}`}
+          onClick={() => onRoleChange(null)}
+          aria-pressed={!activeRole}
+        >
+          Todos
+        </button>
+
         {roles.map((role) => {
           const active = activeRole === role.displayName;
           return (
@@ -58,15 +91,6 @@ export function AgentFilters({
             </button>
           );
         })}
-
-        <button
-          type="button"
-          className={`role-filter-btn reset ${activeRole ? "" : "active"}`}
-          onClick={() => onRoleChange(null)}
-          aria-pressed={!activeRole}
-        >
-          Todos
-        </button>
       </div>
 
       <div className="agent-filter-tools">
@@ -107,7 +131,14 @@ export function AgentFilters({
           ))}
         </select>
       </div>
-    </div>
+
+      {hasActiveFilters && (
+        <div className="agents-active-filters" aria-label="Filtros activos">
+          {summary.activeLabels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
-

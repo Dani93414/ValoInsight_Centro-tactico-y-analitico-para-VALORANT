@@ -6,6 +6,7 @@ import { AgentFilters } from "./components/AgentFilters";
 import { AgentGrid } from "./components/AgentGrid";
 import { AgentInlineDetail } from "./components/AgentInlineDetail";
 import { AgentsHeader } from "./components/AgentsHeader";
+import { AgentsInsights } from "./components/AgentsInsights";
 import { RoleSummary } from "./components/RoleSummary";
 import { useAgentesViewModel } from "./useAgentesViewModel";
 
@@ -65,10 +66,11 @@ export default function Agentes() {
         />
       )}
 
-      <AgentsHeader />
+      <AgentsHeader overview={viewModel.overviewStats} />
       <RoleSummary roles={viewModel.roleSummary} />
       <AgentFilters
         activeRole={viewModel.activeRole}
+        summary={viewModel.filterSummary}
         roles={viewModel.roles}
         search={viewModel.search}
         sortKey={viewModel.sortKey}
@@ -77,7 +79,9 @@ export default function Agentes() {
         onSearchChange={viewModel.setSearch}
         onSortChange={viewModel.setSortKey}
         onStatsFilterChange={viewModel.setStatsFilter}
+        onResetFilters={viewModel.resetFilters}
       />
+      <AgentsInsights insights={viewModel.insights} />
 
       {viewModel.selectedAgent && (
         <div ref={detailRef}>
@@ -98,7 +102,9 @@ export default function Agentes() {
       <AgentGrid
         agents={viewModel.filteredAgents}
         selectedAgent={viewModel.selectedAgent}
+        activeFilterLabels={viewModel.filterSummary.activeLabels}
         onSelect={viewModel.selectAgent}
+        onResetFilters={viewModel.resetFilters}
       />
     </div>
   );

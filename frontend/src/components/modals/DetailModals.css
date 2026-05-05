@@ -53,6 +53,9 @@
 
 .weapon-modal-panel {
   width: min(1060px, 100%);
+  background:
+    radial-gradient(circle at top right, rgba(255, 70, 85, 0.12), transparent 34%),
+    linear-gradient(180deg, #1a1d23 0%, #12151b 100%);
 }
 
 .map-detail-modal-panel {
@@ -335,6 +338,22 @@
   gap: 1rem;
 }
 
+.modal-sample-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-top: 0.7rem;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid rgba(255, 70, 85, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 70, 85, 0.12);
+  color: #ffd7db;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
 .map-detail-header {
   display: flex;
   align-items: center;
@@ -375,8 +394,11 @@
   object-fit: contain;
   border-radius: 18px;
   padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.04);
+  background:
+    radial-gradient(circle at center, rgba(255, 70, 85, 0.14), transparent 62%),
+    rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.45));
 }
 
 .weapon-modal-icon-placeholder {
@@ -1268,6 +1290,25 @@
   color: #b5b5b5;
   background: rgba(255, 255, 255, 0.03);
   font-family: "Manrope", "Segoe UI Variable", system-ui, sans-serif;
+}
+
+.weapon-modal-empty {
+  flex-direction: column;
+  gap: 0.45rem;
+  text-align: center;
+}
+
+.weapon-modal-empty strong {
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.weapon-modal-empty span {
+  max-width: 520px;
+  color: #b5b5b5;
+  line-height: 1.55;
 }
 
 .loading-card {
