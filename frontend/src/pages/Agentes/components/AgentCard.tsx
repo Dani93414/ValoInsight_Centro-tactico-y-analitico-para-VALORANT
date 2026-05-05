@@ -13,7 +13,6 @@ export function AgentCard({ agent, active, onSelect, style }: Props) {
   const picks = agent.globalStats?.picks ?? 0;
   const winRate = agent.globalStats?.win_rate;
   const hasStats = picks > 0;
-  const winRateWidth = Math.max(0, Math.min(winRate ?? 0, 100));
   const cardStyle = {
     ...style,
     "--agent-accent": agent.backgroundGradientColors?.[0] ?? "#ff4655",
@@ -27,17 +26,6 @@ export function AgentCard({ agent, active, onSelect, style }: Props) {
       aria-pressed={active}
       style={cardStyle}
     >
-      <span className="agent-card-role-chip">{agent.role.displayName}</span>
-
-      {agent.role.displayIcon && (
-        <img
-          src={agent.role.displayIcon}
-          alt=""
-          className="agent-card-role-icon"
-          loading="lazy"
-        />
-      )}
-
       {agent.displayIcon && (
         <div className="agent-image-frame">
           <img
@@ -53,14 +41,14 @@ export function AgentCard({ agent, active, onSelect, style }: Props) {
         <h2 className="agent-name">{agent.displayName}</h2>
         <p className="agent-role">{agent.role.displayName}</p>
         <div className="agent-card-metrics">
-          <span>{hasStats ? `${formatNumber(picks)} picks` : "Sin muestra"}</span>
-          <strong>{hasStats ? `${formatPercent(winRate)} WR` : "-"}</strong>
-        </div>
-        <div
-          className="agent-winrate-bar"
-          aria-label={hasStats ? `Win rate ${formatPercent(winRate)}` : "Sin win rate"}
-        >
-          <i style={{ width: `${hasStats ? winRateWidth : 0}%` }} />
+          <div>
+            <span>Picks</span>
+            <strong>{hasStats ? formatNumber(picks) : "-"}</strong>
+          </div>
+          <div>
+            <span>Win rate</span>
+            <strong>{hasStats ? formatPercent(winRate) : "-"}</strong>
+          </div>
         </div>
       </div>
     </button>

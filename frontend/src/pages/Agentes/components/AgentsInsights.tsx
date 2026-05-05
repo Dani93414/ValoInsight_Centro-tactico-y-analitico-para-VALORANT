@@ -7,9 +7,9 @@ type Props = {
 
 export function AgentsInsights({ topAgents }: Props) {
   return (
-    <section className="agents-top-grid" aria-label="Top 3 agentes por win rate">
+    <section className="agents-top-strip" aria-label="Top 3 agentes por win rate">
       {topAgents.map((agent) => (
-        <article key={agent.key} className="agents-top-card">
+        <article key={agent.key} className="agents-top-pill">
           <div className="agents-top-avatar">
             {agent.displayIcon && (
               <img src={agent.displayIcon} alt="" loading="lazy" />

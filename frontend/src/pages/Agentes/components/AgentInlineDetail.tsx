@@ -1,6 +1,6 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { formatNumber, formatPercent } from "../../../utils/formatters";
-import type { EnrichedAgent } from "../types";
+import type { AgentComparisonMetric, EnrichedAgent } from "../types";
 
 type Props = {
   agent: EnrichedAgent;
@@ -10,18 +10,30 @@ type Props = {
   onToggleRole: () => void;
 };
 
-const statLabels: Array<{
+type StatConfig = {
   key: string;
   label: string;
   format?: "number" | "percent";
-}> = [
-  { key: "avg_kd", label: "KD medio", format: "number" },
-  { key: "avg_acs", label: "ACS medio", format: "number" },
-  { key: "avg_adr", label: "ADR medio", format: "number" },
-  { key: "avg_headshot_pct", label: "Headshot", format: "percent" },
-  { key: "avg_fk_rate", label: "FK rate", format: "percent" },
-  { key: "avg_survival_rate", label: "Supervivencia", format: "percent" },
-  { key: "avg_clutch_win_rate", label: "Clutch WR", format: "percent" },
+};
+
+const statGroups: Array<{ title: string; items: StatConfig[] }> = [
+  {
+    title: "Impacto",
+    items: [
+      { key: "avg_kd", label: "KD medio", format: "number" },
+      { key: "avg_acs", label: "ACS medio", format: "number" },
+      { key: "avg_adr", label: "ADR medio", format: "number" },
+      { key: "avg_fk_rate", label: "FK rate", format: "percent" },
+    ],
+  },
+  {
+    title: "Precisión y supervivencia",
+    items: [
+      { key: "avg_headshot_pct", label: "Headshot", format: "percent" },
+      { key: "avg_survival_rate", label: "Supervivencia", format: "percent" },
+      { key: "avg_clutch_win_rate", label: "Clutch WR", format: "percent" },
+    ],
+  },
 ];
 
 function getStatValue(stats: EnrichedAgent["globalStats"], key: string) {
@@ -30,24 +42,21 @@ function getStatValue(stats: EnrichedAgent["globalStats"], key: string) {
   return typeof value === "number" ? value : undefined;
 }
 
-function getMetricTone(key: string, value?: number) {
-  if (value === undefined) return "neutral";
-  if (key.includes("rate")) {
-    if (value >= 52) return "positive";
-    if (value < 45) return "low";
+function getDiffTone(metric: AgentComparisonMetric) {
+  if (typeof metric.diff === "number") {
+    if (metric.diff > 0) return "positive";
+    if (metric.diff < 0) return "negative";
+    return "neutral";
   }
-  if (key === "avg_kd") {
-    if (value >= 1.05) return "positive";
-    if (value < 0.9) return "low";
-  }
-  return "neutral";
-}
 
-function getDiffTone(diffLabel: string) {
-  const normalized = diffLabel.trim();
+  const normalized = metric.diffLabel.trim();
   if (normalized.startsWith("+")) return "positive";
   if (normalized.startsWith("-")) return "negative";
   return "neutral";
+}
+
+function formatStatValue(value: number | undefined, format?: "number" | "percent") {
+  return format === "percent" ? formatPercent(value) : formatNumber(value, 2);
 }
 
 export function AgentInlineDetail({
@@ -57,10 +66,8 @@ export function AgentInlineDetail({
   onClose,
   onToggleRole,
 }: Props) {
-  const [abilitiesOpen, setAbilitiesOpen] = useState(false);
-  const [statsOpen, setStatsOpen] = useState(false);
-  const abilitiesId = useId();
-  const statsId = useId();
+  const [activeAbilityIndex, setActiveAbilityIndex] = useState(0);
+  const abilityTabsId = useId();
   const roleId = useId();
   const stats = agent.globalStats;
   const sample = stats?.picks ?? 0;
@@ -68,23 +75,30 @@ export function AgentInlineDetail({
     hasSession &&
     Boolean(agent.personalStats?.picks) &&
     agent.comparisonMetrics.length > 0;
-  const visibleStats = statLabels.filter(
-    (item) => getStatValue(stats, item.key) !== undefined,
-  );
   const quickStats = [
     { label: "Picks", value: formatNumber(stats?.picks) },
     { label: "Wins", value: formatNumber(stats?.wins) },
     { label: "Win rate", value: formatPercent(stats?.win_rate) },
     { label: "Pick rate", value: formatPercent(stats?.pick_rate) },
   ];
-  const statsPreview = showComparison
-    ? `${agent.comparisonMetrics.length} métricas comparadas`
-    : sample > 0
-      ? `${visibleStats.length} métricas avanzadas disponibles`
-      : "Sin estadísticas globales";
-  const statsTitle = showComparison
-    ? "Estadísticas globales y comparación"
-    : "Estadísticas globales";
+  const comparisonSummary = agent.comparisonMetrics.reduce(
+    (summary, metric) => {
+      const tone = getDiffTone(metric);
+      return {
+        ...summary,
+        [tone]: summary[tone] + 1,
+      };
+    },
+    { positive: 0, negative: 0, neutral: 0 },
+  );
+  const activeAbility = agent.abilities[activeAbilityIndex] ?? agent.abilities[0];
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setActiveAbilityIndex(0);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [agent.uuid, agent.id, agent.displayName]);
 
   return (
     <article className="agent-detail">
@@ -97,7 +111,7 @@ export function AgentInlineDetail({
         ×
       </button>
 
-      <div className="agent-detail-content">
+      <div className="agent-detail-hero">
         <div className="agent-detail-left">
           <div className="agent-detail-heading">
             <div>
@@ -137,131 +151,6 @@ export function AgentInlineDetail({
               </div>
             ))}
           </div>
-
-          {(agent.characterTags?.length ?? 0) > 0 && (
-            <div className="agent-tags">
-              {agent.characterTags?.map((tag) => <span key={tag}>{tag}</span>)}
-            </div>
-          )}
-
-          <section className={`agent-collapsible ${statsOpen ? "is-open" : ""}`}>
-            <button
-              type="button"
-              className="agent-collapsible-toggle"
-              onClick={() => setStatsOpen((open) => !open)}
-              aria-expanded={statsOpen}
-              aria-controls={statsId}
-            >
-              <span>{statsTitle}</span>
-              <strong>{statsPreview}</strong>
-              <i className="agent-collapsible-chevron" aria-hidden="true" />
-            </button>
-            {statsOpen && (
-              <div id={statsId} className="agent-collapsible-panel">
-                {showComparison ? (
-                  <div
-                    className="agents-comparison-table"
-                    role="table"
-                    aria-label="Comparativa global vs tu rendimiento"
-                  >
-                    <div className="agents-comparison-row agents-comparison-row--head" role="row">
-                      <span role="columnheader">Métrica</span>
-                      <span role="columnheader">Global</span>
-                      <span role="columnheader">Tú</span>
-                      <span role="columnheader">Diferencia</span>
-                    </div>
-                    {agent.comparisonMetrics.map((metric) => {
-                      const diffTone = getDiffTone(metric.diffLabel);
-                      return (
-                        <div key={metric.key} className="agents-comparison-row" role="row">
-                          <span role="cell">{metric.label}</span>
-                          <strong role="cell">{metric.globalLabel}</strong>
-                          <strong role="cell">{metric.personalLabel}</strong>
-                          <em
-                            role="cell"
-                            className={`metric-diff metric-diff-${diffTone}`}
-                          >
-                            {metric.diffLabel}
-                          </em>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : visibleStats.length > 0 && sample > 0 ? (
-                  <div className="agent-stats-grid">
-                    {visibleStats.map((item) => {
-                      const value = getStatValue(stats, item.key);
-                      const tone = getMetricTone(item.key, value);
-                      return (
-                        <div key={item.key} className={`metric-tone-${tone}`}>
-                          <span>{item.label}</span>
-                          <strong>
-                            {item.format === "percent"
-                              ? formatPercent(value)
-                              : formatNumber(value, 2)}
-                          </strong>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="agent-panel-empty">
-                    No hay estadísticas disponibles para este agente.
-                  </p>
-                )}
-              </div>
-            )}
-          </section>
-
-          <section className={`agent-collapsible ${abilitiesOpen ? "is-open" : ""}`}>
-            <button
-              type="button"
-              className="agent-collapsible-toggle"
-              onClick={() => setAbilitiesOpen((open) => !open)}
-              aria-expanded={abilitiesOpen}
-              aria-controls={abilitiesId}
-            >
-              <span>Habilidades · {agent.abilities.length}</span>
-              <strong className="ability-preview-icons">
-                {agent.abilities.slice(0, 4).map((ability) =>
-                  ability.displayIcon ? (
-                    <img
-                      key={`${ability.slot}-${ability.displayName}`}
-                      src={ability.displayIcon}
-                      alt=""
-                    />
-                  ) : null,
-                )}
-              </strong>
-              <i className="agent-collapsible-chevron" aria-hidden="true" />
-            </button>
-            {abilitiesOpen && (
-              <div id={abilitiesId} className="agent-collapsible-panel">
-                <div className="abilities-list">
-                  {agent.abilities.map((ability) => (
-                    <div
-                      key={`${ability.slot}-${ability.displayName}`}
-                      className="ability-card"
-                    >
-                      <div className={`ability-header ${ability.displayIcon ? "" : "ability-header--no-icon"}`}>
-                        {ability.displayIcon && (
-                          <img
-                            src={ability.displayIcon}
-                            alt={ability.displayName}
-                            className="ability-icon"
-                          />
-                        )}
-                        <span className="ability-slot">{ability.slot}</span>
-                        <h4 className="ability-name">{ability.displayName}</h4>
-                      </div>
-
-                      <p className="ability-description">{ability.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
         </div>
 
         <div className="agent-detail-right">
@@ -278,6 +167,147 @@ export function AgentInlineDetail({
           )}
         </div>
       </div>
+
+      <section className="agent-detail-section" aria-labelledby="agent-performance-title">
+        <div className="agent-detail-section-heading">
+          <span className="agents-section-eyebrow">Rendimiento</span>
+          <h3 id="agent-performance-title">Global vs personal</h3>
+        </div>
+
+        {showComparison ? (
+          <>
+            <div className="agent-comparison-summary" aria-label="Resumen de comparación">
+              <span className="metric-diff metric-diff-positive">
+                {comparisonSummary.positive} por encima
+              </span>
+              <span className="metric-diff metric-diff-negative">
+                {comparisonSummary.negative} por debajo
+              </span>
+              <span className="metric-diff metric-diff-neutral">
+                {comparisonSummary.neutral} igualadas
+              </span>
+            </div>
+
+            <div
+              className="agents-comparison-table"
+              role="table"
+              aria-label="Comparativa global vs tu rendimiento"
+            >
+              <div className="agents-comparison-row agents-comparison-row--head" role="row">
+                <span role="columnheader">Métrica</span>
+                <span role="columnheader">Global</span>
+                <span role="columnheader">Tú</span>
+                <span role="columnheader">Diferencia</span>
+              </div>
+              {agent.comparisonMetrics.map((metric) => {
+                const diffTone = getDiffTone(metric);
+                return (
+                  <div key={metric.key} className="agents-comparison-row" role="row">
+                    <span role="cell">{metric.label}</span>
+                    <strong role="cell">{metric.globalLabel}</strong>
+                    <strong role="cell">{metric.personalLabel}</strong>
+                    <em
+                      role="cell"
+                      className={`metric-diff metric-diff-${diffTone}`}
+                    >
+                      {metric.diffLabel}
+                    </em>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : sample > 0 ? (
+          <div className="agent-stat-groups">
+            {statGroups.map((group) => {
+              const visibleItems = group.items.filter(
+                (item) => getStatValue(stats, item.key) !== undefined,
+              );
+              if (visibleItems.length === 0) return null;
+
+              return (
+                <section key={group.title} className="agent-stat-group">
+                  <h4>{group.title}</h4>
+                  <div className="agent-stats-grid">
+                    {visibleItems.map((item) => {
+                      const value = getStatValue(stats, item.key);
+                      return (
+                        <div key={item.key}>
+                          <span>{item.label}</span>
+                          <strong>{formatStatValue(value, item.format)}</strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="agent-panel-empty">
+            No hay estadísticas disponibles para este agente.
+          </p>
+        )}
+      </section>
+
+      <section className="agent-detail-section" aria-labelledby="agent-abilities-title">
+        <div className="agent-detail-section-heading">
+          <span className="agents-section-eyebrow">Kit</span>
+          <h3 id="agent-abilities-title">Habilidades</h3>
+        </div>
+
+        <div className="ability-tabs" role="tablist" aria-label="Habilidades del agente">
+          {agent.abilities.map((ability, index) => {
+            const tabId = `${abilityTabsId}-tab-${index}`;
+            const panelId = `${abilityTabsId}-panel-${index}`;
+            const selected = activeAbilityIndex === index;
+
+            return (
+              <button
+                key={`${ability.slot}-${ability.displayName}`}
+                id={tabId}
+                type="button"
+                className={`ability-tab ${selected ? "active" : ""}`}
+                role="tab"
+                aria-selected={selected}
+                aria-controls={panelId}
+                onClick={() => setActiveAbilityIndex(index)}
+              >
+                {ability.displayIcon ? (
+                  <img src={ability.displayIcon} alt="" />
+                ) : (
+                  <strong>{ability.slot.charAt(0) || ability.displayName.charAt(0)}</strong>
+                )}
+                <span>{ability.displayName}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {activeAbility && (
+          <div
+            id={`${abilityTabsId}-panel-${activeAbilityIndex}`}
+            className="ability-tab-panel"
+            role="tabpanel"
+            aria-labelledby={`${abilityTabsId}-tab-${activeAbilityIndex}`}
+          >
+            <div className="ability-tab-panel-icon">
+              {activeAbility.displayIcon ? (
+                <img src={activeAbility.displayIcon} alt="" />
+              ) : (
+                <strong>
+                  {activeAbility.slot.charAt(0) || activeAbility.displayName.charAt(0)}
+                </strong>
+              )}
+            </div>
+            <div>
+              <span className="ability-slot">{activeAbility.slot}</span>
+              <h4 className="ability-name">{activeAbility.displayName}</h4>
+              <p className="ability-description">{activeAbility.description}</p>
+            </div>
+          </div>
+        )}
+      </section>
     </article>
   );
 }
