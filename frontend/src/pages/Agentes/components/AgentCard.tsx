@@ -20,10 +20,6 @@ export function AgentCard({ agent, active, onSelect }: Props) {
       onClick={() => onSelect(agent)}
       aria-pressed={active}
     >
-      <span className={`agent-stat-badge ${hasStats ? "is-ready" : "is-muted"}`}>
-        {hasStats ? "Con stats" : "Sin stats"}
-      </span>
-
       {agent.role.displayIcon && (
         <img
           src={agent.role.displayIcon}
@@ -49,7 +45,7 @@ export function AgentCard({ agent, active, onSelect }: Props) {
         <p className="agent-role">{agent.role.displayName}</p>
         <div className="agent-card-metrics">
           <span>{hasStats ? `${formatNumber(picks)} picks` : "Sin muestra"}</span>
-          <strong>{hasStats ? formatPercent(winRate) : "-"}</strong>
+          <strong>{hasStats ? `${formatPercent(winRate)} WR` : "-"}</strong>
         </div>
         <div
           className="agent-winrate-bar"

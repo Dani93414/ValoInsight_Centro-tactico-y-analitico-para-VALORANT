@@ -25,7 +25,7 @@ export function AgentGrid({
       <div className="agents-empty-state">
         <h2>No se encontraron agentes</h2>
         <p>
-          No hay agentes que encajen con la busqueda y filtros seleccionados.
+          No hay agentes que encajen con la búsqueda y filtros seleccionados.
         </p>
         {activeFilterLabels.length > 0 && (
           <div className="agents-empty-filters">

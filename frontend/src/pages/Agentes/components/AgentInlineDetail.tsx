@@ -1,13 +1,10 @@
 import { useId, useState } from "react";
-import {
-  formatNumber,
-  formatPercent,
-  getSampleReliabilityLabel,
-} from "../../../utils/formatters";
+import { formatNumber, formatPercent } from "../../../utils/formatters";
 import type { EnrichedAgent } from "../types";
 
 type Props = {
   agent: EnrichedAgent;
+  hasSession: boolean;
   isRoleOpen: boolean;
   onClose: () => void;
   onToggleRole: () => void;
@@ -18,10 +15,6 @@ const statLabels: Array<{
   label: string;
   format?: "number" | "percent";
 }> = [
-  { key: "picks", label: "Picks globales", format: "number" },
-  { key: "wins", label: "Wins", format: "number" },
-  { key: "win_rate", label: "Win rate", format: "percent" },
-  { key: "pick_rate", label: "Pick rate", format: "percent" },
   { key: "avg_kd", label: "KD medio", format: "number" },
   { key: "avg_acs", label: "ACS medio", format: "number" },
   { key: "avg_adr", label: "ADR medio", format: "number" },
@@ -39,7 +32,7 @@ function getStatValue(stats: EnrichedAgent["globalStats"], key: string) {
 
 function getMetricTone(key: string, value?: number) {
   if (value === undefined) return "neutral";
-  if (key === "win_rate" || key === "pick_rate" || key.includes("rate")) {
+  if (key.includes("rate")) {
     if (value >= 52) return "positive";
     if (value < 45) return "low";
   }
@@ -52,6 +45,7 @@ function getMetricTone(key: string, value?: number) {
 
 export function AgentInlineDetail({
   agent,
+  hasSession,
   isRoleOpen,
   onClose,
   onToggleRole,
@@ -62,8 +56,9 @@ export function AgentInlineDetail({
   const statsId = useId();
   const roleId = useId();
   const stats = agent.globalStats;
+  const personalStats = agent.personalStats;
   const sample = stats?.picks ?? 0;
-  const reliability = getSampleReliabilityLabel(sample);
+  const showComparison = hasSession && Boolean(personalStats?.picks);
   const visibleStats = statLabels.filter(
     (item) => getStatValue(stats, item.key) !== undefined,
   );
@@ -75,10 +70,11 @@ export function AgentInlineDetail({
   ];
   const statsPreview =
     sample > 0
-      ? `${formatNumber(stats?.picks)} picks · ${formatPercent(stats?.win_rate)} WR · ${reliability}`
-      : "Sin estadisticas globales";
-  const winRateWidth = Math.max(0, Math.min(stats?.win_rate ?? 0, 100));
-  const pickRateWidth = Math.max(0, Math.min(stats?.pick_rate ?? 0, 100));
+      ? `${visibleStats.length} métricas avanzadas disponibles`
+      : "Sin estadísticas globales";
+  const statsTitle = showComparison
+    ? "Estadísticas globales y comparación"
+    : "Estadísticas globales";
 
   return (
     <article className="agent-detail">
@@ -95,10 +91,9 @@ export function AgentInlineDetail({
         <div className="agent-detail-left">
           <div className="agent-detail-heading">
             <div>
-              <span className="agents-section-eyebrow">Ficha tactica</span>
+              <span className="agents-section-eyebrow">Ficha táctica</span>
               <h2 className="agent-detail-name">{agent.displayName}</h2>
             </div>
-            <span className="sample-reliability-badge">{reliability}</span>
           </div>
 
           <button
@@ -133,19 +128,6 @@ export function AgentInlineDetail({
             ))}
           </div>
 
-          <div className="agent-extra-grid">
-            <div>
-              <span>Fecha de salida</span>
-              <strong>{agent.releaseDate || "-"}</strong>
-            </div>
-            <div>
-              <span>Origen</span>
-              <strong>
-                {agent.isBaseContent ? "Contenido base" : "Contenido anadido"}
-              </strong>
-            </div>
-          </div>
-
           {(agent.characterTags?.length ?? 0) > 0 && (
             <div className="agent-tags">
               {agent.characterTags?.map((tag) => <span key={tag}>{tag}</span>)}
@@ -160,55 +142,71 @@ export function AgentInlineDetail({
               aria-expanded={statsOpen}
               aria-controls={statsId}
             >
-              <span>Estadisticas</span>
+              <span>{statsTitle}</span>
               <strong>{statsPreview}</strong>
               <i className="agent-collapsible-chevron" aria-hidden="true" />
             </button>
             {statsOpen && (
               <div id={statsId} className="agent-collapsible-panel">
-                <div className="agent-stat-bars">
-                  <div>
-                    <span>Win rate</span>
-                    <strong>{formatPercent(stats?.win_rate)}</strong>
-                    <div className="agent-stat-bar" aria-hidden="true">
-                      <i style={{ width: `${sample > 0 ? winRateWidth : 0}%` }} />
-                    </div>
-                  </div>
-                  <div>
-                    <span>Pick rate</span>
-                    <strong>{formatPercent(stats?.pick_rate)}</strong>
-                    <div className="agent-stat-bar" aria-hidden="true">
-                      <i style={{ width: `${sample > 0 ? pickRateWidth : 0}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                <span className="sample-reliability-badge">{reliability}</span>
                 {visibleStats.length > 0 && sample > 0 ? (
-                  <div className="agent-stats-grid">
-                    {visibleStats.map((item) => {
-                      const value = getStatValue(stats, item.key);
-                      const tone = getMetricTone(item.key, value);
-                      return (
-                        <div key={item.key} className={`metric-tone-${tone}`}>
-                          <span>{item.label}</span>
+                  <>
+                    <div className="agent-stats-grid">
+                      {visibleStats.map((item) => {
+                        const value = getStatValue(stats, item.key);
+                        const tone = getMetricTone(item.key, value);
+                        return (
+                          <div key={item.key} className={`metric-tone-${tone}`}>
+                            <span>{item.label}</span>
+                            <strong>
+                              {item.format === "percent"
+                                ? formatPercent(value)
+                                : formatNumber(value, 2)}
+                            </strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {showComparison && personalStats && (
+                      <div className="agent-personal-comparison">
+                        <div className="agent-personal-comparison-row">
+                          <span>Uso global</span>
                           <strong>
-                            {item.format === "percent"
-                              ? formatPercent(value)
-                              : formatNumber(
-                                  value,
-                                  item.key === "picks" || item.key === "wins"
-                                    ? 0
-                                    : 2,
-                                )}
+                            {formatNumber(stats?.picks)} picks · {formatPercent(stats?.pick_rate)}
                           </strong>
+                          <div className="agent-stat-bar" aria-hidden="true">
+                            <i style={{ width: `${Math.min(stats?.pick_rate ?? 0, 100)}%` }} />
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="agent-personal-comparison-row is-personal">
+                          <span>Tu uso</span>
+                          <strong>
+                            {formatNumber(personalStats.picks)} picks · {formatPercent(personalStats.usagePct)}
+                          </strong>
+                          <div className="agent-stat-bar" aria-hidden="true">
+                            <i style={{ width: `${Math.min(personalStats.usagePct, 100)}%` }} />
+                          </div>
+                        </div>
+                        <div className="agent-personal-comparison-row">
+                          <span>WR global</span>
+                          <strong>{formatPercent(stats?.win_rate)} WR</strong>
+                          <div className="agent-stat-bar" aria-hidden="true">
+                            <i style={{ width: `${Math.min(stats?.win_rate ?? 0, 100)}%` }} />
+                          </div>
+                        </div>
+                        <div className="agent-personal-comparison-row is-personal">
+                          <span>Tu WR</span>
+                          <strong>{formatPercent(personalStats.winRate)} WR</strong>
+                          <div className="agent-stat-bar" aria-hidden="true">
+                            <i style={{ width: `${Math.min(personalStats.winRate, 100)}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <p className="agent-panel-empty">
-                    No hay estadisticas disponibles para este agente.
+                    No hay estadísticas disponibles para este agente.
                   </p>
                 )}
               </div>
@@ -245,7 +243,7 @@ export function AgentInlineDetail({
                       key={`${ability.slot}-${ability.displayName}`}
                       className="ability-card"
                     >
-                      <div className="ability-header">
+                      <div className={`ability-header ${ability.displayIcon ? "" : "ability-header--no-icon"}`}>
                         {ability.displayIcon && (
                           <img
                             src={ability.displayIcon}

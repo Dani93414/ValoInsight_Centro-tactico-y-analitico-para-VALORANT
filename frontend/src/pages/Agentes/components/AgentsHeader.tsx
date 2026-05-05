@@ -1,39 +1,13 @@
-import { formatNumber } from "../../../utils/formatters";
-import type { AgentsOverviewStats } from "../types";
+import type { CSSProperties } from "react";
+import { formatNumber, formatPercent } from "../../../utils/formatters";
+import type { RoleSummaryItem, TopAgentSummary } from "../types";
 
 type Props = {
-  overview: AgentsOverviewStats;
+  roles: RoleSummaryItem[];
+  topAgents: TopAgentSummary[];
 };
 
-export function AgentsHeader({ overview }: Props) {
-  const kpis = [
-    {
-      label: "Total agentes",
-      value: formatNumber(overview.totalAgents),
-      hint: "Plantilla disponible",
-    },
-    {
-      label: "Con stats",
-      value: formatNumber(overview.agentsWithStats),
-      hint: "Agentes con muestra global",
-    },
-    {
-      label: "Rol mas usado",
-      value: overview.mostUsedRole,
-      hint: "Por picks acumulados",
-    },
-    {
-      label: "Mejor rol WR",
-      value: overview.bestWinRateRole,
-      hint: "Con muestra suficiente",
-    },
-    {
-      label: "Picks globales",
-      value: formatNumber(overview.totalPicks),
-      hint: "Volumen total analizado",
-    },
-  ];
-
+export function AgentsHeader({ roles, topAgents }: Props) {
   return (
     <header className="agents-header">
       <div className="agents-header-copy">
@@ -44,17 +18,59 @@ export function AgentsHeader({ overview }: Props) {
           dentro de ValoInsight.
         </p>
         <div className="agents-divider" />
+        <div className="agents-top-winrate" aria-label="Top 3 agentes por win rate">
+          {topAgents.map((agent) => (
+            <div key={agent.key} className="agents-top-winrate-item">
+              <div className="agents-top-winrate-orb" title={`${agent.name} · ${formatPercent(agent.winRate)} WR`}>
+                {agent.displayIcon ? (
+                  <img src={agent.displayIcon} alt="" />
+                ) : (
+                  <span>{agent.name.slice(0, 2).toUpperCase()}</span>
+                )}
+              </div>
+              <strong>{agent.name}</strong>
+              <small>{formatPercent(agent.winRate)} WR</small>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="agents-overview-kpis" aria-label="KPIs rapidos de agentes">
-        {kpis.map((kpi) => (
-          <article key={kpi.label} className="agents-kpi-card">
-            <span>{kpi.label}</span>
-            <strong>{kpi.value}</strong>
-            <small>{kpi.hint}</small>
+      <section className="agents-role-summary agents-role-summary--header" aria-label="Resumen por rol">
+        {roles.map((role) => (
+          <article
+            key={role.displayName}
+            className="agents-role-summary-card"
+            style={
+              role.displayIcon
+                ? ({
+                    ["--role-watermark" as string]: `url("${role.displayIcon}") center / contain no-repeat`,
+                  } as CSSProperties)
+                : undefined
+            }
+          >
+            {role.displayIcon && <img src={role.displayIcon} alt="" />}
+            <div className="role-summary-content">
+              <span>{role.displayName}</span>
+              <strong>{role.agents} agentes</strong>
+              <small>
+                {formatNumber(role.picks)} picks · {formatPercent(role.usagePct)} uso
+              </small>
+              <div className="role-bar-row">
+                <span>Uso</span>
+                <div className="role-usage-bar" aria-label={`${formatNumber(role.picks)} picks, ${formatPercent(role.usagePct)} uso`}>
+                  <i style={{ width: `${Math.min(role.usagePct, 100)}%` }} />
+                </div>
+              </div>
+              <div className="role-bar-row">
+                <span>WR</span>
+                <div className="role-usage-bar role-winrate-bar" aria-label={`${formatPercent(role.winRate)} WR`}>
+                  <i style={{ width: `${Math.min(role.winRate, 100)}%` }} />
+                </div>
+              </div>
+            </div>
           </article>
         ))}
-      </div>
+      </section>
     </header>
   );
 }

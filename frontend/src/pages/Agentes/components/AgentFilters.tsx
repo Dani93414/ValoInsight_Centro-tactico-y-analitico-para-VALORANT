@@ -1,47 +1,58 @@
 import type { Role } from "../../../types/agents";
-import type { AgentFilterSummary, AgentSortKey, AgentStatsFilter } from "../types";
+import type { AgentFilterSummary, AgentSelectOption, AgentSortKey } from "../types";
 
 type Props = {
   activeRole: string | null;
+  actFilter: string;
+  actOptions: AgentSelectOption[];
+  mapFilter: string;
+  mapOptions: AgentSelectOption[];
+  rankFilter: string;
+  rankOptions: AgentSelectOption[];
+  regionOptions: AgentSelectOption[];
   roles: Role[];
   search: string;
+  selectedRegion: string;
   sortKey: AgentSortKey;
-  statsFilter: AgentStatsFilter;
   summary: AgentFilterSummary;
+  onActFilterChange: (value: string) => void;
+  onMapFilterChange: (value: string) => void;
+  onRankFilterChange: (value: string) => void;
+  onRegionChange: (value: string) => void;
   onRoleChange: (role: string | null) => void;
   onSearchChange: (value: string) => void;
   onSortChange: (value: AgentSortKey) => void;
-  onStatsFilterChange: (value: AgentStatsFilter) => void;
   onResetFilters: () => void;
 };
-
-const statsFilters: Array<{ value: AgentStatsFilter; label: string }> = [
-  { value: "all", label: "Todos" },
-  { value: "withStats", label: "Con estadísticas" },
-  { value: "withoutStats", label: "Sin estadísticas" },
-  { value: "base", label: "Base" },
-  { value: "added", label: "Añadido" },
-];
 
 const sortOptions: Array<{ value: AgentSortKey; label: string }> = [
   { value: "name", label: "Nombre" },
   { value: "picks", label: "Picks globales" },
   { value: "winRate", label: "Win rate global" },
   { value: "role", label: "Rol" },
-  { value: "releaseDate", label: "Fecha de salida" },
 ];
 
 export function AgentFilters({
   activeRole,
+  actFilter,
+  actOptions,
+  mapFilter,
+  mapOptions,
+  rankFilter,
+  rankOptions,
+  regionOptions,
   roles,
   search,
+  selectedRegion,
   sortKey,
-  statsFilter,
   summary,
+  onActFilterChange,
+  onMapFilterChange,
+  onRankFilterChange,
+  onRegionChange,
   onRoleChange,
   onSearchChange,
   onSortChange,
-  onStatsFilterChange,
   onResetFilters,
 }: Props) {
   const hasActiveFilters = summary.activeLabels.length > 0;
@@ -105,15 +116,52 @@ export function AgentFilters({
 
         <select
           className="agents-select"
-          value={statsFilter}
-          onChange={(event) =>
-            onStatsFilterChange(event.target.value as AgentStatsFilter)
-          }
-          aria-label="Filtrar por disponibilidad de estadísticas"
+          value={selectedRegion}
+          onChange={(event) => onRegionChange(event.target.value)}
+          aria-label="Seleccionar región"
         >
-          {statsFilters.map((filter) => (
-            <option key={filter.value} value={filter.value}>
-              {filter.label}
+          {regionOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              Región: {option.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="agents-select"
+          value={mapFilter}
+          onChange={(event) => onMapFilterChange(event.target.value)}
+          aria-label="Filtrar por mapa"
+        >
+          {mapOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              Mapa: {option.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="agents-select"
+          value={rankFilter}
+          onChange={(event) => onRankFilterChange(event.target.value)}
+          aria-label="Filtrar por rango"
+        >
+          {rankOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              Rango: {option.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="agents-select"
+          value={actFilter}
+          onChange={(event) => onActFilterChange(event.target.value)}
+          aria-label="Filtrar por acto"
+        >
+          {actOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              Acto: {option.label}
             </option>
           ))}
         </select>
