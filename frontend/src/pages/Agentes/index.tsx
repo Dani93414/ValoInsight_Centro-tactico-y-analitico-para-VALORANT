@@ -6,8 +6,6 @@ import { AgentFilters } from "./components/AgentFilters";
 import { AgentGrid } from "./components/AgentGrid";
 import { AgentInlineDetail } from "./components/AgentInlineDetail";
 import { AgentsHeader } from "./components/AgentsHeader";
-import { AgentsInsights } from "./components/AgentsInsights";
-import { RoleSummary } from "./components/RoleSummary";
 import { useAgentesViewModel } from "./useAgentesViewModel";
 
 export default function Agentes() {
@@ -66,23 +64,30 @@ export default function Agentes() {
         />
       )}
 
-      <AgentsHeader overview={viewModel.overviewStats} />
-      <RoleSummary roles={viewModel.roleSummary} />
+      <AgentsHeader roles={viewModel.roleSummary} topAgents={viewModel.topAgents} />
       <AgentFilters
         activeRole={viewModel.activeRole}
+        actFilter={viewModel.actFilter}
+        actOptions={viewModel.actOptions}
+        mapFilter={viewModel.mapFilter}
+        mapOptions={viewModel.mapOptions}
+        rankFilter={viewModel.rankFilter}
+        rankOptions={viewModel.rankOptions}
+        regionOptions={viewModel.regionOptions}
         summary={viewModel.filterSummary}
         roles={viewModel.roles}
         search={viewModel.search}
+        selectedRegion={viewModel.selectedRegion}
         sortKey={viewModel.sortKey}
-        statsFilter={viewModel.statsFilter}
+        onActFilterChange={viewModel.setActFilter}
+        onMapFilterChange={viewModel.setMapFilter}
+        onRankFilterChange={viewModel.setRankFilter}
+        onRegionChange={viewModel.setSelectedRegion}
         onRoleChange={viewModel.setActiveRole}
         onSearchChange={viewModel.setSearch}
         onSortChange={viewModel.setSortKey}
-        onStatsFilterChange={viewModel.setStatsFilter}
         onResetFilters={viewModel.resetFilters}
       />
-      <AgentsInsights insights={viewModel.insights} />
-
       {viewModel.selectedAgent && (
         <div ref={detailRef}>
           <AgentInlineDetail
@@ -92,6 +97,7 @@ export default function Agentes() {
               viewModel.selectedAgent.displayName
             }
             agent={viewModel.selectedAgent}
+            hasSession={viewModel.insights.hasSession}
             isRoleOpen={viewModel.isRoleOpen}
             onClose={viewModel.closeDetail}
             onToggleRole={() => viewModel.setIsRoleOpen((open) => !open)}
