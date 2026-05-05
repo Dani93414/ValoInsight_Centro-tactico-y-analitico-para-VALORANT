@@ -14,12 +14,13 @@ type Props = {
   onSortChange: (value: WeaponSortKey) => void;
   onStatsFilterChange: (value: WeaponStatsFilter) => void;
   onResetFilters: () => void;
+  onClearFilter: (key: WeaponFilterSummary["activeFilters"][number]["key"]) => void;
 };
 
 const sortOptions: Array<{ value: WeaponSortKey; label: string }> = [
   { value: "name", label: "Nombre" },
   { value: "cost", label: "Coste" },
-  { value: "category", label: "Categoria" },
+  { value: "category", label: "Categoría" },
   { value: "kills", label: "Kills globales" },
   { value: "headshot", label: "Headshot global" },
   { value: "rounds", label: "Rondas equipada" },
@@ -28,8 +29,8 @@ const sortOptions: Array<{ value: WeaponSortKey; label: string }> = [
 
 const statsOptions: Array<{ value: WeaponStatsFilter; label: string }> = [
   { value: "all", label: "Todas" },
-  { value: "withStats", label: "Con estadisticas" },
-  { value: "withoutStats", label: "Sin estadisticas" },
+  { value: "withStats", label: "Con estadísticas" },
+  { value: "withoutStats", label: "Sin estadísticas" },
   { value: "weapons", label: "Solo armas" },
   { value: "shields", label: "Solo escudos" },
 ];
@@ -48,8 +49,9 @@ export function WeaponsFilters({
   onSortChange,
   onStatsFilterChange,
   onResetFilters,
+  onClearFilter,
 }: Props) {
-  const hasActiveFilters = summary.activeLabels.length > 0;
+  const hasActiveFilters = summary.activeFilters.length > 0;
 
   return (
     <section className="weapons-filters">
@@ -84,7 +86,7 @@ export function WeaponsFilters({
           className="weapons-select"
           value={activeCategory}
           onChange={(event) => onCategoryChange(event.target.value)}
-          aria-label="Filtrar por categoria"
+          aria-label="Filtrar por categoría"
         >
           {categories.map((category) => (
             <option key={category} value={category}>
@@ -101,7 +103,7 @@ export function WeaponsFilters({
         >
           <option value="Todos">Todos los costes</option>
           <option value="Gratis">Gratis</option>
-          <option value="Economicas">Economicas</option>
+          <option value="Economicas">Económicas</option>
           <option value="Premium">Premium</option>
         </select>
 
@@ -111,7 +113,7 @@ export function WeaponsFilters({
           onChange={(event) =>
             onStatsFilterChange(event.target.value as WeaponStatsFilter)
           }
-          aria-label="Filtrar por estadisticas"
+          aria-label="Filtrar por estadísticas"
         >
           {statsOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -136,12 +138,20 @@ export function WeaponsFilters({
 
       {hasActiveFilters && (
         <div className="weapons-active-filters" aria-label="Filtros activos">
-          {summary.activeLabels.map((label) => (
-            <span key={label}>{label}</span>
+          {summary.activeFilters.map((filter) => (
+            <button
+              key={filter.key}
+              type="button"
+              className="weapons-active-filter-chip"
+              onClick={() => onClearFilter(filter.key)}
+              aria-label={`Quitar filtro ${filter.label}`}
+            >
+              <span>{filter.label}</span>
+              <strong aria-hidden="true">x</strong>
+            </button>
           ))}
         </div>
       )}
     </section>
   );
 }
-

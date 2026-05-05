@@ -63,6 +63,8 @@ body {
 .weapons-search-input:focus-visible,
 .weapons-select:focus-visible,
 .weapons-clear-filters:focus-visible,
+.weapons-active-filter-chip:focus-visible,
+.weapons-ranking-tabs button:focus-visible,
 .weapon-detail-close:focus-visible,
 .weapon-collapsible-toggle:focus-visible,
 .weapons-empty-action:focus-visible {
@@ -305,7 +307,7 @@ body {
   gap: 0.35rem;
 }
 
-.weapons-active-filters span,
+.weapons-active-filter-chip,
 .weapons-empty-filters span,
 .weapon-tags span,
 .weapon-sample-badge {
@@ -323,6 +325,28 @@ body {
   text-transform: uppercase;
 }
 
+.weapons-active-filter-chip {
+  appearance: none;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.weapons-active-filter-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 70, 85, 0.55);
+  background: rgba(255, 70, 85, 0.2);
+}
+
+.weapons-active-filter-chip strong {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
 /* Highlights / ranking */
 
 .weapons-highlights {
@@ -336,6 +360,38 @@ body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.weapons-ranking-tabs {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.28rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: rgba(15, 17, 21, 0.62);
+}
+
+.weapons-ranking-tabs button {
+  appearance: none;
+  min-height: 34px;
+  padding: 0.42rem 0.72rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.weapons-ranking-tabs button:hover,
+.weapons-ranking-tabs button.active {
+  border-color: rgba(255, 70, 85, 0.34);
+  background: rgba(255, 70, 85, 0.14);
+  color: #fff;
 }
 
 .weapons-global-item {
@@ -370,6 +426,20 @@ body {
 .weapons-global-copy strong,
 .weapons-global-copy small {
   display: block;
+}
+
+.weapons-global-copy em {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.35rem;
+  padding: 0.16rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 70, 85, 0.12);
+  color: #ffd7db;
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .weapons-global-copy strong {
@@ -719,6 +789,23 @@ body {
   margin: 0.85rem 0 0;
 }
 
+.weapon-profile-block {
+  margin-top: 0.9rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 70, 85, 0.1), transparent 38%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.weapon-profile-block p {
+  margin: 0.3rem 0 0;
+  color: var(--text-secondary);
+  font-family: var(--font-reading);
+  line-height: 1.6;
+}
+
 .weapon-detail-right {
   position: relative;
   display: flex;
@@ -827,6 +914,18 @@ body {
   gap: 0.55rem;
 }
 
+.weapon-damage-note {
+  margin: 0 0 0.25rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 70, 85, 0.24);
+  border-radius: 10px;
+  background: rgba(255, 70, 85, 0.08);
+  color: #ffd7db;
+  font-family: var(--font-reading);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
 .weapon-damage-header,
 .weapon-damage-row {
   display: grid;
@@ -873,6 +972,126 @@ body {
   font-style: normal;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+/* Personal comparison */
+
+.weapon-personal-skeleton {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.weapon-personal-skeleton span {
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.04)
+  );
+  background-size: 220% 100%;
+  animation: weaponSkeleton 1.2s ease-in-out infinite;
+}
+
+.weapon-comparison {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.weapon-comparison-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.weapon-comparison-summary p {
+  flex: 1 1 260px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-reading);
+  line-height: 1.55;
+}
+
+.weapon-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.weapon-comparison-metric {
+  padding: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.weapon-comparison-metric.tone-positive {
+  border-color: rgba(74, 222, 128, 0.28);
+}
+
+.weapon-comparison-metric.tone-improve {
+  border-color: rgba(255, 70, 85, 0.3);
+}
+
+.weapon-comparison-metric-header,
+.weapon-comparison-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weapon-comparison-metric-header strong {
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.weapon-comparison-metric-header span {
+  padding: 0.18rem 0.48rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: #eef2f8;
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tone-positive .weapon-comparison-metric-header span {
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.1);
+  color: #bbf7d0;
+}
+
+.tone-improve .weapon-comparison-metric-header span {
+  border-color: rgba(255, 70, 85, 0.34);
+  background: rgba(255, 70, 85, 0.12);
+  color: #ffd7db;
+}
+
+.weapon-comparison-values {
+  justify-content: flex-start;
+  margin-top: 0.65rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.weapon-comparison-values strong {
+  color: #fff;
+}
+
+.weapon-comparison-metric p {
+  margin: 0.65rem 0 0;
+  color: var(--text-secondary);
+  font-family: var(--font-reading);
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
 
 /* States */
@@ -1010,9 +1229,18 @@ body {
   }
 
   .weapons-filters-header,
+  .weapons-panel-header,
   .weapons-filter-tools {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .weapons-ranking-tabs {
+    width: 100%;
+  }
+
+  .weapons-ranking-tabs button {
+    flex: 1;
   }
 
   .weapons-clear-filters,
@@ -1046,6 +1274,10 @@ body {
   .weapon-damage-header span:not(:first-child),
   .weapon-damage-row strong {
     text-align: left;
+  }
+
+  .weapon-comparison-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1094,3 +1326,11 @@ body {
   }
 }
 
+@keyframes weaponSkeleton {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}

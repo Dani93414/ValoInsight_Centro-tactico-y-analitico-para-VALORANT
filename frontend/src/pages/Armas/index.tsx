@@ -36,7 +36,7 @@ export default function Armas() {
     const message =
       viewModel.error instanceof Error
         ? viewModel.error.message
-        : "No se pudo cargar la informacion del arsenal.";
+        : "No se pudo cargar la información del arsenal.";
 
     return (
       <div className="weapons-container">
@@ -78,6 +78,7 @@ export default function Armas() {
         onSortChange={viewModel.setSortKey}
         onStatsFilterChange={viewModel.setStatsFilter}
         onResetFilters={viewModel.resetFilters}
+        onClearFilter={viewModel.clearFilter}
       />
       <WeaponsHighlights insights={viewModel.insights} />
       <WeaponsGlobalRanking ranking={viewModel.ranking} />
@@ -87,6 +88,7 @@ export default function Armas() {
           <WeaponInlineDetail
             key={viewModel.selectedWeapon.uuid ?? viewModel.selectedWeapon.displayName}
             weapon={viewModel.selectedWeapon}
+            personalComparison={viewModel.personalComparison}
             onClose={() => viewModel.setSelectedWeapon(null)}
           />
         </div>
@@ -95,11 +97,10 @@ export default function Armas() {
       <WeaponGrid
         weaponsByCategory={viewModel.weaponsByCategory}
         selectedWeapon={viewModel.selectedWeapon}
-        activeFilterLabels={viewModel.filterSummary.activeLabels}
+        activeFilters={viewModel.filterSummary.activeFilters}
         onSelect={viewModel.selectWeapon}
         onResetFilters={viewModel.resetFilters}
       />
     </div>
   );
 }
-

@@ -9,14 +9,30 @@ export const STAT_LABELS: Record<string, string> = {
   runSpeedMultiplier: "Velocidad de movimiento",
   equipTimeSeconds: "Tiempo de equipamiento",
   reloadTimeSeconds: "Tiempo de recarga",
-  firstBulletAccuracy: "Precision del primer disparo",
+  firstBulletAccuracy: "Precisión del primer disparo",
   shotgunPelletCount: "Perdigones por disparo",
-  wallPenetration: "Penetracion de pared",
-  feature: "Caracteristica especial",
+  wallPenetration: "Penetración de pared",
+  feature: "Característica especial",
   fireMode: "Modo de disparo",
   altFireType: "Modo alternativo",
   zoomMultiplier: "Multiplicador de zoom",
-  burstCount: "Disparos por rafaga",
+  burstCount: "Disparos por ráfaga",
+};
+
+const VALUE_TRANSLATIONS: Record<string, string> = {
+  High: "Alta",
+  Medium: "Media",
+  Low: "Baja",
+  Automatic: "Automático",
+  SemiAutomatic: "Semiautomático",
+  Burst: "Ráfaga",
+  Shotgun: "Escopeta",
+  Sniper: "Francotirador",
+  Rifle: "Rifle",
+  SMG: "Subfusil",
+  Heavy: "Ametralladora",
+  Sidearm: "Pistola",
+  Melee: "Cuerpo a cuerpo",
 };
 
 export function normalizeWeaponCategory(category?: string | null) {
@@ -50,7 +66,7 @@ export function formatWeaponCost(value: unknown) {
   }
   const numeric = Number(value);
   if (!numeric || Number.isNaN(numeric)) return "Gratis";
-  return `${numeric} creditos`;
+  return `${numeric} créditos`;
 }
 
 export function getNumericCost(weapon: Arma) {
@@ -59,10 +75,13 @@ export function getNumericCost(weapon: Arma) {
 }
 
 export function formatWeaponValue(value: unknown): string | number {
-  if (typeof value === "string" && value.includes("::")) {
-    return value.split("::").pop() ?? value;
+  if (typeof value === "string") {
+    const cleanValue = value.includes("::")
+      ? (value.split("::").pop() ?? value)
+      : value;
+    return VALUE_TRANSLATIONS[cleanValue] ?? cleanValue;
   }
-  if (typeof value === "number" || typeof value === "string") return value;
+  if (typeof value === "number") return value;
   return "-";
 }
 
@@ -82,11 +101,11 @@ export function getWeaponProfileTags(weapon: Arma) {
 
   if (weapon.isShield || category === "Escudos") tags.add("escudo");
   if (category === "CUERPO A CUERPO") tags.add("cuerpo a cuerpo");
-  if (cost > 0 && cost <= 1600) tags.add("economica");
+  if (cost > 0 && cost <= 1600) tags.add("económica");
   if (cost > 1600) tags.add("premium");
   if ((stats?.fireRate ?? 0) >= 10) tags.add("alta cadencia");
   if ((stats?.reloadTimeSeconds ?? 99) > 0 && (stats?.reloadTimeSeconds ?? 99) <= 2.3) {
-    tags.add("recarga rapida");
+    tags.add("recarga rápida");
   }
   if ((stats?.magazineSize ?? 0) >= 50) tags.add("cargador grande");
   if ((stats?.firstBulletAccuracy ?? 99) > 0 && (stats?.firstBulletAccuracy ?? 99) <= 0.3) {
@@ -96,10 +115,38 @@ export function getWeaponProfileTags(weapon: Arma) {
     tags.add("tiene ADS");
   }
   if (String(stats?.wallPenetration ?? "").toLowerCase().includes("high")) {
-    tags.add("buena penetracion");
+    tags.add("buena penetración");
   }
 
   return Array.from(tags);
+}
+
+export function hasSufficientWeaponSample(stats?: RegionWeaponStats) {
+  return (stats?.rounds_equipped ?? 0) >= 10 || (stats?.kills ?? 0) >= 10;
+}
+
+export function buildWeaponProfileSummary(weapon: EnrichedWeapon) {
+  const tags = new Set(weapon.profileTags);
+  if (tags.has("escudo")) {
+    return "Escudo defensivo orientado a supervivencia y mitigación de daño.";
+  }
+  if (tags.has("cuerpo a cuerpo")) {
+    return "Arma cuerpo a cuerpo sin estadísticas balísticas; útil como recurso básico de movilidad y remate.";
+  }
+
+  const fragments: string[] = [];
+  if (tags.has("premium")) fragments.push("arma de inversión alta");
+  if (tags.has("económica")) fragments.push("opción adecuada para rondas económicas");
+  if (tags.has("alta cadencia")) fragments.push("buen rendimiento en duelos sostenidos");
+  if (tags.has("precisa")) fragments.push("premia disparos controlados");
+  if (tags.has("buena penetración")) fragments.push("puede castigar a través de superficies");
+  if (tags.has("tiene ADS")) fragments.push("ofrece utilidad a media y larga distancia con ADS");
+
+  if (fragments.length === 0) {
+    return "Arma versátil del arsenal; revisa sus estadísticas base y daño por distancia para contextualizar su uso.";
+  }
+
+  return `${fragments[0][0].toUpperCase()}${fragments[0].slice(1)}${fragments.length > 1 ? `, con ${fragments.slice(1).join(", ")}.` : "."}`;
 }
 
 export function buildWeaponStatsResolver(
@@ -144,7 +191,13 @@ export function sortWeapons(weapons: EnrichedWeapon[], sortKey: WeaponSortKey) {
       return (b.globalStats?.kills ?? 0) - (a.globalStats?.kills ?? 0);
     }
     if (sortKey === "headshot") {
-      return (b.globalStats?.headshot_pct ?? 0) - (a.globalStats?.headshot_pct ?? 0);
+      const bSufficient = hasSufficientWeaponSample(b.globalStats) ? 1 : 0;
+      const aSufficient = hasSufficientWeaponSample(a.globalStats) ? 1 : 0;
+      if (bSufficient !== aSufficient) return bSufficient - aSufficient;
+      return (
+        (b.globalStats?.headshot_pct ?? 0) - (a.globalStats?.headshot_pct ?? 0) ||
+        (b.globalStats?.kills ?? 0) - (a.globalStats?.kills ?? 0)
+      );
     }
     if (sortKey === "rounds") {
       return (b.globalStats?.rounds_equipped ?? 0) - (a.globalStats?.rounds_equipped ?? 0);
@@ -159,4 +212,3 @@ export function sortWeapons(weapons: EnrichedWeapon[], sortKey: WeaponSortKey) {
 export function getMaxHeadDamage(ranges?: DamageRange[] | null) {
   return Math.max(0, ...(ranges ?? []).map((range) => range.headDamage ?? 0));
 }
-
