@@ -7,7 +7,7 @@ export function WeaponsHeader({ overview }: Props) {
   const kpis = [
     ["Total armas", formatNumber(overview.totalWeapons), "Arsenal disponible"],
     ["Escudos", formatNumber(overview.totalShields), "Gear defensivo"],
-    ["Categorias", formatNumber(overview.categories), "Familias del arsenal"],
+    ["Categorías", formatNumber(overview.categories), "Familias del arsenal"],
     ["Top kills", overview.topKillsWeapon, "Mayor impacto global"],
     ["Mejor HS", overview.bestHeadshotWeapon, "Con muestra suficiente"],
     ["Kills globales", formatNumber(overview.totalKills), "Volumen analizado"],
@@ -19,11 +19,11 @@ export function WeaponsHeader({ overview }: Props) {
         <span className="weapons-eyebrow">Valorant</span>
         <h1 className="weapons-title">Armas</h1>
         <p className="weapons-subtitle">
-          Explora el arsenal, costes, dano y rendimiento global.
+          Explora el arsenal, costes, daño y rendimiento global.
         </p>
         <div className="weapons-divider" />
       </div>
-      <div className="weapons-overview-kpis" aria-label="KPIs rapidos de armas">
+      <div className="weapons-overview-kpis" aria-label="KPIs rápidos de armas">
         {kpis.map(([label, value, hint]) => (
           <article key={label} className="weapons-kpi-card">
             <span>{label}</span>
@@ -35,4 +35,3 @@ export function WeaponsHeader({ overview }: Props) {
     </header>
   );
 }
-

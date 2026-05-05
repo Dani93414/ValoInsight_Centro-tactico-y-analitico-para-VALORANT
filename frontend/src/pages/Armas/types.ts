@@ -42,7 +42,10 @@ export type WeaponInsightItem = {
 export type WeaponFilterSummary = {
   total: number;
   shown: number;
-  activeLabels: string[];
+  activeFilters: Array<{
+    key: "search" | "category" | "cost" | "stats" | "sort";
+    label: string;
+  }>;
 };
 
 export type WeaponRankingItem = {
@@ -52,5 +55,42 @@ export type WeaponRankingItem = {
   rounds: number;
   headshotPct: number;
   image?: string | null;
+  hasSufficientHeadshotSample: boolean;
 };
 
+export type PersonalWeaponStats = {
+  matchesUsed: number;
+  rounds: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  damageDealt: number;
+  headshotPct: number;
+  kd: number;
+  killsPerRound: number;
+  damagePerRound: number;
+  sampleReliability: string;
+};
+
+export type WeaponComparisonTone = "positive" | "neutral" | "improve";
+
+export type WeaponComparisonMetric = {
+  key: "kills" | "headshot" | "rounds" | "damagePerRound" | "kd" | "killsPerRound";
+  label: string;
+  globalLabel: string;
+  personalLabel: string;
+  diffLabel: string;
+  tone: WeaponComparisonTone;
+  feedback: string;
+};
+
+export type WeaponPersonalComparison = {
+  hasSession: boolean;
+  isLoading: boolean;
+  isError: boolean;
+  hasPersonalUsage: boolean;
+  hasGlobalReference: boolean;
+  sampleReliability: string;
+  summary: string;
+  metrics: WeaponComparisonMetric[];
+};

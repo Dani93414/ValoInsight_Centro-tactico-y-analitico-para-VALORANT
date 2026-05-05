@@ -8,6 +8,10 @@ export function WeaponDamageTable({ ranges }: Props) {
 
   return (
     <div className="weapon-damage-table">
+      <p className="weapon-damage-note">
+        One tap indica daño de cabeza suficiente para eliminar a un enemigo con
+        150 de vida.
+      </p>
       <div className="weapon-damage-header">
         <span>Distancia</span>
         <span>Cabeza</span>
@@ -39,4 +43,3 @@ export function WeaponDamageTable({ ranges }: Props) {
     </div>
   );
 }
-

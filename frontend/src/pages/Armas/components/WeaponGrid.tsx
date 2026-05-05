@@ -1,10 +1,10 @@
-import type { EnrichedWeapon } from "../types";
+import type { EnrichedWeapon, WeaponFilterSummary } from "../types";
 import { WeaponCard } from "./WeaponCard";
 
 type Props = {
   weaponsByCategory: Record<string, EnrichedWeapon[]>;
   selectedWeapon: EnrichedWeapon | null;
-  activeFilterLabels: string[];
+  activeFilters: WeaponFilterSummary["activeFilters"];
   onSelect: (weapon: EnrichedWeapon) => void;
   onResetFilters: () => void;
 };
@@ -16,7 +16,7 @@ function getWeaponKey(weapon: EnrichedWeapon) {
 export function WeaponGrid({
   weaponsByCategory,
   selectedWeapon,
-  activeFilterLabels,
+  activeFilters,
   onSelect,
   onResetFilters,
 }: Props) {
@@ -28,10 +28,10 @@ export function WeaponGrid({
         <span className="weapons-section-eyebrow">Sin resultados</span>
         <h2>No se encontraron armas</h2>
         <p>No hay elementos del arsenal que encajen con los filtros activos.</p>
-        {activeFilterLabels.length > 0 && (
+        {activeFilters.length > 0 && (
           <div className="weapons-empty-filters">
-            {activeFilterLabels.map((label) => (
-              <span key={label}>{label}</span>
+            {activeFilters.map((filter) => (
+              <span key={filter.key}>{filter.label}</span>
             ))}
           </div>
         )}
@@ -67,4 +67,3 @@ export function WeaponGrid({
     </>
   );
 }
-

@@ -1,18 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useArmas, useGear, useRegions } from "../../api/hooks";
-import { normalizeArrayResponse, normalizeLabel, formatNumber, formatPercent } from "../../utils/formatters";
+import { useArmas, useGear, usePlayerDashboard, useRegions } from "../../api/hooks";
+import { useAuth } from "../../context/AuthContext";
+import { normalizeArrayResponse, normalizeLabel } from "../../utils/formatters";
 import type { GearContent } from "../../types/content";
 import type { Arma } from "../../types/weapons";
 import type {
   EnrichedWeapon,
-  WeaponFilterSummary,
-  WeaponInsightItem,
-  WeaponOverviewStats,
-  WeaponRankingItem,
   WeaponSortKey,
   WeaponStatsFilter,
 } from "./types";
+import {
+  buildFilterSummary,
+  buildInsights,
+  buildOverview,
+  buildRanking,
+  gearToWeapon,
+} from "./weaponAnalytics";
+import {
+  calculatePersonalWeaponStats,
+  compareWeaponStats,
+} from "./weaponPersonalStats";
 import {
   buildWeaponStatsResolver,
   getNumericCost,
@@ -33,151 +41,8 @@ function getWeaponKey(weapon: Arma) {
   return weapon.uuid ?? weapon.displayName;
 }
 
-function gearToWeapon(item: GearContent): Arma {
-  return {
-    uuid: item.uuid,
-    displayName: item.displayName,
-    displayIcon: item.displayIcon || item.shopImage || null,
-    category: "Escudos",
-    cost: item.cost,
-    description: item.description,
-    isShield: true,
-    stats: null,
-    adsStats: null,
-    damageRanges: null,
-  };
-}
-
-function buildOverview(weapons: EnrichedWeapon[]): WeaponOverviewStats {
-  const categories = new Set(weapons.map((weapon) => weapon.normalizedCategory));
-  const totalKills = weapons.reduce(
-    (total, weapon) => total + (weapon.globalStats?.kills ?? 0),
-    0,
-  );
-  const topKillsWeapon = weapons
-    .filter((weapon) => (weapon.globalStats?.kills ?? 0) > 0)
-    .sort((a, b) => (b.globalStats?.kills ?? 0) - (a.globalStats?.kills ?? 0))[0];
-  const bestHeadshotWeapon = weapons
-    .filter((weapon) => (weapon.globalStats?.rounds_equipped ?? weapon.globalStats?.kills ?? 0) >= 10)
-    .sort((a, b) => (b.globalStats?.headshot_pct ?? 0) - (a.globalStats?.headshot_pct ?? 0))[0];
-
-  return {
-    totalWeapons: weapons.filter((weapon) => !weapon.isShield).length,
-    totalShields: weapons.filter((weapon) => weapon.isShield).length,
-    categories: categories.size,
-    topKillsWeapon: topKillsWeapon?.displayName ?? "Sin datos",
-    bestHeadshotWeapon: bestHeadshotWeapon?.displayName ?? "Sin datos",
-    totalKills,
-  };
-}
-
-function buildRanking(weapons: EnrichedWeapon[]): WeaponRankingItem[] {
-  return weapons
-    .filter((weapon) => (weapon.globalStats?.kills ?? 0) > 0)
-    .sort((a, b) => (b.globalStats?.kills ?? 0) - (a.globalStats?.kills ?? 0))
-    .slice(0, 6)
-    .map((weapon) => ({
-      id: getWeaponKey(weapon),
-      name: weapon.displayName,
-      kills: weapon.globalStats?.kills ?? 0,
-      rounds: weapon.globalStats?.rounds_equipped ?? 0,
-      headshotPct: weapon.globalStats?.headshot_pct ?? 0,
-      image: weapon.displayIcon,
-    }));
-}
-
-function buildInsights(weapons: EnrichedWeapon[]): WeaponInsightItem[] {
-  const totalKills = weapons.reduce(
-    (total, weapon) => total + (weapon.globalStats?.kills ?? 0),
-    0,
-  );
-  const mostUsed = weapons
-    .filter((weapon) => (weapon.globalStats?.kills ?? 0) > 0)
-    .sort((a, b) => (b.globalStats?.kills ?? 0) - (a.globalStats?.kills ?? 0))[0];
-  const bestHs = weapons
-    .filter((weapon) => (weapon.globalStats?.rounds_equipped ?? weapon.globalStats?.kills ?? 0) >= 10)
-    .sort((a, b) => (b.globalStats?.headshot_pct ?? 0) - (a.globalStats?.headshot_pct ?? 0))[0];
-  const mostEquipped = weapons
-    .filter((weapon) => (weapon.globalStats?.rounds_equipped ?? 0) > 0)
-    .sort((a, b) => (b.globalStats?.rounds_equipped ?? 0) - (a.globalStats?.rounds_equipped ?? 0))[0];
-  const categoryTotals = new Map<string, number>();
-  weapons.forEach((weapon) => {
-    categoryTotals.set(
-      weapon.normalizedCategory,
-      (categoryTotals.get(weapon.normalizedCategory) ?? 0) +
-        (weapon.globalStats?.kills ?? 0),
-    );
-  });
-  const dominantCategory = Array.from(categoryTotals.entries()).sort(
-    (a, b) => b[1] - a[1],
-  )[0];
-
-  return [
-    {
-      label: "Arma mas usada",
-      value: mostUsed?.displayName ?? "Sin datos suficientes",
-      hint: mostUsed ? `${formatNumber(mostUsed.globalStats?.kills)} kills globales` : "Aun no hay kills registradas.",
-    },
-    {
-      label: "Mejor HS%",
-      value: bestHs?.displayName ?? "Sin muestra suficiente",
-      hint: bestHs ? `${formatPercent(bestHs.globalStats?.headshot_pct)} HS global` : "Necesita al menos 10 rondas o kills.",
-    },
-    {
-      label: "Mas equipada",
-      value: mostEquipped?.displayName ?? "Sin datos suficientes",
-      hint: mostEquipped ? `${formatNumber(mostEquipped.globalStats?.rounds_equipped)} rondas equipada` : "Sin rondas registradas.",
-    },
-    {
-      label: "Categoria dominante",
-      value: dominantCategory && dominantCategory[1] > 0 ? dominantCategory[0] : "Sin datos suficientes",
-      hint: dominantCategory && dominantCategory[1] > 0 ? `${formatNumber(dominantCategory[1])} kills` : "Sin kills por categoria.",
-    },
-    {
-      label: "Kills totales",
-      value: formatNumber(totalKills),
-      hint: totalKills > 0 ? "Muestra global acumulada" : "Sin muestra global",
-    },
-  ];
-}
-
-function buildFilterSummary(
-  weapons: EnrichedWeapon[],
-  filteredWeapons: EnrichedWeapon[],
-  search: string,
-  category: string,
-  cost: string,
-  statsFilter: WeaponStatsFilter,
-  sortKey: WeaponSortKey,
-): WeaponFilterSummary {
-  const statsLabels: Record<WeaponStatsFilter, string> = {
-    all: "Todo el arsenal",
-    withStats: "Con estadisticas",
-    withoutStats: "Sin estadisticas",
-    weapons: "Solo armas",
-    shields: "Solo escudos",
-  };
-  const sortLabels: Record<WeaponSortKey, string> = {
-    name: "Orden por nombre",
-    cost: "Orden por coste",
-    category: "Orden por categoria",
-    kills: "Orden por kills",
-    headshot: "Orden por headshot",
-    rounds: "Orden por rondas",
-    fireRate: "Orden por cadencia",
-  };
-  const activeLabels = [
-    search.trim() ? `Busqueda: ${search.trim()}` : null,
-    category !== "Todas" ? `Categoria: ${category}` : null,
-    cost !== "Todos" ? `Coste: ${cost}` : null,
-    statsFilter !== "all" ? statsLabels[statsFilter] : null,
-    sortKey !== "name" ? sortLabels[sortKey] : null,
-  ].filter((label): label is string => Boolean(label));
-
-  return { total: weapons.length, shown: filteredWeapons.length, activeLabels };
-}
-
 export function useArmasViewModel() {
+  const auth = useAuth();
   const {
     data: rawArmas,
     isLoading: weaponsLoading,
@@ -191,6 +56,10 @@ export function useArmasViewModel() {
     error: gearErrorValue,
   } = useGear();
   const { data: regions } = useRegions();
+  const personalDashboardQuery = usePlayerDashboard(
+    auth.user?.puuid,
+    undefined,
+  );
   const location = useLocation();
   const navigate = useNavigate();
   const routeState = (location.state as RouteState) ?? null;
@@ -284,6 +153,47 @@ export function useArmasViewModel() {
     [activeCategory, activeCost, filteredWeapons, search, sortKey, statsFilter, weapons],
   );
 
+  const personalComparison = useMemo(() => {
+    if (!auth.isLoggedIn) return null;
+    if (personalDashboardQuery.isLoading) {
+      return {
+        hasSession: true,
+        isLoading: true,
+        isError: false,
+        hasPersonalUsage: false,
+        hasGlobalReference: Boolean(selectedWeapon?.globalStats),
+        sampleReliability: "Cargando",
+        summary: "Cargando tus estadísticas personales...",
+        metrics: [],
+      };
+    }
+    if (personalDashboardQuery.isError) {
+      return {
+        hasSession: true,
+        isLoading: false,
+        isError: true,
+        hasPersonalUsage: false,
+        hasGlobalReference: Boolean(selectedWeapon?.globalStats),
+        sampleReliability: "Sin datos",
+        summary: "No se pudieron cargar tus estadísticas personales.",
+        metrics: [],
+      };
+    }
+    if (!selectedWeapon) return null;
+
+    const personalStats = calculatePersonalWeaponStats(
+      personalDashboardQuery.data?.analyticsList,
+      selectedWeapon.uuid,
+    );
+    return compareWeaponStats(selectedWeapon.globalStats, personalStats);
+  }, [
+    auth.isLoggedIn,
+    personalDashboardQuery.data?.analyticsList,
+    personalDashboardQuery.isError,
+    personalDashboardQuery.isLoading,
+    selectedWeapon,
+  ]);
+
   useEffect(() => {
     const routeWeaponName = routeState?.weaponName?.trim() || null;
     if (
@@ -306,6 +216,17 @@ export function useArmasViewModel() {
     return () => cancelAnimationFrame(frame);
   }, [routeState?.weaponName, selectedWeapon, weapons]);
 
+  useEffect(() => {
+    if (!selectedWeapon) return;
+    const selectedKey = getWeaponKey(selectedWeapon);
+    const stillVisible = filteredWeapons.some(
+      (weapon) => getWeaponKey(weapon) === selectedKey,
+    );
+    if (stillVisible) return;
+    const frame = requestAnimationFrame(() => setSelectedWeapon(null));
+    return () => cancelAnimationFrame(frame);
+  }, [filteredWeapons, selectedWeapon]);
+
   const selectWeapon = (weapon: EnrichedWeapon) => {
     const active =
       selectedWeapon && getWeaponKey(selectedWeapon) === getWeaponKey(weapon);
@@ -320,6 +241,14 @@ export function useArmasViewModel() {
     setSortKey("name");
   };
 
+  const clearFilter = (key: "search" | "category" | "cost" | "stats" | "sort") => {
+    if (key === "search") setSearch("");
+    if (key === "category") setActiveCategory("Todas");
+    if (key === "cost") setActiveCost("Todos");
+    if (key === "stats") setStatsFilter("all");
+    if (key === "sort") setSortKey("name");
+  };
+
   return {
     activeCategory,
     activeCost,
@@ -332,6 +261,7 @@ export function useArmasViewModel() {
     isLoading: weaponsLoading || gearLoading,
     navigate,
     overviewStats,
+    personalComparison,
     ranking,
     returnLabel: routeState?.returnLabel ?? "Volver",
     returnTo: routeState?.returnTo ?? null,
@@ -342,6 +272,7 @@ export function useArmasViewModel() {
     weapons,
     weaponsByCategory,
     resetFilters,
+    clearFilter,
     selectWeapon,
     setActiveCategory,
     setActiveCost,
@@ -351,4 +282,3 @@ export function useArmasViewModel() {
     setStatsFilter,
   };
 }
-

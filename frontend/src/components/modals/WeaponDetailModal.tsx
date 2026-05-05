@@ -298,7 +298,7 @@ export default function WeaponDetailModal({
                   <div>
                     <h3 className="panel-title">Distribucion de impactos</h3>
                     <p className="panel-subtitle">
-                      Precision por zona de impacto con esta arma.
+                      Precisión por zona de impacto con esta arma.
                     </p>
                   </div>
                 </div>

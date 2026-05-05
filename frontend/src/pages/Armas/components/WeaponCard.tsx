@@ -21,6 +21,7 @@ export function WeaponCard({ weapon, active, onSelect }: Props) {
       className={`weapon-card ${active ? "active" : ""}`}
       onClick={() => onSelect(weapon)}
       aria-pressed={active}
+      aria-label={`${active ? "Ocultar" : "Ver"} detalles de ${weapon.displayName}`}
     >
       <span className={`weapon-stat-badge ${hasStats ? "is-ready" : "is-muted"}`}>
         {hasStats ? "Con stats" : "Sin stats"}
@@ -59,4 +60,3 @@ export function WeaponCard({ weapon, active, onSelect }: Props) {
     </button>
   );
 }
-

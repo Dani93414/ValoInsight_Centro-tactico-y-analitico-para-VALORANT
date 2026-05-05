@@ -1,11 +1,17 @@
 import { useId, useState } from "react";
 import { formatNumber, formatPercent } from "../../../utils/formatters";
-import type { EnrichedWeapon } from "../types";
-import { formatWeaponCost, formatWeaponValue, STAT_LABELS } from "../weaponUtils";
+import type { EnrichedWeapon, WeaponPersonalComparison } from "../types";
+import {
+  buildWeaponProfileSummary,
+  formatWeaponCost,
+  formatWeaponValue,
+  STAT_LABELS,
+} from "../weaponUtils";
 import { WeaponDamageTable } from "./WeaponDamageTable";
 
 type Props = {
   weapon: EnrichedWeapon;
+  personalComparison: WeaponPersonalComparison | null;
   onClose: () => void;
 };
 
@@ -22,15 +28,75 @@ function StatGrid({ entries }: { entries: Array<[string, unknown]> }) {
   );
 }
 
-export function WeaponInlineDetail({ weapon, onClose }: Props) {
+function PersonalComparisonPanel({
+  comparison,
+}: {
+  comparison: WeaponPersonalComparison;
+}) {
+  if (comparison.isLoading) {
+    return (
+      <div className="weapon-personal-skeleton" role="status">
+        <span />
+        <span />
+        <span />
+      </div>
+    );
+  }
+
+  if (comparison.isError) {
+    return <p className="weapons-panel-empty">{comparison.summary}</p>;
+  }
+
+  if (!comparison.hasPersonalUsage) {
+    return <p className="weapons-panel-empty">{comparison.summary}</p>;
+  }
+
+  return (
+    <div className="weapon-comparison">
+      <div className="weapon-comparison-summary">
+        <span className="weapon-sample-badge">{comparison.sampleReliability}</span>
+        <p>{comparison.summary}</p>
+      </div>
+      <div className="weapon-comparison-grid">
+        {comparison.metrics.map((metric) => (
+          <article
+            key={metric.key}
+            className={`weapon-comparison-metric tone-${metric.tone}`}
+          >
+            <div className="weapon-comparison-metric-header">
+              <strong>{metric.label}</strong>
+              <span>
+                {metric.tone === "positive"
+                  ? "Positiva"
+                  : metric.tone === "improve"
+                    ? "Mejorable"
+                    : "Neutral"}
+              </span>
+            </div>
+            <div className="weapon-comparison-values">
+              <span>Global: {metric.globalLabel}</span>
+              <span>Tú: {metric.personalLabel}</span>
+              <strong>{metric.diffLabel}</strong>
+            </div>
+            <p>{metric.feedback}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function WeaponInlineDetail({ weapon, personalComparison, onClose }: Props) {
   const [globalOpen, setGlobalOpen] = useState(false);
   const [baseOpen, setBaseOpen] = useState(false);
   const [adsOpen, setAdsOpen] = useState(false);
   const [damageOpen, setDamageOpen] = useState(false);
+  const [personalOpen, setPersonalOpen] = useState(false);
   const globalId = useId();
   const baseId = useId();
   const adsId = useId();
   const damageId = useId();
+  const personalId = useId();
 
   const stats = weapon.globalStats;
   const baseEntries = Object.entries(weapon.stats ?? {}).filter(([, value]) => value !== undefined && value !== null);
@@ -40,12 +106,28 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
     ["Kills", formatNumber(stats?.kills)],
     ["Rondas equipada", formatNumber(stats?.rounds_equipped)],
     ["Headshot", formatPercent(stats?.headshot_pct)],
-    ["Dano total", formatNumber(stats?.damage_dealt)],
+    ["Daño total", formatNumber(stats?.damage_dealt)],
   ];
   const globalPreview =
     (stats?.kills ?? 0) > 0 || (stats?.rounds_equipped ?? 0) > 0
       ? `${formatNumber(stats?.kills)} kills · ${formatPercent(stats?.headshot_pct)} HS · ${weapon.sampleReliability}`
-      : "Sin estadisticas globales";
+      : "Sin estadísticas globales";
+  const basePreview =
+    baseEntries.length > 0 ? `${baseEntries.length} métricas` : "Sin métricas";
+  const adsPreview =
+    adsEntries.length > 0 ? `${adsEntries.length} métricas` : "Sin ADS";
+  const hasOneTap = damageRanges.some((range) => range.headDamage >= 150);
+  const damagePreview =
+    damageRanges.length > 0
+      ? `${damageRanges.length} rangos${hasOneTap ? " · One tap disponible" : ""}`
+      : "Sin rangos";
+  const personalPreview = personalComparison
+    ? personalComparison.isLoading
+      ? "Cargando tus estadísticas..."
+      : personalComparison.hasPersonalUsage
+        ? `${personalComparison.sampleReliability} · ${personalComparison.metrics.length} métricas`
+        : personalComparison.summary
+    : "";
 
   return (
     <article className="weapon-detail">
@@ -92,6 +174,11 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
             </div>
           )}
 
+          <div className="weapon-profile-block">
+            <span className="weapons-section-eyebrow">Perfil del arma</span>
+            <p>{buildWeaponProfileSummary(weapon)}</p>
+          </div>
+
           <section className={`weapon-collapsible ${globalOpen ? "is-open" : ""}`}>
             <button
               type="button"
@@ -100,7 +187,7 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
               aria-expanded={globalOpen}
               aria-controls={globalId}
             >
-              <span>Estadisticas globales</span>
+              <span>Estadísticas globales</span>
               <strong>{globalPreview}</strong>
               <i aria-hidden="true" />
             </button>
@@ -126,8 +213,8 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
               aria-expanded={baseOpen}
               aria-controls={baseId}
             >
-              <span>Estadisticas base</span>
-              <strong>{baseEntries.length} metricas</strong>
+              <span>Estadísticas base</span>
+              <strong>{basePreview}</strong>
               <i aria-hidden="true" />
             </button>
             {baseOpen && (
@@ -135,7 +222,7 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
                 {baseEntries.length > 0 ? (
                   <StatGrid entries={baseEntries} />
                 ) : (
-                  <p className="weapons-panel-empty">Sin estadisticas base.</p>
+                  <p className="weapons-panel-empty">Sin estadísticas base.</p>
                 )}
               </div>
             )}
@@ -150,7 +237,7 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
               aria-controls={adsId}
             >
               <span>Apuntar con mira</span>
-              <strong>{adsEntries.length > 0 ? `${adsEntries.length} metricas` : "Sin ADS"}</strong>
+              <strong>{adsPreview}</strong>
               <i aria-hidden="true" />
             </button>
             {adsOpen && (
@@ -172,8 +259,8 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
               aria-expanded={damageOpen}
               aria-controls={damageId}
             >
-              <span>Dano por distancia</span>
-              <strong>{damageRanges.length} rangos</strong>
+              <span>Daño por distancia</span>
+              <strong>{damagePreview}</strong>
               <i aria-hidden="true" />
             </button>
             {damageOpen && (
@@ -181,11 +268,32 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
                 {damageRanges.length > 0 ? (
                   <WeaponDamageTable ranges={damageRanges} />
                 ) : (
-                  <p className="weapons-panel-empty">Sin rangos de dano disponibles.</p>
+                  <p className="weapons-panel-empty">Sin rangos de daño disponibles.</p>
                 )}
               </div>
             )}
           </section>
+
+          {personalComparison && (
+            <section className={`weapon-collapsible ${personalOpen ? "is-open" : ""}`}>
+              <button
+                type="button"
+                className="weapon-collapsible-toggle"
+                onClick={() => setPersonalOpen((open) => !open)}
+                aria-expanded={personalOpen}
+                aria-controls={personalId}
+              >
+                <span>Tus estadísticas vs global</span>
+                <strong>{personalPreview}</strong>
+                <i aria-hidden="true" />
+              </button>
+              {personalOpen && (
+                <div id={personalId} className="weapon-collapsible-panel">
+                  <PersonalComparisonPanel comparison={personalComparison} />
+                </div>
+              )}
+            </section>
+          )}
         </div>
 
         <div className="weapon-detail-right">
@@ -201,4 +309,3 @@ export function WeaponInlineDetail({ weapon, onClose }: Props) {
     </article>
   );
 }
-
