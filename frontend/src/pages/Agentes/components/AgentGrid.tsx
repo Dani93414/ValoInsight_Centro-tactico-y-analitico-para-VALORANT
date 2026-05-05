@@ -1,5 +1,6 @@
 import type { EnrichedAgent } from "../types";
 import { AgentCard } from "./AgentCard";
+import type { CSSProperties } from "react";
 
 type Props = {
   agents: EnrichedAgent[];
@@ -23,10 +24,8 @@ export function AgentGrid({
   if (agents.length === 0) {
     return (
       <div className="agents-empty-state">
-        <h2>No se encontraron agentes</h2>
-        <p>
-          No hay agentes que encajen con la búsqueda y filtros seleccionados.
-        </p>
+        <h2>No hay agentes en esta composición</h2>
+        <p>Prueba a limpiar filtros o cambiar mapa, rango o región.</p>
         {activeFilterLabels.length > 0 && (
           <div className="agents-empty-filters">
             {activeFilterLabels.map((label) => (
@@ -43,7 +42,7 @@ export function AgentGrid({
 
   return (
     <div className="agents-grid">
-      {agents.map((agent) => {
+      {agents.map((agent, index) => {
         const active = getAgentKey(selectedAgent ?? agent) === getAgentKey(agent) && Boolean(selectedAgent);
         return (
           <AgentCard
@@ -51,6 +50,7 @@ export function AgentGrid({
             agent={agent}
             active={active}
             onSelect={onSelect}
+            style={{ "--delay": `${Math.min(index * 38, 420)}ms` } as CSSProperties}
           />
         );
       })}

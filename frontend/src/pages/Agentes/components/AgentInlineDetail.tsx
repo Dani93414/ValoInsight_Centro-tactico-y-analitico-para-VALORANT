@@ -43,6 +43,13 @@ function getMetricTone(key: string, value?: number) {
   return "neutral";
 }
 
+function getDiffTone(diffLabel: string) {
+  const normalized = diffLabel.trim();
+  if (normalized.startsWith("+")) return "positive";
+  if (normalized.startsWith("-")) return "negative";
+  return "neutral";
+}
+
 export function AgentInlineDetail({
   agent,
   hasSession,
@@ -87,7 +94,7 @@ export function AgentInlineDetail({
         onClick={onClose}
         aria-label="Cerrar detalle"
       >
-        x
+        ×
       </button>
 
       <div className="agent-detail-content">
@@ -163,14 +170,22 @@ export function AgentInlineDetail({
                       <span role="columnheader">Tú</span>
                       <span role="columnheader">Diferencia</span>
                     </div>
-                    {agent.comparisonMetrics.map((metric) => (
-                      <div key={metric.key} className="agents-comparison-row" role="row">
-                        <span role="cell">{metric.label}</span>
-                        <strong role="cell">{metric.globalLabel}</strong>
-                        <strong role="cell">{metric.personalLabel}</strong>
-                        <em role="cell">{metric.diffLabel}</em>
-                      </div>
-                    ))}
+                    {agent.comparisonMetrics.map((metric) => {
+                      const diffTone = getDiffTone(metric.diffLabel);
+                      return (
+                        <div key={metric.key} className="agents-comparison-row" role="row">
+                          <span role="cell">{metric.label}</span>
+                          <strong role="cell">{metric.globalLabel}</strong>
+                          <strong role="cell">{metric.personalLabel}</strong>
+                          <em
+                            role="cell"
+                            className={`metric-diff metric-diff-${diffTone}`}
+                          >
+                            {metric.diffLabel}
+                          </em>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : visibleStats.length > 0 && sample > 0 ? (
                   <div className="agent-stats-grid">
