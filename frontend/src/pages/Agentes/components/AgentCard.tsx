@@ -8,6 +8,11 @@ type Props = {
 };
 
 export function AgentCard({ agent, active, onSelect }: Props) {
+  const picks = agent.globalStats?.picks ?? 0;
+  const winRate = agent.globalStats?.win_rate;
+  const hasStats = picks > 0;
+  const winRateWidth = Math.max(0, Math.min(winRate ?? 0, 100));
+
   return (
     <button
       type="button"
@@ -15,24 +20,44 @@ export function AgentCard({ agent, active, onSelect }: Props) {
       onClick={() => onSelect(agent)}
       aria-pressed={active}
     >
-      {agent.displayIcon && (
+      <span className={`agent-stat-badge ${hasStats ? "is-ready" : "is-muted"}`}>
+        {hasStats ? "Con stats" : "Sin stats"}
+      </span>
+
+      {agent.role.displayIcon && (
         <img
-          src={agent.displayIcon}
-          alt={agent.displayName}
-          className="agent-image"
+          src={agent.role.displayIcon}
+          alt=""
+          className="agent-card-role-icon"
           loading="lazy"
         />
       )}
 
-      <h2 className="agent-name">{agent.displayName}</h2>
-      <p className="agent-role">{agent.role.displayName}</p>
-      {(agent.globalStats?.picks ?? 0) > 0 ? (
-        <p className="agent-global-line">
-          {formatNumber(agent.globalStats?.picks)} picks ·{" "}
-          {formatPercent(agent.globalStats?.win_rate)}
-        </p>
-      ) : null}
+      {agent.displayIcon && (
+        <div className="agent-image-frame">
+          <img
+            src={agent.displayIcon}
+            alt={agent.displayName}
+            className="agent-image"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      <div className="agent-card-body">
+        <h2 className="agent-name">{agent.displayName}</h2>
+        <p className="agent-role">{agent.role.displayName}</p>
+        <div className="agent-card-metrics">
+          <span>{hasStats ? `${formatNumber(picks)} picks` : "Sin muestra"}</span>
+          <strong>{hasStats ? formatPercent(winRate) : "-"}</strong>
+        </div>
+        <div
+          className="agent-winrate-bar"
+          aria-label={hasStats ? `Win rate ${formatPercent(winRate)}` : "Sin win rate"}
+        >
+          <i style={{ width: `${hasStats ? winRateWidth : 0}%` }} />
+        </div>
+      </div>
     </button>
   );
 }
-

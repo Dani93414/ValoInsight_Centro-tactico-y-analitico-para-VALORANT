@@ -1,5 +1,9 @@
 import { useId, useState } from "react";
-import { formatNumber, formatPercent, getSampleReliabilityLabel } from "../../../utils/formatters";
+import {
+  formatNumber,
+  formatPercent,
+  getSampleReliabilityLabel,
+} from "../../../utils/formatters";
 import type { EnrichedAgent } from "../types";
 
 type Props = {
@@ -9,7 +13,11 @@ type Props = {
   onToggleRole: () => void;
 };
 
-const statLabels: Array<{ key: string; label: string; format?: "number" | "percent" }> = [
+const statLabels: Array<{
+  key: string;
+  label: string;
+  format?: "number" | "percent";
+}> = [
   { key: "picks", label: "Picks globales", format: "number" },
   { key: "wins", label: "Wins", format: "number" },
   { key: "win_rate", label: "Win rate", format: "percent" },
@@ -29,6 +37,19 @@ function getStatValue(stats: EnrichedAgent["globalStats"], key: string) {
   return typeof value === "number" ? value : undefined;
 }
 
+function getMetricTone(key: string, value?: number) {
+  if (value === undefined) return "neutral";
+  if (key === "win_rate" || key === "pick_rate" || key.includes("rate")) {
+    if (value >= 52) return "positive";
+    if (value < 45) return "low";
+  }
+  if (key === "avg_kd") {
+    if (value >= 1.05) return "positive";
+    if (value < 0.9) return "low";
+  }
+  return "neutral";
+}
+
 export function AgentInlineDetail({
   agent,
   isRoleOpen,
@@ -46,21 +67,39 @@ export function AgentInlineDetail({
   const visibleStats = statLabels.filter(
     (item) => getStatValue(stats, item.key) !== undefined,
   );
+  const quickStats = [
+    { label: "Picks", value: formatNumber(stats?.picks) },
+    { label: "Wins", value: formatNumber(stats?.wins) },
+    { label: "Win rate", value: formatPercent(stats?.win_rate) },
+    { label: "Pick rate", value: formatPercent(stats?.pick_rate) },
+  ];
+  const statsPreview =
+    sample > 0
+      ? `${formatNumber(stats?.picks)} picks · ${formatPercent(stats?.win_rate)} WR · ${reliability}`
+      : "Sin estadisticas globales";
+  const winRateWidth = Math.max(0, Math.min(stats?.win_rate ?? 0, 100));
+  const pickRateWidth = Math.max(0, Math.min(stats?.pick_rate ?? 0, 100));
 
   return (
-    <div className="agent-detail">
+    <article className="agent-detail">
       <button
         type="button"
         className="agent-detail-close"
         onClick={onClose}
         aria-label="Cerrar detalle"
       >
-        ×
+        x
       </button>
 
       <div className="agent-detail-content">
         <div className="agent-detail-left">
-          <h2 className="agent-detail-name">{agent.displayName}</h2>
+          <div className="agent-detail-heading">
+            <div>
+              <span className="agents-section-eyebrow">Ficha tactica</span>
+              <h2 className="agent-detail-name">{agent.displayName}</h2>
+            </div>
+            <span className="sample-reliability-badge">{reliability}</span>
+          </div>
 
           <button
             type="button"
@@ -69,7 +108,9 @@ export function AgentInlineDetail({
             aria-expanded={isRoleOpen}
             aria-controls={roleId}
           >
-            {agent.role.displayName}
+            {agent.role.displayIcon && <img src={agent.role.displayIcon} alt="" />}
+            <span>{agent.role.displayName}</span>
+            <i aria-hidden="true" />
           </button>
 
           {isRoleOpen && (
@@ -83,6 +124,15 @@ export function AgentInlineDetail({
 
           <p className="agent-description">{agent.description}</p>
 
+          <div className="agent-quick-kpis" aria-label="KPIs del agente">
+            {quickStats.map((item) => (
+              <div key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+
           <div className="agent-extra-grid">
             <div>
               <span>Fecha de salida</span>
@@ -91,16 +141,8 @@ export function AgentInlineDetail({
             <div>
               <span>Origen</span>
               <strong>
-                {agent.isBaseContent ? "Contenido base" : "Contenido añadido"}
+                {agent.isBaseContent ? "Contenido base" : "Contenido anadido"}
               </strong>
-            </div>
-            <div>
-              <span>Picks globales</span>
-              <strong>{formatNumber(stats?.picks)}</strong>
-            </div>
-            <div>
-              <span>Win rate global</span>
-              <strong>{formatPercent(stats?.win_rate)}</strong>
             </div>
           </div>
 
@@ -110,7 +152,7 @@ export function AgentInlineDetail({
             </div>
           )}
 
-          <section className="agent-collapsible">
+          <section className={`agent-collapsible ${statsOpen ? "is-open" : ""}`}>
             <button
               type="button"
               className="agent-collapsible-toggle"
@@ -118,23 +160,47 @@ export function AgentInlineDetail({
               aria-expanded={statsOpen}
               aria-controls={statsId}
             >
-              <span>Estadísticas</span>
-              <strong>{statsOpen ? "Cerrar" : "Abrir"}</strong>
+              <span>Estadisticas</span>
+              <strong>{statsPreview}</strong>
+              <i className="agent-collapsible-chevron" aria-hidden="true" />
             </button>
             {statsOpen && (
               <div id={statsId} className="agent-collapsible-panel">
+                <div className="agent-stat-bars">
+                  <div>
+                    <span>Win rate</span>
+                    <strong>{formatPercent(stats?.win_rate)}</strong>
+                    <div className="agent-stat-bar" aria-hidden="true">
+                      <i style={{ width: `${sample > 0 ? winRateWidth : 0}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <span>Pick rate</span>
+                    <strong>{formatPercent(stats?.pick_rate)}</strong>
+                    <div className="agent-stat-bar" aria-hidden="true">
+                      <i style={{ width: `${sample > 0 ? pickRateWidth : 0}%` }} />
+                    </div>
+                  </div>
+                </div>
+
                 <span className="sample-reliability-badge">{reliability}</span>
                 {visibleStats.length > 0 && sample > 0 ? (
                   <div className="agent-stats-grid">
                     {visibleStats.map((item) => {
                       const value = getStatValue(stats, item.key);
+                      const tone = getMetricTone(item.key, value);
                       return (
-                        <div key={item.key}>
+                        <div key={item.key} className={`metric-tone-${tone}`}>
                           <span>{item.label}</span>
                           <strong>
                             {item.format === "percent"
                               ? formatPercent(value)
-                              : formatNumber(value, item.key === "picks" || item.key === "wins" ? 0 : 2)}
+                              : formatNumber(
+                                  value,
+                                  item.key === "picks" || item.key === "wins"
+                                    ? 0
+                                    : 2,
+                                )}
                           </strong>
                         </div>
                       );
@@ -142,14 +208,14 @@ export function AgentInlineDetail({
                   </div>
                 ) : (
                   <p className="agent-panel-empty">
-                    No hay estadísticas disponibles para este agente.
+                    No hay estadisticas disponibles para este agente.
                   </p>
                 )}
               </div>
             )}
           </section>
 
-          <section className="agent-collapsible">
+          <section className={`agent-collapsible ${abilitiesOpen ? "is-open" : ""}`}>
             <button
               type="button"
               className="agent-collapsible-toggle"
@@ -157,8 +223,19 @@ export function AgentInlineDetail({
               aria-expanded={abilitiesOpen}
               aria-controls={abilitiesId}
             >
-              <span>Habilidades</span>
-              <strong>{abilitiesOpen ? "Cerrar" : "Abrir"}</strong>
+              <span>Habilidades · {agent.abilities.length}</span>
+              <strong className="ability-preview-icons">
+                {agent.abilities.slice(0, 4).map((ability) =>
+                  ability.displayIcon ? (
+                    <img
+                      key={`${ability.slot}-${ability.displayName}`}
+                      src={ability.displayIcon}
+                      alt=""
+                    />
+                  ) : null,
+                )}
+              </strong>
+              <i className="agent-collapsible-chevron" aria-hidden="true" />
             </button>
             {abilitiesOpen && (
               <div id={abilitiesId} className="agent-collapsible-panel">
@@ -203,6 +280,6 @@ export function AgentInlineDetail({
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }

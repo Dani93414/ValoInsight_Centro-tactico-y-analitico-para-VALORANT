@@ -14,6 +14,26 @@ export type EnrichedAgent = Agente & {
   globalStats?: RegionAgentStats;
 };
 
+export type AgentsOverviewStats = {
+  totalAgents: number;
+  agentsWithStats: number;
+  mostUsedRole: string;
+  bestWinRateRole: string;
+  totalPicks: number;
+};
+
+export type AgentInsightItem = {
+  label: string;
+  value: string;
+  hint: string;
+};
+
+export type AgentFilterSummary = {
+  total: number;
+  shown: number;
+  activeLabels: string[];
+};
+
 export type RoleSummaryItem = Role & {
   agents: number;
   picks: number;
@@ -23,4 +43,3 @@ export type RoleSummaryItem = Role & {
   isMostUsed: boolean;
   isBestWinRate: boolean;
 };
-

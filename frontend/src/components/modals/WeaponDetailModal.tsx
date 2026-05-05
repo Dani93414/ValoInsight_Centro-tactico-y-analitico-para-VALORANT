@@ -15,13 +15,16 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   formatNumber,
   formatPercent,
-  formatDate,
 } from "../../utils/formatters";
 import {
   RECHARTS_TOOLTIP_CLAMP_VIEWBOX,
   RECHARTS_TOOLTIP_WRAPPER_STYLE,
 } from "../../utils/tooltipPositioning";
 import type { AnalyticsMatch } from "../../types/dashboard";
+import {
+  calculateWeaponStats,
+  type WeaponTimelinePoint,
+} from "./WeaponDetailModalUtils";
 import "./DetailModals.css";
 
 type Props = {
@@ -31,52 +34,6 @@ type Props = {
   analyticsList: AnalyticsMatch[];
   onClose: () => void;
 };
-
-type WeaponTimelinePoint = {
-  label: string;
-  shortLabel: string;
-  kills: number;
-  deaths: number;
-  hsPct: number;
-  won: boolean;
-};
-
-type WeaponShotDatum = {
-  label: string;
-  value: number;
-  color: string;
-};
-
-function toNumber(value: unknown): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
-function getWeaponEntry(
-  match: AnalyticsMatch,
-  weaponId: string,
-): Record<string, unknown> | null {
-  const rows = match.overview?.weapon_stats;
-  if (!Array.isArray(rows)) return null;
-
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    const item = row as Record<string, unknown>;
-    const key = String(item.weapon_id ?? item.key ?? "").trim();
-    if (key && key === weaponId) return item;
-  }
-
-  return null;
-}
-
-function pct(numerator: number, denominator: number): number {
-  if (denominator <= 0) return 0;
-  return (numerator * 100) / denominator;
-}
 
 export default function WeaponDetailModal({
   weaponId,
@@ -97,95 +54,10 @@ export default function WeaponDetailModal({
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  const stats = useMemo(() => {
-    let matchesUsed = 0;
-    let wins = 0;
-    let rounds = 0;
-    let kills = 0;
-    let deaths = 0;
-    let assists = 0;
-    let damageDealt = 0;
-    let headshots = 0;
-    let bodyshots = 0;
-    let legshots = 0;
-
-    const timeline: Array<WeaponTimelinePoint & { timestamp: number }> = [];
-
-    for (const match of analyticsList) {
-      const weaponEntry = getWeaponEntry(match, weaponId);
-      if (!weaponEntry) continue;
-
-      const roundsUsed = toNumber(weaponEntry.rounds);
-      const killsUsed = toNumber(weaponEntry.kills);
-      const deathsUsed = toNumber(weaponEntry.deaths);
-      const assistsUsed = toNumber(weaponEntry.assists);
-
-      const hasUsage =
-        roundsUsed > 0 || killsUsed > 0 || deathsUsed > 0 || assistsUsed > 0;
-      if (!hasUsage) continue;
-
-      const headshotsUsed = toNumber(weaponEntry.headshots);
-      const bodyshotsUsed = toNumber(weaponEntry.bodyshots);
-      const legshotsUsed = toNumber(weaponEntry.legshots);
-      const totalShots = headshotsUsed + bodyshotsUsed + legshotsUsed;
-
-      matchesUsed += 1;
-      wins += match.won_match ? 1 : 0;
-      rounds += roundsUsed;
-      kills += killsUsed;
-      deaths += deathsUsed;
-      assists += assistsUsed;
-      damageDealt += toNumber(weaponEntry.damage_dealt);
-      headshots += headshotsUsed;
-      bodyshots += bodyshotsUsed;
-      legshots += legshotsUsed;
-
-      const timestamp = toNumber(match.game_start_millis);
-      timeline.push({
-        timestamp,
-        label: formatDate(timestamp),
-        shortLabel: "",
-        kills: killsUsed,
-        deaths: deathsUsed,
-        hsPct: pct(headshotsUsed, totalShots),
-        won: Boolean(match.won_match),
-      });
-    }
-
-    const recentTimeline = timeline
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 8)
-      .reverse()
-      .map((point, index) => ({
-        ...point,
-        shortLabel: `P${index + 1}`,
-      }));
-
-    const totalShots = headshots + bodyshots + legshots;
-    const shotData: WeaponShotDatum[] = [
-      { label: "Cabeza", value: headshots, color: "#ff4655" },
-      { label: "Cuerpo", value: bodyshots, color: "#ff9d4d" },
-      { label: "Piernas", value: legshots, color: "#64a0ff" },
-    ];
-
-    return {
-      matchesUsed,
-      wins,
-      rounds,
-      kills,
-      deaths,
-      assists,
-      damageDealt,
-      headshotPct: pct(headshots, totalShots),
-      kd: kills / Math.max(deaths, 1),
-      kda: (kills + assists) / Math.max(deaths, 1),
-      killsPerRound: kills / Math.max(rounds, 1),
-      damagePerRound: damageDealt / Math.max(rounds, 1),
-      winRate: pct(wins, matchesUsed),
-      shotData,
-      recentTimeline,
-    };
-  }, [analyticsList, weaponId]);
+  const stats = useMemo(
+    () => calculateWeaponStats(analyticsList, weaponId),
+    [analyticsList, weaponId],
+  );
 
   const timelineHasData = stats.recentTimeline.length > 0;
   const shotHasData = stats.shotData.some((item) => item.value > 0);
@@ -224,6 +96,7 @@ export default function WeaponDetailModal({
               <p className="stats-subtitle">
                 Rendimiento agregado con los filtros actuales.
               </p>
+              <span className="modal-sample-badge">{stats.sampleReliability}</span>
             </div>
           </div>
 
@@ -246,7 +119,13 @@ export default function WeaponDetailModal({
         </div>
 
         {stats.matchesUsed === 0 ? (
-          <div className="empty-chart">Sin uso registrado para esta arma.</div>
+          <div className="empty-chart weapon-modal-empty">
+            <strong>Sin uso registrado</strong>
+            <span>
+              No hay rondas, kills ni impactos para esta arma con los filtros
+              actuales.
+            </span>
+          </div>
         ) : (
           <>
             <div className="stats-kpis modal-kpis">

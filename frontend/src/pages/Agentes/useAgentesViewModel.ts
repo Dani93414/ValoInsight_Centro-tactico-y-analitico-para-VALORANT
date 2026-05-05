@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAgentes, useRegions } from "../../api/hooks";
-import { normalizeArrayResponse, normalizeLabel, safeDivide } from "../../utils/formatters";
+import {
+  formatNumber,
+  formatPercent,
+  getSampleReliabilityLabel,
+  normalizeArrayResponse,
+  normalizeLabel,
+  safeDivide,
+} from "../../utils/formatters";
 import type { Agente, Role } from "../../types/agents";
 import type { RegionAgentStats } from "../../types/globalStats";
 import type {
   AgentSortKey,
+  AgentFilterSummary,
+  AgentInsightItem,
+  AgentsOverviewStats,
   AgentStatsFilter,
   EnrichedAgent,
   RoleSummaryItem,
@@ -100,7 +110,7 @@ function buildRoleSummary(agents: EnrichedAgent[], roles: Role[]): RoleSummaryIt
     null,
   );
   const bestWinRate = summary
-    .filter((role) => role.picks > 0)
+    .filter((role) => role.picks >= 4)
     .reduce<RoleSummaryItem | null>(
       (best, role) => (!best || role.winRate > best.winRate ? role : best),
       null,
@@ -110,8 +120,118 @@ function buildRoleSummary(agents: EnrichedAgent[], roles: Role[]): RoleSummaryIt
     ...role,
     isMostUsed: role.displayName === mostUsed?.displayName && role.picks > 0,
     isBestWinRate:
-      role.displayName === bestWinRate?.displayName && role.picks > 0,
+      role.displayName === bestWinRate?.displayName && role.picks >= 4,
   }));
+}
+
+function buildOverviewStats(
+  agents: EnrichedAgent[],
+  roleSummary: RoleSummaryItem[],
+): AgentsOverviewStats {
+  const totalPicks = agents.reduce(
+    (total, agent) => total + (agent.globalStats?.picks ?? 0),
+    0,
+  );
+  const agentsWithStats = agents.filter(
+    (agent) => (agent.globalStats?.picks ?? 0) > 0,
+  ).length;
+  const mostUsedRole =
+    roleSummary.find((role) => role.isMostUsed)?.displayName ?? "Sin datos";
+  const bestWinRateRole =
+    roleSummary.find((role) => role.isBestWinRate)?.displayName ?? "Sin datos";
+
+  return {
+    totalAgents: agents.length,
+    agentsWithStats,
+    mostUsedRole,
+    bestWinRateRole,
+    totalPicks,
+  };
+}
+
+function buildInsights(
+  agents: EnrichedAgent[],
+  roleSummary: RoleSummaryItem[],
+): AgentInsightItem[] {
+  const totalPicks = agents.reduce(
+    (total, agent) => total + (agent.globalStats?.picks ?? 0),
+    0,
+  );
+  const mostUsedAgent = agents
+    .filter((agent) => (agent.globalStats?.picks ?? 0) > 0)
+    .sort((a, b) => (b.globalStats?.picks ?? 0) - (a.globalStats?.picks ?? 0))[0];
+  const bestWinRateAgent = agents
+    .filter((agent) => (agent.globalStats?.picks ?? 0) >= 4)
+    .sort((a, b) => {
+      const winRateDiff = (b.globalStats?.win_rate ?? 0) - (a.globalStats?.win_rate ?? 0);
+      return winRateDiff || (b.globalStats?.picks ?? 0) - (a.globalStats?.picks ?? 0);
+    })[0];
+  const dominantRole = roleSummary.find((role) => role.isMostUsed);
+
+  return [
+    {
+      label: "Agente mas usado",
+      value: mostUsedAgent?.displayName ?? "Sin datos suficientes",
+      hint: mostUsedAgent
+        ? `${formatNumber(mostUsedAgent.globalStats?.picks)} picks globales`
+        : "Aun no hay picks registrados.",
+    },
+    {
+      label: "Mejor win rate",
+      value: bestWinRateAgent?.displayName ?? "Sin muestra suficiente",
+      hint: bestWinRateAgent
+        ? `${formatPercent(bestWinRateAgent.globalStats?.win_rate)} WR · ${getSampleReliabilityLabel(bestWinRateAgent.globalStats?.picks)}`
+        : "Necesita al menos 4 picks.",
+    },
+    {
+      label: "Rol dominante",
+      value: dominantRole?.displayName ?? "Sin datos suficientes",
+      hint: dominantRole
+        ? `${formatPercent(dominantRole.usagePct)} del uso global`
+        : "Sin reparto de roles todavia.",
+    },
+    {
+      label: "Picks totales",
+      value: formatNumber(totalPicks),
+      hint: totalPicks > 0 ? "Muestra global acumulada" : "Sin muestra global",
+    },
+  ];
+}
+
+function buildFilterSummary(
+  agents: EnrichedAgent[],
+  filteredAgents: EnrichedAgent[],
+  activeRole: string | null,
+  search: string,
+  statsFilter: AgentStatsFilter,
+  sortKey: AgentSortKey,
+): AgentFilterSummary {
+  const statsFilterLabels: Record<AgentStatsFilter, string> = {
+    all: "Todos los agentes",
+    withStats: "Con estadisticas",
+    withoutStats: "Sin estadisticas",
+    base: "Contenido base",
+    added: "Contenido anadido",
+  };
+  const sortLabels: Record<AgentSortKey, string> = {
+    name: "Orden por nombre",
+    picks: "Orden por picks",
+    winRate: "Orden por win rate",
+    role: "Orden por rol",
+    releaseDate: "Orden por fecha",
+  };
+  const activeLabels = [
+    search.trim() ? `Busqueda: ${search.trim()}` : null,
+    activeRole ? `Rol: ${activeRole}` : null,
+    statsFilter !== "all" ? statsFilterLabels[statsFilter] : null,
+    sortKey !== "name" ? sortLabels[sortKey] : null,
+  ].filter((label): label is string => Boolean(label));
+
+  return {
+    total: agents.length,
+    shown: filteredAgents.length,
+    activeLabels,
+  };
 }
 
 export function useAgentesViewModel() {
@@ -155,6 +275,16 @@ export function useAgentesViewModel() {
     [agents, roles],
   );
 
+  const overviewStats = useMemo(
+    () => buildOverviewStats(agents, roleSummary),
+    [agents, roleSummary],
+  );
+
+  const insights = useMemo(
+    () => buildInsights(agents, roleSummary),
+    [agents, roleSummary],
+  );
+
   const filteredAgents = useMemo(() => {
     const normalizedSearch = normalizeLabel(search);
     const filtered = agents.filter((agent) => {
@@ -164,6 +294,26 @@ export function useAgentesViewModel() {
     });
     return sortAgents(filtered, sortKey);
   }, [activeRole, agents, search, sortKey, statsFilter]);
+
+  const filterSummary = useMemo(
+    () =>
+      buildFilterSummary(
+        agents,
+        filteredAgents,
+        activeRole,
+        search,
+        statsFilter,
+        sortKey,
+      ),
+    [activeRole, agents, filteredAgents, search, sortKey, statsFilter],
+  );
+
+  const resetFilters = () => {
+    setSearch("");
+    setActiveRole(null);
+    setStatsFilter("all");
+    setSortKey("name");
+  };
 
   useEffect(() => {
     const routeAgentName = routeState?.agentName?.trim() || null;
@@ -210,6 +360,9 @@ export function useAgentesViewModel() {
     isLoading: agentesLoading,
     isRoleOpen,
     navigate,
+    overviewStats,
+    insights,
+    filterSummary,
     returnLabel: routeState?.returnLabel ?? "Volver",
     returnTo: routeState?.returnTo ?? null,
     roleSummary,
@@ -225,6 +378,6 @@ export function useAgentesViewModel() {
     setSearch,
     setSortKey,
     setStatsFilter,
+    resetFilters,
   };
 }
-
