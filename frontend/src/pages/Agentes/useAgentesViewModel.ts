@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAgentes, usePlayerDashboard, useRegions } from "../../api/hooks";
 import { useAuth } from "../../context/AuthContext";
 import {
+  formatNumber,
+  formatPercent,
   normalizeArrayResponse,
   normalizeLabel,
   safeDivide,
@@ -12,9 +14,9 @@ import type { AnalyticsMatch } from "../../types/dashboard";
 import type { RegionAgentStats } from "../../types/globalStats";
 import type {
   AgentFilterSummary,
+  AgentComparisonMetric,
   AgentSelectOption,
   AgentSortKey,
-  AgentsInsightsModel,
   EnrichedAgent,
   PersonalAgentStats,
   RoleSummaryItem,
@@ -26,6 +28,41 @@ type RouteState = {
   returnTo?: string;
   returnLabel?: string;
 } | null;
+
+type PersonalStatAccumulator = {
+  picks: number;
+  wins: number;
+  sums: Partial<Record<PersonalAverageKey, number>>;
+  counts: Partial<Record<PersonalAverageKey, number>>;
+};
+
+type PersonalAverageKey =
+  | "avg_kd"
+  | "avg_acs"
+  | "avg_adr"
+  | "avg_headshot_pct"
+  | "avg_fk_rate"
+  | "avg_survival_rate"
+  | "avg_clutch_win_rate";
+
+type ComparisonMetricConfig = {
+  key: keyof RegionAgentStats;
+  personalKey?: keyof PersonalAgentStats;
+  label: string;
+  format: "integer" | "number" | "percent";
+};
+
+const comparisonMetricConfigs: ComparisonMetricConfig[] = [
+  { key: "win_rate", personalKey: "winRate", label: "Win rate", format: "percent" },
+  { key: "pick_rate", personalKey: "usagePct", label: "Pick rate", format: "percent" },
+  { key: "avg_kd", label: "KD medio", format: "number" },
+  { key: "avg_acs", label: "ACS medio", format: "number" },
+  { key: "avg_adr", label: "ADR medio", format: "number" },
+  { key: "avg_headshot_pct", label: "Headshot", format: "percent" },
+  { key: "avg_fk_rate", label: "FK rate", format: "percent" },
+  { key: "avg_survival_rate", label: "Supervivencia", format: "percent" },
+  { key: "avg_clutch_win_rate", label: "Clutch WR", format: "percent" },
+];
 
 function getAgentKey(agent: Pick<Agente, "uuid" | "id" | "displayName">): string {
   return agent.uuid ?? agent.id ?? agent.displayName;
@@ -105,7 +142,7 @@ function buildPersonalStatsByAgent(
   analyticsList: AnalyticsMatch[] | undefined,
   agents: Agente[],
 ): Map<string, PersonalAgentStats> {
-  const statSeeds = new Map<string, { picks: number; wins: number }>();
+  const statSeeds = new Map<string, PersonalStatAccumulator>();
   const keyByMatchValue = new Map<string, string>();
 
   agents.forEach((agent) => {
@@ -121,9 +158,27 @@ function buildPersonalStatsByAgent(
       keyByMatchValue.get(normalizeLabel(match.agent_name));
     if (!agentKey) return;
 
-    const current = statSeeds.get(agentKey) ?? { picks: 0, wins: 0 };
+    const current =
+      statSeeds.get(agentKey) ?? { picks: 0, wins: 0, sums: {}, counts: {} };
+    const overview = match.overview ?? {};
+    const averageValues: Partial<Record<PersonalAverageKey, number | undefined>> = {
+      avg_kd: overview.kd_ratio,
+      avg_acs: overview.acs,
+      avg_adr: overview.adr,
+      avg_headshot_pct: overview.headshot_pct,
+      avg_fk_rate: overview.opening_duel_win_pct,
+      avg_survival_rate: overview.survival_rate,
+      avg_clutch_win_rate: overview.clutch_win_rate,
+    };
+
     current.picks += 1;
     current.wins += match.won_match ? 1 : 0;
+    Object.entries(averageValues).forEach(([key, value]) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) return;
+      const metricKey = key as PersonalAverageKey;
+      current.sums[metricKey] = (current.sums[metricKey] ?? 0) + value;
+      current.counts[metricKey] = (current.counts[metricKey] ?? 0) + 1;
+    });
     statSeeds.set(agentKey, current);
   });
 
@@ -133,8 +188,19 @@ function buildPersonalStatsByAgent(
   );
   const result = new Map<string, PersonalAgentStats>();
   statSeeds.forEach((stats, agentKey) => {
+    const averages = Object.fromEntries(
+      (Object.keys(stats.sums) as PersonalAverageKey[])
+        .map((key) => {
+          const count = stats.counts[key] ?? 0;
+          return [key, count > 0 ? safeDivide(stats.sums[key] ?? 0, count) : undefined];
+        })
+        .filter((entry): entry is [PersonalAverageKey, number] => typeof entry[1] === "number"),
+    ) as Partial<Pick<PersonalAgentStats, PersonalAverageKey>>;
+
     result.set(agentKey, {
-      ...stats,
+      picks: stats.picks,
+      wins: stats.wins,
+      ...averages,
       usagePct: safeDivide(stats.picks * 100, totalPicks),
       winRate: safeDivide(stats.wins * 100, stats.picks),
     });
@@ -143,44 +209,74 @@ function buildPersonalStatsByAgent(
   return result;
 }
 
-function buildInsightsModel(
-  agents: EnrichedAgent[],
-  hasSession: boolean,
-  isLoadingPersonal: boolean,
-): AgentsInsightsModel {
-  const totalGlobalPicks = agents.reduce(
-    (total, agent) => total + (agent.globalStats?.picks ?? 0),
-    0,
-  );
-  const rows = [...agents]
-    .filter((agent) => (agent.globalStats?.picks ?? 0) > 0 || (agent.personalStats?.picks ?? 0) > 0)
-    .sort((a, b) => {
-      const personalDiff = (b.personalStats?.picks ?? 0) - (a.personalStats?.picks ?? 0);
-      const globalDiff = (b.globalStats?.picks ?? 0) - (a.globalStats?.picks ?? 0);
-      return hasSession && personalDiff ? personalDiff : globalDiff;
-    })
-    .slice(0, 4)
-    .map((agent) => ({
-      key: getAgentKey(agent),
-      agentName: agent.displayName,
-      roleName: agent.role.displayName,
-      globalPicks: agent.globalStats?.picks ?? 0,
-      globalUsagePct: safeDivide((agent.globalStats?.picks ?? 0) * 100, totalGlobalPicks),
-      globalWinRate: agent.globalStats?.win_rate ?? 0,
-      personalPicks: agent.personalStats?.picks,
-      personalUsagePct: agent.personalStats?.usagePct,
-      personalWinRate: agent.personalStats?.winRate,
-    }));
+function getPersonalMetricValue(
+  personalStats: PersonalAgentStats | null | undefined,
+  config: ComparisonMetricConfig,
+) {
+  if (!personalStats) return undefined;
+  const personalKey = config.personalKey ?? config.key;
+  const value = personalStats[personalKey as keyof PersonalAgentStats];
+  return typeof value === "number" ? value : undefined;
+}
 
-  return {
-    hasSession,
-    isLoadingPersonal,
-    hasPersonalData: agents.some((agent) => (agent.personalStats?.picks ?? 0) > 0),
-    rows,
-  };
+function getGlobalMetricValue(
+  globalStats: RegionAgentStats | undefined,
+  key: keyof RegionAgentStats,
+) {
+  const value = globalStats?.[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+function formatComparisonValue(
+  value: number | undefined,
+  format: ComparisonMetricConfig["format"],
+) {
+  if (value === undefined || Number.isNaN(value)) return "-";
+  if (format === "percent") return formatPercent(value);
+  if (format === "integer") return formatNumber(value, 0);
+  return formatNumber(value, 2);
+}
+
+function formatDiff(
+  globalValue: number | undefined,
+  personalValue: number | undefined,
+  format: ComparisonMetricConfig["format"],
+) {
+  if (globalValue === undefined || personalValue === undefined) return "-";
+  const diff = personalValue - globalValue;
+  const sign = diff > 0 ? "+" : "";
+  if (format === "percent") return `${sign}${formatPercent(diff)}`;
+  if (format === "integer") return `${sign}${formatNumber(diff, 0)}`;
+  return `${sign}${formatNumber(diff, 2)}`;
+}
+
+function buildComparisonMetrics(
+  globalStats: RegionAgentStats | undefined,
+  personalStats: PersonalAgentStats | null | undefined,
+): AgentComparisonMetric[] {
+  return comparisonMetricConfigs
+    .map((config) => {
+      const globalValue = getGlobalMetricValue(globalStats, config.key);
+      const personalValue = getPersonalMetricValue(personalStats, config);
+      if (globalValue === undefined && personalValue === undefined) return null;
+
+      return {
+        key: config.key,
+        label: config.label,
+        globalLabel: formatComparisonValue(globalValue, config.format),
+        personalLabel: formatComparisonValue(personalValue, config.format),
+        diffLabel: formatDiff(globalValue, personalValue, config.format),
+      };
+    })
+    .filter((metric): metric is AgentComparisonMetric => Boolean(metric));
 }
 
 function buildTopAgents(agents: EnrichedAgent[]): TopAgentSummary[] {
+  const totalPicks = agents.reduce(
+    (total, agent) => total + (agent.globalStats?.picks ?? 0),
+    0,
+  );
+
   return [...agents]
     .filter((agent) => (agent.globalStats?.picks ?? 0) > 0)
     .sort((a, b) => (b.globalStats?.win_rate ?? 0) - (a.globalStats?.win_rate ?? 0))
@@ -188,6 +284,9 @@ function buildTopAgents(agents: EnrichedAgent[]): TopAgentSummary[] {
     .map((agent) => ({
       key: getAgentKey(agent),
       name: agent.displayName,
+      roleName: agent.role.displayName,
+      picks: agent.globalStats?.picks ?? 0,
+      usagePct: safeDivide((agent.globalStats?.picks ?? 0) * 100, totalPicks),
       winRate: agent.globalStats?.win_rate ?? 0,
       displayIcon: agent.displayIcon,
     }));
@@ -297,6 +396,13 @@ export function useAgentesViewModel() {
         globalStats: resolveStats(agent),
         personalStats: personalStatsByAgent.get(getAgentKey(agent)) ?? null,
       }))
+      .map((agent) => ({
+        ...agent,
+        comparisonMetrics: buildComparisonMetrics(
+          agent.globalStats,
+          agent.personalStats,
+        ),
+      }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }, [personalDashboardQuery.data?.analyticsList, rawAgentes, resolveStats]);
 
@@ -308,16 +414,6 @@ export function useAgentesViewModel() {
   const roleSummary = useMemo(
     () => buildRoleSummary(agents, roles),
     [agents, roles],
-  );
-
-  const insights = useMemo(
-    () =>
-      buildInsightsModel(
-        agents,
-        auth.isLoggedIn,
-        personalDashboardQuery.isLoading,
-      ),
-    [agents, auth.isLoggedIn, personalDashboardQuery.isLoading],
   );
 
   const topAgents = useMemo(() => buildTopAgents(agents), [agents]);
@@ -431,7 +527,7 @@ export function useAgentesViewModel() {
     error,
     filteredAgents,
     filterSummary,
-    insights,
+    hasSession: auth.isLoggedIn,
     isError,
     isLoading: agentesLoading,
     isRoleOpen,
