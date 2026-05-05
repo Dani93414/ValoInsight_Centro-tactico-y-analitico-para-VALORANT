@@ -94,69 +94,100 @@ body {
   background: linear-gradient(to right, var(--valorant-red), transparent);
 }
 
-.agents-top-winrate {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.9rem;
+.agents-top-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
   margin-top: 1.25rem;
 }
 
-.agents-top-winrate-item {
-  display: grid;
-  justify-items: center;
-  gap: 0.22rem;
-  min-width: 78px;
-}
-
-.agents-top-winrate-orb {
-  display: grid;
-  place-items: center;
-  width: 62px;
-  height: 62px;
+.agents-top-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(255, 70, 85, 0.36);
-  border-radius: 50%;
+  padding: 0.75rem 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
   background:
-    radial-gradient(circle at center, rgba(255, 70, 85, 0.2), transparent 62%),
-    rgba(15, 17, 21, 0.86);
-  color: #ffd7db;
-  font-size: 0.82rem;
-  font-weight: 900;
+    radial-gradient(circle at top left, rgba(255, 70, 85, 0.14), transparent 44%),
+    rgba(15, 17, 21, 0.72);
+  text-align: center;
   transition:
     transform var(--transition-medium),
     border-color var(--transition-fast),
     box-shadow var(--transition-medium);
 }
 
-.agents-top-winrate-orb img {
-  width: 82%;
-  height: 82%;
-  object-fit: contain;
-  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.5));
+.agents-top-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 70, 85, 0.48);
+  box-shadow: 0 14px 26px rgba(255, 70, 85, 0.12);
 }
 
-.agents-top-winrate-item:hover .agents-top-winrate-orb {
-  transform: translateY(-4px) scale(1.08);
-  border-color: var(--valorant-red);
-  box-shadow: 0 16px 28px rgba(255, 70, 85, 0.18);
+.agents-top-avatar {
+  display: grid;
+  place-items: center;
+  width: clamp(62px, 7.5vw, 90px);
+  height: clamp(62px, 7.5vw, 90px);
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 70, 85, 0.35);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.08), transparent 55%),
+    rgba(10, 12, 16, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 70, 85, 0.08);
 }
 
-.agents-top-winrate-item strong,
-.agents-top-winrate-item small {
-  display: block;
-  max-width: 96px;
-  text-align: center;
+.agents-top-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.42));
 }
 
-.agents-top-winrate-item strong {
-  font-size: 0.76rem;
+.agents-top-title-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.agents-top-name,
+.agents-top-role,
+.agents-top-stat {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-top-name {
+  font-size: 0.9rem;
   font-weight: 900;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
-.agents-top-winrate-item small {
+.agents-top-role {
+  color: var(--valorant-red-soft);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.agents-top-stat {
   color: var(--text-secondary);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
+}
+
+.agents-top-stat--wr {
+  color: #bbf7d0;
   font-weight: 900;
 }
 
@@ -304,10 +335,10 @@ body {
 .agents-role-summary-card {
   position: relative;
   display: flex;
-  min-height: 132px;
-  gap: 0.9rem;
+  min-height: 112px;
+  gap: 0.7rem;
   overflow: hidden;
-  padding: 1rem;
+  padding: 0.85rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   background:
@@ -327,8 +358,8 @@ body {
 }
 
 .agents-role-summary-card > img {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
   object-fit: contain;
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.42));
@@ -353,27 +384,60 @@ body {
   min-width: 0;
 }
 
-.role-summary-content > span {
-  display: block;
-  color: var(--valorant-red-soft);
-  font-size: 0.72rem;
+.role-summary-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.role-summary-heading strong,
+.role-summary-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-summary-heading strong {
+  font-size: 0.98rem;
   font-weight: 900;
-  letter-spacing: 1px;
+}
+
+.role-summary-heading span {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.role-stat-line {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
+}
+
+.role-stat-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.role-stat-label-row span {
+  color: var(--text-muted);
+  font-weight: 900;
+  letter-spacing: 0.7px;
   text-transform: uppercase;
 }
 
-.role-summary-content strong {
-  display: block;
-  margin-top: 0.15rem;
-  font-size: 1.02rem;
+.role-stat-label-row strong {
   font-weight: 900;
-}
-
-.role-summary-content small {
-  display: block;
-  margin-top: 0.22rem;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .role-usage-bar,
@@ -387,7 +451,7 @@ body {
 }
 
 .role-usage-bar {
-  margin-top: 0.35rem;
+  margin-top: 0.1rem;
 }
 
 .role-winrate-bar i {
@@ -732,6 +796,59 @@ body {
 
 .agents-comparison-bar-group.is-personal .agents-comparison-bar i {
   background: linear-gradient(90deg, #6ee7b7, #4ade80);
+}
+
+.agents-comparison-table {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.agents-comparison-row {
+  display: grid;
+  grid-template-columns: minmax(118px, 1.35fr) repeat(3, minmax(72px, 0.85fr));
+  gap: 0.55rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.agents-comparison-row:first-child {
+  border-top: 0;
+}
+
+.agents-comparison-row--head {
+  background: rgba(255, 70, 85, 0.11);
+  color: #ffd7db;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.agents-comparison-row span,
+.agents-comparison-row strong,
+.agents-comparison-row em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-comparison-row strong {
+  color: var(--text-primary);
+  font-weight: 900;
+}
+
+.agents-comparison-row em {
+  color: #bbf7d0;
+  font-style: normal;
+  font-weight: 900;
 }
 
 /* =====================================================
@@ -1150,7 +1267,8 @@ body {
 
 .agent-detail-right {
   position: relative;
-  min-height: 560px;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -1166,8 +1284,8 @@ body {
   inset: 0;
   z-index: 2;
   background:
-    linear-gradient(180deg, rgba(15, 17, 21, 0.08), rgba(15, 17, 21, 0.24) 52%, rgba(15, 17, 21, 0.78)),
-    linear-gradient(90deg, rgba(15, 17, 21, 0.72), transparent 45%);
+    linear-gradient(180deg, rgba(15, 17, 21, 0.04), rgba(15, 17, 21, 0.18) 52%, rgba(15, 17, 21, 0.48)),
+    linear-gradient(90deg, rgba(15, 17, 21, 0.38), transparent 45%);
   pointer-events: none;
 }
 
@@ -1183,15 +1301,13 @@ body {
 
 .agent-fullportrait {
   position: absolute;
-  right: 50%;
-  bottom: 0;
+  inset: 0;
   z-index: 1;
-  max-height: 100%;
-  max-width: 100%;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
-  transform: translateX(50%);
+  object-position: center bottom;
+  transform: none;
   filter: drop-shadow(0 28px 44px rgba(0, 0, 0, 0.68));
   pointer-events: none;
 }
@@ -1574,6 +1690,10 @@ body {
 }
 
 @media (max-width: 1020px) {
+  .agents-top-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .agents-overview-kpis,
   .agents-insights {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1615,6 +1735,7 @@ body {
 
   .agents-overview-kpis,
   .agents-insights,
+  .agents-top-grid,
   .agents-role-summary,
   .agent-quick-kpis,
   .agent-extra-grid,
@@ -1679,6 +1800,13 @@ body {
   .agent-collapsible-chevron {
     grid-column: 2;
     grid-row: 1;
+  }
+
+  .agents-comparison-row {
+    grid-template-columns: minmax(90px, 1.2fr) repeat(3, minmax(58px, 0.8fr));
+    gap: 0.35rem;
+    padding: 0.5rem;
+    font-size: 0.7rem;
   }
 }
 

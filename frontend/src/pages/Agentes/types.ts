@@ -3,11 +3,10 @@ import type { RegionAgentStats } from "../../types/globalStats";
 
 export type AgentSortKey = "name" | "picks" | "winRate" | "role";
 
-export type AgentScopedFilter = "all" | string;
-
 export type EnrichedAgent = Agente & {
   globalStats?: RegionAgentStats;
   personalStats?: PersonalAgentStats | null;
+  comparisonMetrics: AgentComparisonMetric[];
 };
 
 export type PersonalAgentStats = {
@@ -15,6 +14,21 @@ export type PersonalAgentStats = {
   wins: number;
   usagePct: number;
   winRate: number;
+  avg_kd?: number;
+  avg_acs?: number;
+  avg_adr?: number;
+  avg_headshot_pct?: number;
+  avg_fk_rate?: number;
+  avg_survival_rate?: number;
+  avg_clutch_win_rate?: number;
+};
+
+export type AgentComparisonMetric = {
+  key: keyof RegionAgentStats;
+  label: string;
+  globalLabel: string;
+  personalLabel: string;
+  diffLabel: string;
 };
 
 export type AgentFilterSummary = {
@@ -39,25 +53,9 @@ export type RoleSummaryItem = Role & {
 export type TopAgentSummary = {
   key: string;
   name: string;
+  roleName: string;
+  picks: number;
+  usagePct: number;
   winRate: number;
   displayIcon?: string | null;
-};
-
-export type AgentComparisonInsight = {
-  key: string;
-  agentName: string;
-  roleName: string;
-  globalPicks: number;
-  globalUsagePct: number;
-  globalWinRate: number;
-  personalPicks?: number;
-  personalUsagePct?: number;
-  personalWinRate?: number;
-};
-
-export type AgentsInsightsModel = {
-  hasSession: boolean;
-  isLoadingPersonal: boolean;
-  hasPersonalData: boolean;
-  rows: AgentComparisonInsight[];
 };

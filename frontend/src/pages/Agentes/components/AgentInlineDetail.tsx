@@ -56,9 +56,11 @@ export function AgentInlineDetail({
   const statsId = useId();
   const roleId = useId();
   const stats = agent.globalStats;
-  const personalStats = agent.personalStats;
   const sample = stats?.picks ?? 0;
-  const showComparison = hasSession && Boolean(personalStats?.picks);
+  const showComparison =
+    hasSession &&
+    Boolean(agent.personalStats?.picks) &&
+    agent.comparisonMetrics.length > 0;
   const visibleStats = statLabels.filter(
     (item) => getStatValue(stats, item.key) !== undefined,
   );
@@ -68,8 +70,9 @@ export function AgentInlineDetail({
     { label: "Win rate", value: formatPercent(stats?.win_rate) },
     { label: "Pick rate", value: formatPercent(stats?.pick_rate) },
   ];
-  const statsPreview =
-    sample > 0
+  const statsPreview = showComparison
+    ? `${agent.comparisonMetrics.length} métricas comparadas`
+    : sample > 0
       ? `${visibleStats.length} métricas avanzadas disponibles`
       : "Sin estadísticas globales";
   const statsTitle = showComparison
@@ -148,62 +151,44 @@ export function AgentInlineDetail({
             </button>
             {statsOpen && (
               <div id={statsId} className="agent-collapsible-panel">
-                {visibleStats.length > 0 && sample > 0 ? (
-                  <>
-                    <div className="agent-stats-grid">
-                      {visibleStats.map((item) => {
-                        const value = getStatValue(stats, item.key);
-                        const tone = getMetricTone(item.key, value);
-                        return (
-                          <div key={item.key} className={`metric-tone-${tone}`}>
-                            <span>{item.label}</span>
-                            <strong>
-                              {item.format === "percent"
-                                ? formatPercent(value)
-                                : formatNumber(value, 2)}
-                            </strong>
-                          </div>
-                        );
-                      })}
+                {showComparison ? (
+                  <div
+                    className="agents-comparison-table"
+                    role="table"
+                    aria-label="Comparativa global vs tu rendimiento"
+                  >
+                    <div className="agents-comparison-row agents-comparison-row--head" role="row">
+                      <span role="columnheader">Métrica</span>
+                      <span role="columnheader">Global</span>
+                      <span role="columnheader">Tú</span>
+                      <span role="columnheader">Diferencia</span>
                     </div>
-
-                    {showComparison && personalStats && (
-                      <div className="agent-personal-comparison">
-                        <div className="agent-personal-comparison-row">
-                          <span>Uso global</span>
-                          <strong>
-                            {formatNumber(stats?.picks)} picks · {formatPercent(stats?.pick_rate)}
-                          </strong>
-                          <div className="agent-stat-bar" aria-hidden="true">
-                            <i style={{ width: `${Math.min(stats?.pick_rate ?? 0, 100)}%` }} />
-                          </div>
-                        </div>
-                        <div className="agent-personal-comparison-row is-personal">
-                          <span>Tu uso</span>
-                          <strong>
-                            {formatNumber(personalStats.picks)} picks · {formatPercent(personalStats.usagePct)}
-                          </strong>
-                          <div className="agent-stat-bar" aria-hidden="true">
-                            <i style={{ width: `${Math.min(personalStats.usagePct, 100)}%` }} />
-                          </div>
-                        </div>
-                        <div className="agent-personal-comparison-row">
-                          <span>WR global</span>
-                          <strong>{formatPercent(stats?.win_rate)} WR</strong>
-                          <div className="agent-stat-bar" aria-hidden="true">
-                            <i style={{ width: `${Math.min(stats?.win_rate ?? 0, 100)}%` }} />
-                          </div>
-                        </div>
-                        <div className="agent-personal-comparison-row is-personal">
-                          <span>Tu WR</span>
-                          <strong>{formatPercent(personalStats.winRate)} WR</strong>
-                          <div className="agent-stat-bar" aria-hidden="true">
-                            <i style={{ width: `${Math.min(personalStats.winRate, 100)}%` }} />
-                          </div>
-                        </div>
+                    {agent.comparisonMetrics.map((metric) => (
+                      <div key={metric.key} className="agents-comparison-row" role="row">
+                        <span role="cell">{metric.label}</span>
+                        <strong role="cell">{metric.globalLabel}</strong>
+                        <strong role="cell">{metric.personalLabel}</strong>
+                        <em role="cell">{metric.diffLabel}</em>
                       </div>
-                    )}
-                  </>
+                    ))}
+                  </div>
+                ) : visibleStats.length > 0 && sample > 0 ? (
+                  <div className="agent-stats-grid">
+                    {visibleStats.map((item) => {
+                      const value = getStatValue(stats, item.key);
+                      const tone = getMetricTone(item.key, value);
+                      return (
+                        <div key={item.key} className={`metric-tone-${tone}`}>
+                          <span>{item.label}</span>
+                          <strong>
+                            {item.format === "percent"
+                              ? formatPercent(value)
+                              : formatNumber(value, 2)}
+                          </strong>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <p className="agent-panel-empty">
                     No hay estadísticas disponibles para este agente.

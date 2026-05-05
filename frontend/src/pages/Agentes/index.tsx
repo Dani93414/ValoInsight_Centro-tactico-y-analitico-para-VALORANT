@@ -97,7 +97,7 @@ export default function Agentes() {
               viewModel.selectedAgent.displayName
             }
             agent={viewModel.selectedAgent}
-            hasSession={viewModel.insights.hasSession}
+            hasSession={viewModel.hasSession}
             isRoleOpen={viewModel.isRoleOpen}
             onClose={viewModel.closeDetail}
             onToggleRole={() => viewModel.setIsRoleOpen((open) => !open)}
