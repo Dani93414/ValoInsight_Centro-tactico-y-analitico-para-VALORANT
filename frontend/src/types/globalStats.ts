@@ -12,11 +12,17 @@ export type RegionMetricTotals = {
   legshots?: number;
   first_kills?: number;
   first_deaths?: number;
+  opening_duel_wins?: number;
+  opening_duel_losses?: number;
   survival_rounds?: number;
+  rounds_with_assist?: number;
   rounds_with_kast?: number;
   clutch_opportunities?: number;
   clutches_won?: number;
   trade_kills?: number;
+  trade_opportunities?: number;
+  missed_trade_opportunities?: number;
+  traded_deaths?: number;
   multi_2k?: number;
   multi_3k?: number;
   multi_4k?: number;
@@ -61,15 +67,26 @@ export type RegionAgentStats = {
   role?: string;
   picks?: number;
   wins?: number;
+  matches?: number;
+  rounds?: number;
+  totals?: RegionMetricTotals;
   pick_rate?: number;
   win_rate?: number;
   avg_kd?: number;
+  avg_kda?: number;
   avg_acs?: number;
   avg_adr?: number;
   avg_headshot_pct?: number;
   avg_fk_rate?: number;
+  avg_fd_rate?: number;
   avg_survival_rate?: number;
   avg_clutch_win_rate?: number;
+  deaths_per_round?: number;
+  assist_rate?: number;
+  kast_pct?: number;
+  trade_rate?: number;
+  trade_kills_per_round?: number;
+  opening_duel_win_pct?: number;
 };
 
 export type RegionMapStats = {
@@ -146,4 +163,40 @@ export type RegionStats = {
   mostPlayedMaps?: RegionTopMap[];
   mostLethalWeapons?: RegionTopWeapon[];
   updatedAt?: string;
+};
+
+export type GlobalAgentStatsOption = {
+  value: string;
+  label: string;
+  count?: number;
+};
+
+export type GlobalAgentStatsPayload = {
+  filters?: {
+    region?: string | null;
+    rank?: string | null;
+    map?: string | null;
+    act?: string | null;
+    role?: string | null;
+  };
+  options?: {
+    maps?: GlobalAgentStatsOption[];
+    ranks?: GlobalAgentStatsOption[];
+    acts?: GlobalAgentStatsOption[];
+  };
+  sampleSize?: {
+    matches?: number;
+    picks?: number;
+    agents?: number;
+  };
+  warnings?: string[];
+  agentStats?: Record<string, RegionAgentStats>;
+};
+
+export type GlobalAgentStatsFilters = {
+  region?: string;
+  rank?: string;
+  map?: string;
+  act?: string;
+  role?: string;
 };

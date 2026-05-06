@@ -1,12 +1,14 @@
 import type { RegionAgentStats } from "../../../types/globalStats";
 import type { AgentProfileMetric, EnrichedAgent } from "../types";
-import { clamp, normalizeRange } from "./agentScoring";
+import { clamp, getRoleNormalizedMetric, normalizeRange } from "./agentScoring";
 
 const safe = (value: number | undefined, fallback = 0) =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 function metricSource(
-  agent: EnrichedAgent | { globalStats?: RegionAgentStats; confidence?: number },
+  agent:
+    | EnrichedAgent
+    | { globalStats?: RegionAgentStats; confidence?: number },
 ) {
   return agent.globalStats ?? {};
 }
@@ -19,20 +21,24 @@ export function normalizePercentLike(value: number | undefined) {
 export function getRoleEntryBaseline(roleName?: string) {
   const normalized = (roleName ?? "").trim().toLowerCase();
   if (normalized.includes("duel")) return 85;
-  if (normalized.includes("inicia") || normalized.includes("initiator")) return 65;
+  if (normalized.includes("inicia") || normalized.includes("initiator"))
+    return 65;
   if (normalized.includes("cent") || normalized.includes("sentinel")) return 45;
   if (normalized.includes("control")) return 45;
   return 55;
 }
 
 export function buildAgentProfileMetrics(
-  agent: EnrichedAgent | { globalStats?: RegionAgentStats; confidence?: number },
+  agent:
+    | EnrichedAgent
+    | { globalStats?: RegionAgentStats; confidence?: number },
+  roleStats: RegionAgentStats[] = [],
 ): AgentProfileMetric[] {
   const stats = metricSource(agent);
   const roleName = "role" in agent ? agent.role?.displayName : undefined;
   const pickRate = normalizePercentLike(stats.pick_rate) ?? 0;
   const hs = normalizePercentLike(stats.avg_headshot_pct);
-  const survival = normalizePercentLike(stats.avg_survival_rate);
+  const survival = getRoleNormalizedMetric(stats, "survivalRate", roleStats) * 100;
   const clutch = normalizePercentLike(stats.avg_clutch_win_rate);
   const fkRate = normalizePercentLike(stats.avg_fk_rate);
   const acs = normalizeRange(stats.avg_acs, 120, 300);
@@ -53,7 +59,7 @@ export function buildAgentProfileMetrics(
   return [
     { key: "impact", label: "Impacto", value: clamp(impact) },
     { key: "precision", label: "Precisión", value: normalizeRange(hs, 10, 35) },
-    { key: "survival", label: "Supervivencia", value: clamp(survival ?? 50) },
+    { key: "survival", label: "Supervivencia", value: clamp(survival) },
     { key: "clutch", label: "Clutch", value: clamp(clutch ?? 45) },
     { key: "entry", label: "Entry", value: clamp(entry) },
     { key: "consistency", label: "Consistencia", value: clamp(consistency) },

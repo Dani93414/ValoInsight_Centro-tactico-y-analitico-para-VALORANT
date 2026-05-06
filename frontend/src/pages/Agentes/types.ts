@@ -37,12 +37,19 @@ export type PersonalAgentStats = {
   usagePct: number;
   winRate: number;
   avg_kd?: number;
+  avg_kda?: number;
   avg_acs?: number;
   avg_adr?: number;
   avg_headshot_pct?: number;
   avg_fk_rate?: number;
+  avg_fd_rate?: number;
   avg_survival_rate?: number;
   avg_clutch_win_rate?: number;
+  deaths_per_round?: number;
+  assist_rate?: number;
+  kast_pct?: number;
+  trade_rate?: number;
+  opening_duel_win_pct?: number;
 };
 
 export type AgentComparisonMetric = {

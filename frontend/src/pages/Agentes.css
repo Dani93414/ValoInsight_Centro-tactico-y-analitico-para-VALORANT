@@ -196,7 +196,6 @@ body {
 .agents-search:focus-visible,
 .agents-select:focus-visible,
 .agent-collapsible-toggle:focus-visible,
-.agent-role-badge:focus-visible,
 .agent-detail-close:focus-visible,
 .agents-clear-filters:focus-visible,
 .agents-empty-action:focus-visible,
@@ -1219,7 +1218,6 @@ body {
 }
 
 .agent-role-badge {
-  appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -1234,17 +1232,6 @@ body {
   font-weight: 900;
   letter-spacing: 0.9px;
   text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    transform var(--transition-fast),
-    border-color var(--transition-fast),
-    background var(--transition-fast);
-}
-
-.agent-role-badge:hover {
-  transform: translateY(-1px);
-  border-color: rgba(255, 70, 85, 0.58);
-  background: rgba(255, 70, 85, 0.2);
 }
 
 .agent-role-badge img {
@@ -1253,7 +1240,6 @@ body {
   object-fit: contain;
 }
 
-.agent-role-badge i,
 .agent-collapsible-chevron {
   width: 8px;
   height: 8px;
@@ -1263,7 +1249,6 @@ body {
   transition: transform var(--transition-fast);
 }
 
-.agent-role-badge[aria-expanded="true"] i,
 .agent-collapsible.is-open .agent-collapsible-chevron {
   transform: rotate(225deg);
 }
@@ -1271,16 +1256,16 @@ body {
 .agent-role-info {
   display: flex;
   gap: 0.9rem;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 1rem;
   padding: 0.85rem 0.95rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   background: rgba(15, 17, 21, 0.72);
-  animation: fadeUp 0.2s ease both;
 }
 
 .agent-role-info img {
+  flex: 0 0 auto;
   width: 36px;
   height: 36px;
   object-fit: contain;
@@ -1731,6 +1716,23 @@ body {
   border-top-color: var(--valorant-red);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
+}
+
+.agents-loading-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(6, 9, 14, 0.58);
+  backdrop-filter: blur(6px);
+}
+
+.agents-loading-modal__card {
+  width: min(360px, 100%);
+  padding: 2rem;
 }
 
 .agents-state-card--error {
@@ -2438,10 +2440,17 @@ body {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
   gap: 0.85rem;
+  align-items: center;
   padding: 0.85rem;
   border: 1px solid var(--border-color);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.035);
+}
+
+.ability-tab-panel > div:last-child {
+  display: grid;
+  gap: 0.42rem;
+  align-content: center;
 }
 
 .ability-tab-panel-icon {
@@ -3251,8 +3260,14 @@ body {
 .ability-tab-panel {
   grid-template-columns: 72px minmax(0, 1fr);
   gap: 1.15rem;
-  align-items: start;
+  align-items: center;
   padding: 1.15rem;
+}
+
+.ability-tab-panel > div:last-child {
+  display: grid;
+  gap: 0.48rem;
+  align-content: center;
 }
 
 .ability-tab-panel-icon {
@@ -3267,16 +3282,16 @@ body {
 }
 
 .ability-slot {
-  margin-bottom: 0.55rem;
+  justify-self: start;
+  margin-bottom: 0.1rem;
 }
 
 .ability-name {
-  margin-top: 0.22rem;
-  margin-bottom: 0.48rem;
+  margin: 0.15rem 0 0.25rem;
 }
 
 .ability-description {
-  margin: 0.35rem 0 0;
+  margin: 0.2rem 0 0;
   color: var(--text-secondary);
   line-height: 1.68;
 }

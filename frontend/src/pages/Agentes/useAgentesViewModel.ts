@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAgentes, usePlayerDashboard, useRegions } from "../../api/hooks";
+import {
+  useAgentes,
+  useGlobalAgentStats,
+  usePlayerDashboard,
+  useRegions,
+} from "../../api/hooks";
 import { useAuth } from "../../context/AuthContext";
 import type { Agente, Role } from "../../types/agents";
-import type { AnalyticsMatch, MatchCard } from "../../types/dashboard";
-import type { RegionAgentStats } from "../../types/globalStats";
+import type { GlobalAgentStatsOption, RegionAgentStats } from "../../types/globalStats";
 import {
   formatNumber,
   formatPercent,
@@ -12,17 +16,12 @@ import {
   normalizeLabel,
   safeDivide,
 } from "../../utils/formatters";
-import { getRankNameFromTier } from "../../utils/rankUtils";
 import { buildAgentCompareMetrics } from "./domain/agentComparisons";
-import {
-  agentHasPersonalMatch,
-  makeOptions,
-  type PersonalAgentMatch,
-} from "./domain/agentFilters";
-import { buildAgentLookup, getAgentKey } from "./domain/agentKeys";
+import { getAgentKey } from "./domain/agentKeys";
+import { buildPersonalStatsByAgent } from "./domain/agentPersonalStats";
 import { buildAgentProfileMetrics } from "./domain/agentProfile";
 import {
-  calculateAgentScore,
+  calculateAgentScores,
   getAgentTier,
   getScoreConfidence,
   isLowSample,
@@ -43,22 +42,6 @@ type RouteState = {
   returnLabel?: string;
 } | null;
 
-type PersonalAverageKey =
-  | "avg_kd"
-  | "avg_acs"
-  | "avg_adr"
-  | "avg_headshot_pct"
-  | "avg_fk_rate"
-  | "avg_survival_rate"
-  | "avg_clutch_win_rate";
-
-type PersonalStatAccumulator = {
-  picks: number;
-  wins: number;
-  sums: Partial<Record<PersonalAverageKey, number>>;
-  counts: Partial<Record<PersonalAverageKey, number>>;
-};
-
 type ComparisonMetricConfig = {
   key: keyof RegionAgentStats;
   personalKey?: keyof PersonalAgentStats;
@@ -70,10 +53,14 @@ const comparisonMetricConfigs: ComparisonMetricConfig[] = [
   { key: "win_rate", personalKey: "winRate", label: "Win Rate", format: "percent" },
   { key: "pick_rate", personalKey: "usagePct", label: "Pick Rate", format: "percent" },
   { key: "avg_kd", label: "KD medio", format: "number" },
+  { key: "avg_kda", label: "KDA medio", format: "number" },
   { key: "avg_acs", label: "ACS medio", format: "number" },
   { key: "avg_adr", label: "ADR medio", format: "number" },
   { key: "avg_headshot_pct", label: "Headshot", format: "percent" },
   { key: "avg_fk_rate", label: "FK Rate", format: "percent" },
+  { key: "kast_pct", label: "KAST", format: "percent" },
+  { key: "trade_rate", label: "Trade rate", format: "percent" },
+  { key: "assist_rate", label: "Assist rate", format: "percent" },
   { key: "avg_survival_rate", label: "Supervivencia", format: "percent" },
   { key: "avg_clutch_win_rate", label: "Clutch WR", format: "percent" },
 ];
@@ -128,66 +115,25 @@ function buildRegionOptions(regions: { region: string }[] | undefined): AgentSel
     .map((region) => ({ value: region, label: region.toUpperCase() }));
 }
 
-function averageEntries(accumulator: PersonalStatAccumulator) {
-  return Object.fromEntries(
-    (Object.keys(accumulator.sums) as PersonalAverageKey[])
-      .map((key) => {
-        const count = accumulator.counts[key] ?? 0;
-        return [key, count > 0 ? safeDivide(accumulator.sums[key] ?? 0, count) : undefined];
-      })
-      .filter((entry): entry is [PersonalAverageKey, number] => typeof entry[1] === "number"),
-  ) as Partial<Pick<PersonalAgentStats, PersonalAverageKey>>;
+function buildGlobalFilterOptions(
+  options: GlobalAgentStatsOption[] | undefined,
+  emptyLabel: string,
+): AgentSelectOption[] {
+  if (!options || options.length === 0) {
+    return [{ value: "all", label: emptyLabel, disabled: true }];
+  }
+  return [
+    { value: "all", label: "Todos" },
+    ...options.map((option) => ({
+      value: option.value,
+      label: option.count ? `${option.label} (${option.count})` : option.label,
+    })),
+  ];
 }
 
-function buildPersonalStatsByAgent(
-  analyticsList: AnalyticsMatch[] | undefined,
-  agents: Agente[],
-): Map<string, PersonalAgentStats> {
-  const statSeeds = new Map<string, PersonalStatAccumulator>();
-  const keyByMatchValue = buildAgentLookup(agents);
-
-  (analyticsList ?? []).forEach((match) => {
-    const agentKey =
-      keyByMatchValue.get(normalizeLabel(match.agent_id)) ??
-      keyByMatchValue.get(normalizeLabel(match.agent_name));
-    if (!agentKey) return;
-
-    const current = statSeeds.get(agentKey) ?? { picks: 0, wins: 0, sums: {}, counts: {} };
-    const overview = match.overview ?? {};
-    const averageValues: Partial<Record<PersonalAverageKey, number | undefined>> = {
-      avg_kd: overview.kd_ratio,
-      avg_acs: overview.acs,
-      avg_adr: overview.adr,
-      avg_headshot_pct: overview.headshot_pct,
-      avg_fk_rate: overview.opening_duel_win_pct,
-      avg_survival_rate: overview.survival_rate,
-      avg_clutch_win_rate: overview.clutch_win_rate,
-    };
-
-    current.picks += 1;
-    current.wins += match.won_match ? 1 : 0;
-    Object.entries(averageValues).forEach(([key, value]) => {
-      if (typeof value !== "number" || !Number.isFinite(value)) return;
-      const metricKey = key as PersonalAverageKey;
-      current.sums[metricKey] = (current.sums[metricKey] ?? 0) + value;
-      current.counts[metricKey] = (current.counts[metricKey] ?? 0) + 1;
-    });
-    statSeeds.set(agentKey, current);
-  });
-
-  const totalPicks = Array.from(statSeeds.values()).reduce((total, stats) => total + stats.picks, 0);
-  const result = new Map<string, PersonalAgentStats>();
-  statSeeds.forEach((stats, agentKey) => {
-    result.set(agentKey, {
-      picks: stats.picks,
-      wins: stats.wins,
-      ...averageEntries(stats),
-      usagePct: safeDivide(stats.picks * 100, totalPicks),
-      winRate: safeDivide(stats.wins * 100, stats.picks),
-    });
-  });
-
-  return result;
+function optionLabel(options: AgentSelectOption[], value: string) {
+  const label = options.find((option) => option.value === value)?.label ?? value;
+  return label.replace(/\s+\(\d+\)$/, "");
 }
 
 function getPersonalMetricValue(personalStats: PersonalAgentStats | null | undefined, config: ComparisonMetricConfig) {
@@ -238,29 +184,6 @@ function buildComparisonMetrics(
     .filter((metric): metric is AgentComparisonMetric => metric !== null);
 }
 
-function buildPersonalAgentMatches(matches: MatchCard[] | undefined, agents: Agente[]): PersonalAgentMatch[] {
-  const keyByMatchValue = buildAgentLookup(agents);
-
-  return (matches ?? []).reduce<PersonalAgentMatch[]>((result, match) => {
-    const agentKey =
-      keyByMatchValue.get(normalizeLabel(match.agentId)) ??
-      keyByMatchValue.get(normalizeLabel(match.agent));
-    if (!agentKey) return result;
-
-    result.push({
-        agentKey,
-        map: match.map,
-        rank:
-          typeof match.competitiveTier === "number" && match.competitiveTier >= 3
-            ? getRankNameFromTier(match.competitiveTier)
-            : undefined,
-        actId: match.seasonId,
-        actLabel: match.seasonId,
-    });
-    return result;
-  }, []);
-}
-
 function buildFilterSummary(
   agents: EnrichedAgent[],
   filteredAgents: EnrichedAgent[],
@@ -269,8 +192,11 @@ function buildFilterSummary(
   sortKey: AgentSortKey,
   selectedRegion: string,
   mapFilter: string,
+  mapFilterLabel: string,
   rankFilter: string,
+  rankFilterLabel: string,
   actFilter: string,
+  actFilterLabel: string,
 ): AgentFilterSummary {
   const sortLabels: Record<AgentSortKey, string> = {
     name: "Orden por nombre",
@@ -283,9 +209,9 @@ function buildFilterSummary(
     selectedRegion ? `Región: ${selectedRegion.toUpperCase()}` : null,
     search.trim() ? `Búsqueda: ${search.trim()}` : null,
     activeRole !== "all" ? `Rol: ${activeRole}` : null,
-    mapFilter !== "all" ? `Mapa: ${mapFilter}` : null,
-    rankFilter !== "all" ? `Rango: ${rankFilter}` : null,
-    actFilter !== "all" ? `Acto: ${actFilter}` : null,
+    mapFilter !== "all" ? `Mapa: ${mapFilterLabel}` : null,
+    rankFilter !== "all" ? `Rango: ${rankFilterLabel}` : null,
+    actFilter !== "all" ? `Acto: ${actFilterLabel}` : null,
     sortKey !== "name" ? sortLabels[sortKey] : null,
   ].filter((label): label is string => Boolean(label));
 
@@ -304,7 +230,6 @@ export function useAgentesViewModel() {
   const regionTouchedRef = useRef(false);
 
   const [selectedAgent, setSelectedAgent] = useState<EnrichedAgent | null>(null);
-  const [isRoleOpen, setIsRoleOpen] = useState(false);
   const [activeRole, setActiveRole] = useState("all");
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<AgentSortKey>("score");
@@ -313,6 +238,14 @@ export function useAgentesViewModel() {
   const [rankFilter, setRankFilter] = useState("all");
   const [actFilter, setActFilter] = useState("all");
   const [compareAgents, setCompareAgents] = useState<EnrichedAgent[]>([]);
+
+  const globalAgentStatsQuery = useGlobalAgentStats({
+    region: selectedRegion,
+    rank: rankFilter,
+    map: mapFilter,
+    act: actFilter,
+    role: activeRole,
+  });
 
   const baseAgents = useMemo(() => normalizeArrayResponse<Agente>(rawAgentes), [rawAgentes]);
   const regionOptions = useMemo(() => buildRegionOptions(regions), [regions]);
@@ -336,62 +269,67 @@ export function useAgentesViewModel() {
     setSelectedRegionState(value.toLowerCase());
   };
 
-  const selectedRegionStats = useMemo(
-    () => regions?.find((region) => region.region.toLowerCase() === selectedRegion.toLowerCase()),
-    [regions, selectedRegion],
-  );
-
   const resolveStats = useMemo(
-    () => buildAgentStatsResolver(selectedRegionStats?.agentStats ?? {}),
-    [selectedRegionStats?.agentStats],
-  );
-
-  const personalMatchCards = useMemo(
-    () =>
-      Object.values(personalDashboardQuery.data?.actSections ?? {}).flatMap(
-        (section) => section.matches ?? [],
-      ),
-    [personalDashboardQuery.data?.actSections],
-  );
-
-  const personalAgentMatches = useMemo(
-    () => buildPersonalAgentMatches(personalMatchCards, baseAgents),
-    [baseAgents, personalMatchCards],
+    () => buildAgentStatsResolver(globalAgentStatsQuery.data?.agentStats ?? {}),
+    [globalAgentStatsQuery.data?.agentStats],
   );
 
   const agents = useMemo<EnrichedAgent[]>(() => {
     const personalStatsByAgent = buildPersonalStatsByAgent(
       personalDashboardQuery.data?.analyticsList,
       baseAgents,
+      { map: mapFilter, rank: rankFilter, act: actFilter },
     );
-    const totalGlobalPicks = Object.values(selectedRegionStats?.agentStats ?? {}).reduce(
-      (total, stats) => total + (stats.picks ?? 0),
-      0,
-    );
-
-    return baseAgents
+    const initialAgents = baseAgents
       .map((agent) => {
         const globalStats = resolveStats(agent);
-        const confidence = getScoreConfidence(globalStats?.picks);
-        const score = calculateAgentScore(globalStats, totalGlobalPicks);
-        const lowSample = isLowSample(globalStats?.picks);
+        const confidence = getScoreConfidence(globalStats);
         const enriched: EnrichedAgent = {
           ...agent,
           globalStats,
           personalStats: personalStatsByAgent.get(getAgentKey(agent)) ?? null,
           comparisonMetrics: [],
           profileMetrics: [],
-          score,
-          tier: getAgentTier(score, lowSample),
+          score: 50,
+          tier: "C",
           confidence,
-          lowSample,
+          lowSample: isLowSample(globalStats),
         };
         enriched.comparisonMetrics = buildComparisonMetrics(enriched.globalStats, enriched.personalStats);
-        enriched.profileMetrics = buildAgentProfileMetrics(enriched);
         return enriched;
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
-  }, [baseAgents, personalDashboardQuery.data?.analyticsList, resolveStats, selectedRegionStats?.agentStats]);
+
+    const scoreByKey = calculateAgentScores(initialAgents);
+    const statsByRole = new Map<string, RegionAgentStats[]>();
+    initialAgents.forEach((agent) => {
+      if (!agent.globalStats) return;
+      const key = normalizeLabel(agent.role.displayName);
+      statsByRole.set(key, [...(statsByRole.get(key) ?? []), agent.globalStats]);
+    });
+
+    return initialAgents.map((agent) => {
+      const score = scoreByKey.get(getAgentKey(agent)) ?? 50;
+      const lowSample = isLowSample(agent.globalStats);
+      return {
+        ...agent,
+        score,
+        tier: getAgentTier(score, lowSample),
+        lowSample,
+        profileMetrics: buildAgentProfileMetrics(
+          { ...agent, score, tier: getAgentTier(score, lowSample), lowSample },
+          statsByRole.get(normalizeLabel(agent.role.displayName)) ?? [],
+        ),
+      };
+    });
+  }, [
+    actFilter,
+    baseAgents,
+    mapFilter,
+    personalDashboardQuery.data?.analyticsList,
+    rankFilter,
+    resolveStats,
+  ]);
 
   const roles = useMemo(
     () => Array.from(new Map(agents.map((agent) => [agent.role.displayName, agent.role])).values()),
@@ -406,26 +344,17 @@ export function useAgentesViewModel() {
   const roleSummary = useMemo(() => buildRoleSummary(agents, roles), [agents, roles]);
 
   const mapOptions = useMemo(
-    () => makeOptions(personalAgentMatches.map((match) => match.map), "No disponible"),
-    [personalAgentMatches],
+    () => buildGlobalFilterOptions(globalAgentStatsQuery.data?.options?.maps, "Sin mapas globales"),
+    [globalAgentStatsQuery.data?.options?.maps],
   );
   const rankOptions = useMemo(
-    () => makeOptions(personalAgentMatches.map((match) => match.rank), "No disponible"),
-    [personalAgentMatches],
+    () => buildGlobalFilterOptions(globalAgentStatsQuery.data?.options?.ranks, "Sin rangos globales"),
+    [globalAgentStatsQuery.data?.options?.ranks],
   );
-  const actOptions = useMemo(() => {
-    const actLabelById = new Map(
-      (personalDashboardQuery.data?.actOptions ?? []).map((act) => [act.id, act.label]),
-    );
-    const uniqueIds = Array.from(
-      new Set(personalAgentMatches.map((match) => match.actId).filter((id): id is string => Boolean(id))),
-    );
-    if (uniqueIds.length === 0) return [{ value: "all", label: "No disponible", disabled: true }];
-    return [
-      { value: "all", label: "Todos" },
-      ...uniqueIds.map((id) => ({ value: id, label: actLabelById.get(id) ?? id })),
-    ];
-  }, [personalAgentMatches, personalDashboardQuery.data?.actOptions]);
+  const actOptions = useMemo(
+    () => buildGlobalFilterOptions(globalAgentStatsQuery.data?.options?.acts, "Sin actos globales"),
+    [globalAgentStatsQuery.data?.options?.acts],
+  );
 
   const filterAvailability = {
     map: mapOptions.length > 1,
@@ -450,20 +379,30 @@ export function useAgentesViewModel() {
     return () => cancelAnimationFrame(frame);
   }, [actFilter, filterAvailability.act, filterAvailability.map, filterAvailability.rank, mapFilter, rankFilter]);
 
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (mapFilter !== "all" && !mapOptions.some((option) => option.value === mapFilter)) {
+        setMapFilter("all");
+      }
+      if (rankFilter !== "all" && !rankOptions.some((option) => option.value === rankFilter)) {
+        setRankFilter("all");
+      }
+      if (actFilter !== "all" && !actOptions.some((option) => option.value === actFilter)) {
+        setActFilter("all");
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [actFilter, actOptions, mapFilter, mapOptions, rankFilter, rankOptions]);
+
   const filteredAgents = useMemo(() => {
     const normalizedSearch = normalizeLabel(search);
     const filtered = agents.filter((agent) => {
-      const matchesRole = activeRole === "all" || agent.role.displayName === activeRole;
       const matchesSearch = normalizeLabel(agent.displayName).includes(normalizedSearch);
-      const matchesPersonalFilters = agentHasPersonalMatch(agent, personalAgentMatches, {
-        map: mapFilter,
-        rank: rankFilter,
-        act: actFilter,
-      });
-      return matchesRole && matchesSearch && matchesPersonalFilters;
+      const hasGlobalData = activeRole === "all" ? true : Boolean(agent.globalStats);
+      return matchesSearch && hasGlobalData;
     });
     return sortAgents(filtered, sortKey);
-  }, [activeRole, actFilter, agents, mapFilter, personalAgentMatches, rankFilter, search, sortKey]);
+  }, [activeRole, agents, search, sortKey]);
 
   const filterSummary = useMemo(
     () =>
@@ -475,10 +414,26 @@ export function useAgentesViewModel() {
         sortKey,
         selectedRegion,
         mapFilter,
+        optionLabel(mapOptions, mapFilter),
         rankFilter,
+        optionLabel(rankOptions, rankFilter),
         actFilter,
+        optionLabel(actOptions, actFilter),
       ),
-    [activeRole, actFilter, agents, filteredAgents, mapFilter, rankFilter, search, selectedRegion, sortKey],
+    [
+      activeRole,
+      actFilter,
+      actOptions,
+      agents,
+      filteredAgents,
+      mapFilter,
+      mapOptions,
+      rankFilter,
+      rankOptions,
+      search,
+      selectedRegion,
+      sortKey,
+    ],
   );
 
   const resetFilters = () => {
@@ -505,7 +460,6 @@ export function useAgentesViewModel() {
       const match = agents.find((agent) => normalizeLabel(agent.displayName) === normalizeLabel(routeAgentName));
       if (match) {
         setSelectedAgent(match);
-        setIsRoleOpen(false);
       }
       consumedRouteAgentNameRef.current = routeAgentName;
     });
@@ -516,12 +470,10 @@ export function useAgentesViewModel() {
   const selectAgent = (agent: EnrichedAgent) => {
     const isActive = selectedAgent && getAgentKey(selectedAgent) === getAgentKey(agent);
     setSelectedAgent(isActive ? null : agent);
-    setIsRoleOpen(false);
   };
 
   const closeDetail = () => {
     setSelectedAgent(null);
-    setIsRoleOpen(false);
   };
 
   const toggleCompareAgent = (agent: EnrichedAgent) => {
@@ -546,6 +498,18 @@ export function useAgentesViewModel() {
     [compareAgents],
   );
 
+  const currentSelectedAgent = selectedAgent
+    ? agents.find((agent) => getAgentKey(agent) === getAgentKey(selectedAgent)) ?? selectedAgent
+    : null;
+  const isGlobalStatsInitialLoading =
+    Boolean(selectedRegion) &&
+    globalAgentStatsQuery.isLoading &&
+    !globalAgentStatsQuery.data;
+  const isFilteringGlobalStats =
+    Boolean(selectedRegion) &&
+    globalAgentStatsQuery.isFetching &&
+    Boolean(globalAgentStatsQuery.data);
+
   return {
     activeRole,
     actFilter,
@@ -553,14 +517,17 @@ export function useAgentesViewModel() {
     agents,
     compareAgents,
     compareMetrics,
-    error,
+    error: error ?? globalAgentStatsQuery.error,
     filteredAgents,
     filterAvailability,
     filterSummary,
     hasSession: auth.isLoggedIn,
-    isError,
-    isLoading: agentesLoading || (regionsLoading && !selectedRegion),
-    isRoleOpen,
+    isError: isError || globalAgentStatsQuery.isError,
+    isFilteringGlobalStats,
+    isLoading:
+      agentesLoading ||
+      (regionsLoading && !selectedRegion) ||
+      isGlobalStatsInitialLoading,
     mapFilter,
     mapOptions,
     navigate,
@@ -573,7 +540,7 @@ export function useAgentesViewModel() {
     roleSummary,
     roles,
     search,
-    selectedAgent,
+    selectedAgent: currentSelectedAgent,
     selectedRegion,
     sortKey,
     closeDetail,
@@ -583,7 +550,6 @@ export function useAgentesViewModel() {
     selectAgent,
     setActiveRole,
     setActFilter,
-    setIsRoleOpen,
     setMapFilter,
     setRankFilter,
     setSearch,
