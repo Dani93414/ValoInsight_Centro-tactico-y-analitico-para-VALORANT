@@ -35,11 +35,14 @@ export type AnalyticsMatch = {
   id: string;
   match_id?: string;
   won_match?: boolean;
+  season_id?: string;
+  map_id?: string;
   map_name?: string;
   game_start_millis?: number;
   agent_id?: string;
   agent_name?: string;
   role?: string;
+  competitive_tier?: number;
   overview?: {
     kills?: number;
     deaths?: number;
@@ -56,6 +59,8 @@ export type AnalyticsMatch = {
     weapon_stats?: Array<Record<string, unknown>>;
     first_kills?: number;
     first_deaths?: number;
+    opening_duel_wins?: number;
+    opening_duel_losses?: number;
     plants?: number;
     defuses?: number;
     plant_opportunities?: number;

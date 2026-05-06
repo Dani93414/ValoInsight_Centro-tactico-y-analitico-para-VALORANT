@@ -6,9 +6,7 @@ import type { AgentComparisonMetric, EnrichedAgent } from "../types";
 type Props = {
   agent: EnrichedAgent;
   hasSession: boolean;
-  isRoleOpen: boolean;
   onClose: () => void;
-  onToggleRole: () => void;
 };
 
 type GlobalStatConfig = {
@@ -17,14 +15,29 @@ type GlobalStatConfig = {
   format: "number" | "percent";
 };
 
+const globalStatMaxByKey: Partial<
+  Record<keyof NonNullable<EnrichedAgent["globalStats"]>, number>
+> = {
+  avg_kd: 1.5,
+  avg_kda: 2.5,
+  avg_acs: 300,
+  avg_adr: 200,
+  deaths_per_round: 1,
+  trade_kills_per_round: 0.4,
+};
+
 const globalStatsConfig: GlobalStatConfig[] = [
   { key: "pick_rate", label: "Pick Rate", format: "percent" },
   { key: "win_rate", label: "Win Rate", format: "percent" },
   { key: "avg_kd", label: "KD medio", format: "number" },
+  { key: "avg_kda", label: "KDA medio", format: "number" },
   { key: "avg_acs", label: "ACS medio", format: "number" },
   { key: "avg_adr", label: "ADR medio", format: "number" },
   { key: "avg_headshot_pct", label: "Headshot", format: "percent" },
   { key: "avg_fk_rate", label: "FK Rate", format: "percent" },
+  { key: "kast_pct", label: "KAST", format: "percent" },
+  { key: "trade_rate", label: "Trade rate", format: "percent" },
+  { key: "assist_rate", label: "Assist rate", format: "percent" },
   { key: "avg_survival_rate", label: "Supervivencia", format: "percent" },
   { key: "avg_clutch_win_rate", label: "Clutch WR", format: "percent" },
 ];
@@ -41,6 +54,18 @@ function formatStatValue(value: number | undefined, format: "number" | "percent"
   return format === "percent" ? formatPercent(value) : formatNumber(value, 2);
 }
 
+function normalizeGlobalStatBar(
+  key: GlobalStatConfig["key"],
+  value: number | undefined,
+  format: GlobalStatConfig["format"],
+) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  if (format === "percent") return Math.max(0, Math.min(100, value));
+
+  const max = globalStatMaxByKey[key] ?? 100;
+  return Math.max(0, Math.min(100, (value / max) * 100));
+}
+
 function getStatValue(agent: EnrichedAgent, key: GlobalStatConfig["key"]) {
   const value = agent.globalStats?.[key];
   return typeof value === "number" ? value : undefined;
@@ -49,10 +74,10 @@ function getStatValue(agent: EnrichedAgent, key: GlobalStatConfig["key"]) {
 function formatAbilitySlot(slot: string): string {
   const normalized = slot.trim().toLowerCase().replace(/[\s_-]/g, "");
   const labels: Record<string, string> = {
-    grenade: "Básica",
-    ability1: "Básica",
-    ability2: "Firma",
-    signature: "Firma",
+    grenade: "Habilidad de Compra",
+    ability1: "Habilidad de Compra",
+    ability2: "Habilidad Básica",
+    signature: "Habilidad Básica",
     ultimate: "Ultimate",
     passive: "Pasiva",
   };
@@ -68,15 +93,12 @@ function formatAbilitySlot(slot: string): string {
 export function AgentInlineDetail({
   agent,
   hasSession,
-  isRoleOpen,
   onClose,
-  onToggleRole,
 }: Props) {
   const [activeAbilityIndex, setActiveAbilityIndex] = useState(0);
   const [isStatsOpen, setIsStatsOpen] = useState(true);
   const [isAbilitiesOpen, setIsAbilitiesOpen] = useState(false);
   const abilityTabsId = useId();
-  const roleId = useId();
   const statsPanelId = useId();
   const abilitiesPanelId = useId();
   const stats = agent.globalStats;
@@ -123,24 +145,15 @@ export function AgentInlineDetail({
             </span>
           </div>
 
-          <button
-            type="button"
-            className="agent-role-badge"
-            onClick={onToggleRole}
-            aria-expanded={isRoleOpen}
-            aria-controls={roleId}
-          >
+          <div className="agent-role-badge" aria-label={`Rol: ${agent.role.displayName}`}>
             {agent.role.displayIcon && <img src={agent.role.displayIcon} alt="" />}
             <span>{agent.role.displayName}</span>
-            <i aria-hidden="true" />
-          </button>
+          </div>
 
-          {isRoleOpen && (
-            <div id={roleId} className="agent-role-info">
-              {agent.role.displayIcon && <img src={agent.role.displayIcon} alt={agent.role.displayName} />}
-              <p>{agent.role.description}</p>
-            </div>
-          )}
+          <div className="agent-role-info">
+            {agent.role.displayIcon && <img src={agent.role.displayIcon} alt={agent.role.displayName} />}
+            <p>{agent.role.description}</p>
+          </div>
 
           <p className="agent-description">{agent.description}</p>
 
@@ -221,7 +234,7 @@ export function AgentInlineDetail({
               <div className="agent-global-stat-grid">
                 {visibleGlobalStats.map((item) => {
                   const value = getStatValue(agent, item.key);
-                  const normalized = item.format === "percent" ? value ?? 0 : Math.min(100, ((value ?? 0) / 300) * 100);
+                  const normalized = normalizeGlobalStatBar(item.key, value, item.format);
                   return (
                     <div key={item.key} className="agent-global-stat-card">
                       <span>{item.label}</span>

@@ -5,13 +5,18 @@ import argparse
 from collections import Counter, defaultdict
 from datetime import datetime, UTC
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+backend_root = os.path.join(project_root, "backend")
+for path in (project_root, backend_root):
+    if path not in sys.path:
+        sys.path.append(path)
 
 from backend.infrastructure.mongo_client import (
     ensure_indexes,
     matches_collection,
     regions_collection,
 )
+from shared.stat_formulas import finalize_core_stats
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +27,15 @@ _SUM_FIELDS = (
     "rounds", "wins", "kills", "deaths", "assists", "score",
     "damage_dealt", "damage_received", "headshots", "bodyshots", "legshots",
     "first_kills", "first_deaths", "opening_duel_wins", "opening_duel_losses",
-    "trade_kills", "traded_deaths", "clutch_opportunities", "clutches_won",
+    "trade_kills", "trade_opportunities", "missed_trade_opportunities",
+    "traded_deaths", "clutch_opportunities", "clutches_won",
     "survival_rounds", "rounds_with_kill", "rounds_with_assist", "rounds_with_death",
-    "rounds_with_kast", "rounds_with_multikill",
+    "rounds_with_kast", "rounds_with_direct_participation",
+    "rounds_without_direct_participation", "rounds_only_kill",
+    "rounds_only_assist", "rounds_only_death", "rounds_kill_assist",
+    "rounds_kill_death", "rounds_assist_death",
+    "rounds_kill_assist_death", "rounds_none",
+    "rounds_combined_or_none", "rounds_with_multikill",
     "multi_2k", "multi_3k", "multi_4k", "multi_5k",
     "econ_spent", "loadout_value_total",
 )
@@ -45,44 +56,8 @@ def _normalize_region(raw):
 
 
 def _derive_ratios(t):
-    """Compute derived averages from aggregated totals dict."""
-    rounds = t.get("rounds", 0)
-    kills = t.get("kills", 0)
-    deaths = t.get("deaths", 0)
-    assists = t.get("assists", 0)
-    hs = t.get("headshots", 0)
-    total_shots = hs + t.get("bodyshots", 0) + t.get("legshots", 0)
-
-    return {
-        "kd_ratio": _safe_div(kills, max(deaths, 1)),
-        "kda_ratio": _safe_div(kills + assists, max(deaths, 1)),
-        "acs": _safe_div(t.get("score", 0), rounds),
-        "adr": _safe_div(t.get("damage_dealt", 0), rounds),
-        "headshot_pct": _safe_div(hs * 100.0, total_shots),
-        "kills_per_round": _safe_div(kills, rounds),
-        "deaths_per_round": _safe_div(deaths, rounds),
-        "assists_per_round": _safe_div(assists, rounds),
-        "survival_rate": _safe_div(t.get("survival_rounds", 0) * 100.0, rounds),
-        "kast_pct": _safe_div(t.get("rounds_with_kast", 0) * 100.0, rounds),
-        "fk_rate": _safe_div(t.get("first_kills", 0) * 100.0, rounds),
-        "fd_rate": _safe_div(t.get("first_deaths", 0) * 100.0, rounds),
-        "fkfd_diff_per_round": _safe_div(
-            t.get("first_kills", 0) - t.get("first_deaths", 0), rounds,
-        ),
-        "opening_duel_win_pct": _safe_div(
-            t.get("opening_duel_wins", 0) * 100.0,
-            t.get("opening_duel_wins", 0) + t.get("opening_duel_losses", 0),
-        ),
-        "trade_kills_per_round": _safe_div(t.get("trade_kills", 0), rounds),
-        "clutch_win_rate": _safe_div(
-            t.get("clutches_won", 0) * 100.0, t.get("clutch_opportunities", 0),
-        ),
-        "multikill_rate": _safe_div(t.get("rounds_with_multikill", 0) * 100.0, rounds),
-        "damage_per_1000_credits": _safe_div(
-            t.get("damage_dealt", 0) * 1000.0, t.get("econ_spent", 0),
-        ),
-        "average_loadout_value": _safe_div(t.get("loadout_value_total", 0), rounds),
-    }
+    """Compute derived averages from aggregated totals using the profile formulas."""
+    return finalize_core_stats(dict(t))
 
 
 def _side_summary(side_totals):
@@ -222,23 +197,35 @@ def rebuild_regions(*, force: bool = False):
         for agent_id, ag in rd["agents"].items():
             at = dict(ag["totals"])
             ar = at.get("rounds", 0)
-            total_shots_ag = at.get("headshots", 0) + at.get("bodyshots", 0) + at.get("legshots", 0)
+            derived = _derive_ratios(at)
             agent_doc[agent_id] = {
                 "agent_name": ag["agent_name"],
                 "role": ag["role"],
                 "picks": ag["picks"],
                 "wins": ag["wins"],
+                "matches": ag["picks"],
+                "rounds": ar,
+                "totals": {k: at.get(k, 0) for k in _SUM_FIELDS},
                 "pick_rate": _safe_div(ag["picks"] * 100.0, total_picks),
                 "win_rate": _safe_div(ag["wins"] * 100.0, ag["picks"]),
-                "avg_kd": _safe_div(at.get("kills", 0), max(at.get("deaths", 0), 1)),
-                "avg_acs": _safe_div(at.get("score", 0), ar),
-                "avg_adr": _safe_div(at.get("damage_dealt", 0), ar),
-                "avg_headshot_pct": _safe_div(at.get("headshots", 0) * 100.0, total_shots_ag),
-                "avg_fk_rate": _safe_div(at.get("first_kills", 0) * 100.0, ar),
-                "avg_survival_rate": _safe_div(at.get("survival_rounds", 0) * 100.0, ar),
-                "avg_clutch_win_rate": _safe_div(
-                    at.get("clutches_won", 0) * 100.0, at.get("clutch_opportunities", 0),
-                ),
+                "avg_kd": derived["kd_ratio"],
+                "avg_kda": derived["kda_ratio"],
+                "avg_acs": derived["acs"],
+                "avg_adr": derived["adr"],
+                "avg_headshot_pct": derived["headshot_pct"],
+                # avg_fk_rate is first_kills / rounds, not opening_duel_win_pct.
+                "avg_fk_rate": derived["fk_rate"],
+                "avg_fd_rate": derived["fd_rate"],
+                "avg_survival_rate": derived["survival_rate"],
+                "avg_clutch_win_rate": derived["clutch_win_rate"],
+                "deaths_per_round": derived["deaths_per_round"],
+                "assist_rate": derived["rounds_with_assist_pct"],
+                "kast_pct": derived.get("kast_pct", 0.0),
+                "trade_rate": derived["trade_conversion_rate"],
+                "trade_kills_per_round": derived["trade_kills_per_round"],
+                "opening_duel_win_pct": derived["opening_duel_win_pct"],
+                # utilityImpact and mapCoverage are intentionally absent: the current
+                # region aggregation has no true ability-event or positional coverage data.
             }
 
         # ── Map stats ──

@@ -63,6 +63,15 @@ export default function Agentes() {
           ariaLabel={viewModel.returnLabel}
         />
       )}
+      {viewModel.isFilteringGlobalStats && (
+        <div className="agents-loading-modal" role="status" aria-live="polite" aria-label="Actualizando filtros">
+          <div className="loading-card agents-loading-modal__card">
+            <div className="loading-spinner" />
+            <h2>Actualizando filtros</h2>
+            <p>Recalculando métricas globales...</p>
+          </div>
+        </div>
+      )}
 
       <AgentFilters
         actFilter={viewModel.actFilter}
@@ -103,9 +112,7 @@ export default function Agentes() {
             }
             agent={viewModel.selectedAgent}
             hasSession={viewModel.hasSession}
-            isRoleOpen={viewModel.isRoleOpen}
             onClose={viewModel.closeDetail}
-            onToggleRole={() => viewModel.setIsRoleOpen((open) => !open)}
           />
         </div>
       )}

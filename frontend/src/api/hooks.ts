@@ -25,7 +25,7 @@ export {
   useVersion,
 } from "./useContentQueries";
 
-export { useRegions } from "./useGlobalStatsQueries";
+export { useGlobalAgentStats, useRegions } from "./useGlobalStatsQueries";
 
 export {
   usePlayerDashboard,
