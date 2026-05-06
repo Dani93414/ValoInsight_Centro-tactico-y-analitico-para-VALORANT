@@ -1,12 +1,34 @@
 import type { Agente, Role } from "../../types/agents";
 import type { RegionAgentStats } from "../../types/globalStats";
 
-export type AgentSortKey = "name" | "picks" | "winRate" | "role";
+export type AgentSortKey = "name" | "picks" | "winRate" | "role" | "score";
+
+export type AgentTier = "S" | "A" | "B" | "C" | "D";
+
+export type AgentProfileMetric = {
+  key: "impact" | "precision" | "survival" | "clutch" | "entry" | "consistency";
+  label: string;
+  value: number;
+};
+
+export type AgentCompareMetric = {
+  key: string;
+  label: string;
+  firstLabel: string;
+  secondLabel: string;
+  firstValue?: number;
+  secondValue?: number;
+};
 
 export type EnrichedAgent = Agente & {
   globalStats?: RegionAgentStats;
   personalStats?: PersonalAgentStats | null;
   comparisonMetrics: AgentComparisonMetric[];
+  profileMetrics: AgentProfileMetric[];
+  score: number;
+  tier: AgentTier;
+  confidence: number;
+  lowSample: boolean;
 };
 
 export type PersonalAgentStats = {
@@ -41,6 +63,14 @@ export type AgentFilterSummary = {
 export type AgentSelectOption = {
   value: string;
   label: string;
+  disabled?: boolean;
+  helper?: string;
+};
+
+export type AgentFilterAvailability = {
+  map: boolean;
+  rank: boolean;
+  act: boolean;
 };
 
 export type RoleSummaryItem = Role & {
