@@ -4,9 +4,11 @@ import type { CSSProperties } from "react";
 
 type Props = {
   agents: EnrichedAgent[];
+  compareAgents: EnrichedAgent[];
   selectedAgent: EnrichedAgent | null;
   activeFilterLabels: string[];
   onSelect: (agent: EnrichedAgent) => void;
+  onToggleCompare: (agent: EnrichedAgent) => void;
   onResetFilters: () => void;
 };
 
@@ -16,9 +18,11 @@ function getAgentKey(agent: EnrichedAgent): string {
 
 export function AgentGrid({
   agents,
+  compareAgents,
   selectedAgent,
   activeFilterLabels,
   onSelect,
+  onToggleCompare,
   onResetFilters,
 }: Props) {
   if (agents.length === 0) {
@@ -44,12 +48,18 @@ export function AgentGrid({
     <div className="agents-grid">
       {agents.map((agent, index) => {
         const active = getAgentKey(selectedAgent ?? agent) === getAgentKey(agent) && Boolean(selectedAgent);
+        const compared = compareAgents.some(
+          (compareAgent) => getAgentKey(compareAgent) === getAgentKey(agent),
+        );
         return (
           <AgentCard
             key={getAgentKey(agent)}
             agent={agent}
             active={active}
+            compared={compared}
+            compareDisabled={!compared && compareAgents.length >= 2}
             onSelect={onSelect}
+            onToggleCompare={onToggleCompare}
             style={{ "--delay": `${Math.min(index * 38, 420)}ms` } as CSSProperties}
           />
         );

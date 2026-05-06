@@ -1,22 +1,40 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, MouseEvent } from "react";
+import { GitCompare } from "lucide-react";
 import { formatNumber, formatPercent } from "../../../utils/formatters";
 import type { EnrichedAgent } from "../types";
 
 type Props = {
   agent: EnrichedAgent;
   active: boolean;
+  compared: boolean;
+  compareDisabled: boolean;
   onSelect: (agent: EnrichedAgent) => void;
+  onToggleCompare: (agent: EnrichedAgent) => void;
   style?: CSSProperties;
 };
 
-export function AgentCard({ agent, active, onSelect, style }: Props) {
+export function AgentCard({
+  agent,
+  active,
+  compared,
+  compareDisabled,
+  onSelect,
+  onToggleCompare,
+  style,
+}: Props) {
   const picks = agent.globalStats?.picks ?? 0;
-  const winRate = agent.globalStats?.win_rate;
   const hasStats = picks > 0;
   const cardStyle = {
     ...style,
     "--agent-accent": agent.backgroundGradientColors?.[0] ?? "#ff4655",
   } as CSSProperties;
+
+  const handleCompareClick = (event: MouseEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!compared && compareDisabled) return;
+    onToggleCompare(agent);
+  };
 
   return (
     <button
@@ -26,6 +44,28 @@ export function AgentCard({ agent, active, onSelect, style }: Props) {
       aria-pressed={active}
       style={cardStyle}
     >
+      <span className={`agent-tier-badge agent-tier-badge--${agent.tier.toLowerCase()}`}>
+        Tier {agent.tier}
+      </span>
+
+      <span
+        className={`agent-compare-action${compared ? " agent-compare-action--active" : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-label={compared ? "Quitar agente de comparación" : "Añadir agente a comparación"}
+        aria-disabled={!compared && compareDisabled}
+        onClick={handleCompareClick}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (!compared && compareDisabled) return;
+          onToggleCompare(agent);
+        }}
+      >
+        <GitCompare size={15} aria-hidden="true" />
+      </span>
+
       {agent.displayIcon && (
         <div className="agent-image-frame">
           <img
@@ -40,14 +80,19 @@ export function AgentCard({ agent, active, onSelect, style }: Props) {
       <div className="agent-card-body">
         <h2 className="agent-name">{agent.displayName}</h2>
         <p className="agent-role">{agent.role.displayName}</p>
+        <div className="agent-score-line">
+          <span>Score</span>
+          <strong>{formatNumber(agent.score, 1)}</strong>
+          {agent.lowSample && <em>Baja muestra</em>}
+        </div>
         <div className="agent-card-metrics">
           <div>
-            <span>Picks</span>
-            <strong>{hasStats ? formatNumber(picks) : "-"}</strong>
+            <span>Pick Rate</span>
+            <strong>{hasStats ? formatPercent(agent.globalStats?.pick_rate) : "-"}</strong>
           </div>
           <div>
-            <span>Win rate</span>
-            <strong>{hasStats ? formatPercent(winRate) : "-"}</strong>
+            <span>Win Rate</span>
+            <strong>{hasStats ? formatPercent(agent.globalStats?.win_rate) : "-"}</strong>
           </div>
         </div>
       </div>

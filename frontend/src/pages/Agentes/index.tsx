@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import BackButton from "../../components/BackButton";
 import FloatingActionButton from "../../components/FloatingActionButton";
 import "../Agentes.css";
+import { AgentCompareDrawer } from "./components/AgentCompareDrawer";
 import { AgentFilters } from "./components/AgentFilters";
 import { AgentGrid } from "./components/AgentGrid";
 import { AgentInlineDetail } from "./components/AgentInlineDetail";
-import { AgentsHeader } from "./components/AgentsHeader";
 import { useAgentesViewModel } from "./useAgentesViewModel";
 
 export default function Agentes() {
@@ -64,21 +64,16 @@ export default function Agentes() {
         />
       )}
 
-      <AgentsHeader
-        activeRole={viewModel.activeRole}
-        roles={viewModel.roles}
-        roleSummary={viewModel.roleSummary}
-        topAgents={viewModel.topAgents}
-        onRoleChange={viewModel.setActiveRole}
-      />
       <AgentFilters
         actFilter={viewModel.actFilter}
         actOptions={viewModel.actOptions}
+        activeRole={viewModel.activeRole}
         mapFilter={viewModel.mapFilter}
         mapOptions={viewModel.mapOptions}
         rankFilter={viewModel.rankFilter}
         rankOptions={viewModel.rankOptions}
         regionOptions={viewModel.regionOptions}
+        roleOptions={viewModel.roleOptions}
         summary={viewModel.filterSummary}
         search={viewModel.search}
         selectedRegion={viewModel.selectedRegion}
@@ -87,9 +82,16 @@ export default function Agentes() {
         onMapFilterChange={viewModel.setMapFilter}
         onRankFilterChange={viewModel.setRankFilter}
         onRegionChange={viewModel.setSelectedRegion}
+        onRoleChange={viewModel.setActiveRole}
         onSearchChange={viewModel.setSearch}
         onSortChange={viewModel.setSortKey}
         onResetFilters={viewModel.resetFilters}
+      />
+      <AgentCompareDrawer
+        agents={viewModel.compareAgents}
+        metrics={viewModel.compareMetrics}
+        onClear={viewModel.clearCompareAgents}
+        onRemove={viewModel.removeCompareAgent}
       />
       {viewModel.selectedAgent && (
         <div ref={detailRef}>
@@ -110,9 +112,11 @@ export default function Agentes() {
 
       <AgentGrid
         agents={viewModel.filteredAgents}
+        compareAgents={viewModel.compareAgents}
         selectedAgent={viewModel.selectedAgent}
         activeFilterLabels={viewModel.filterSummary.activeLabels}
         onSelect={viewModel.selectAgent}
+        onToggleCompare={viewModel.toggleCompareAgent}
         onResetFilters={viewModel.resetFilters}
       />
     </div>
