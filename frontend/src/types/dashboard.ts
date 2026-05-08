@@ -282,6 +282,14 @@ export type RankComparisonMetricComparison = {
   percentile: number;
   sampleSize: number;
   isNeutral: boolean;
+  value?: number | null;
+  rawValue?: number | null;
+  adjustedValue?: number | null;
+  rankingValue?: number | null;
+  rankingMethod?: "bayesian_shrinkage" | string;
+  metricSampleSize?: number;
+  cohortMean?: number | null;
+  priorWeight?: number;
 };
 
 export type RankComparisonPayload = {

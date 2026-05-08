@@ -117,6 +117,12 @@ _RANK_COMPARISON_METRICS: tuple[tuple[str, bool], ...] = (
     ("losses", True),
 )
 
+_RANK_METRIC_DEFAULT_PRIOR_WEIGHT = 10.0
+_RANK_METRIC_PRIOR_WEIGHT_BY_KEY: dict[str, float] = {
+    "hsPct": 20.0,
+    "kast": 20.0,
+}
+
 
 def _normalize_rank_label(value: Any) -> str:
     text = str(value or "").strip().lower()
@@ -1791,6 +1797,14 @@ def _build_empty_rank_comparison_payload(
                 "percentile": 50.0,
                 "sampleSize": 0,
                 "isNeutral": True,
+                "value": None,
+                "rawValue": None,
+                "adjustedValue": None,
+                "rankingValue": None,
+                "rankingMethod": "bayesian_shrinkage",
+                "metricSampleSize": 0,
+                "cohortMean": None,
+                "priorWeight": _resolve_rank_metric_prior_weight(key),
             }
             for key, _prefer_lower in _RANK_COMPARISON_METRICS
         },
@@ -1800,6 +1814,57 @@ def _build_empty_rank_comparison_payload(
 
 def _is_valid_rank_metric_value(value: Any) -> bool:
     return isinstance(value, (int, float)) and math.isfinite(float(value))
+
+
+def _resolve_rank_metric_prior_weight(metric_key: str) -> float:
+    configured = _RANK_METRIC_PRIOR_WEIGHT_BY_KEY.get(metric_key, _RANK_METRIC_DEFAULT_PRIOR_WEIGHT)
+    if not isinstance(configured, (int, float)) or not math.isfinite(float(configured)):
+        return _RANK_METRIC_DEFAULT_PRIOR_WEIGHT
+    return max(float(configured), 0.0)
+
+
+def _compute_rank_metric_sample_size(metric_key: str, row: dict[str, Any]) -> float:
+    match_count = float(max(int(row.get("matchCount") or 0), 0))
+    rounds = float(max(int(row.get("rounds") or 0), 0))
+    total_shots = float(max(int(row.get("headshots") or 0), 0) + max(int(row.get("bodyshots") or 0), 0) + max(int(row.get("legshots") or 0), 0))
+    round_based_kast_source_rounds = float(max(int(row.get("roundBasedKastSourceRounds") or 0), 0))
+    raw_kast_count = float(max(int(row.get("rawKastFallbackCount") or 0), 0))
+
+    if metric_key in {"hsPct"}:
+        return total_shots if total_shots > 0 else match_count
+    if metric_key in {"kast"}:
+        if round_based_kast_source_rounds > 0:
+            return round_based_kast_source_rounds
+        if raw_kast_count > 0:
+            return raw_kast_count
+        return match_count
+    if metric_key in {"kd", "kda", "acs", "incDamage"}:
+        return rounds if rounds > 0 else match_count
+    return match_count
+
+
+def _compute_bayesian_adjusted_value(
+    *,
+    raw_value: Any,
+    sample_size: Any,
+    cohort_mean: Any,
+    prior_weight: Any,
+) -> float:
+    raw_numeric = float(raw_value) if _is_valid_rank_metric_value(raw_value) else None
+    sample_numeric = float(sample_size) if _is_valid_rank_metric_value(sample_size) else 0.0
+    cohort_mean_numeric = float(cohort_mean) if _is_valid_rank_metric_value(cohort_mean) else None
+    prior_numeric = float(prior_weight) if _is_valid_rank_metric_value(prior_weight) else 0.0
+
+    if raw_numeric is None:
+        raw_numeric = cohort_mean_numeric if cohort_mean_numeric is not None else 0.0
+    if cohort_mean_numeric is None:
+        return raw_numeric
+    if sample_numeric <= 0:
+        return cohort_mean_numeric
+    denominator = sample_numeric + max(prior_numeric, 0.0)
+    if denominator <= 0:
+        return raw_numeric
+    return ((raw_numeric * sample_numeric) + (cohort_mean_numeric * max(prior_numeric, 0.0))) / denominator
 
 
 def _rank_metric_values_close(left: float, right: float) -> bool:
@@ -1856,31 +1921,51 @@ def _build_rank_metric_values(row: dict[str, Any]) -> dict[str, float | None]:
 
 
 def _build_rank_metric_comparison_payload(
-    player_value: float | None,
-    cohort_values: list[float | None],
+    player_raw_value: float | None,
+    player_adjusted_value: float | None,
+    cohort_adjusted_values: list[float | None],
+    metric_sample_size: float,
+    cohort_mean: float | None,
+    prior_weight: float,
     *,
     prefer_lower: bool,
 ) -> dict[str, Any]:
     valid_values = [
         float(value)
-        for value in cohort_values
+        for value in cohort_adjusted_values
         if _is_valid_rank_metric_value(value)
     ]
     sample_size = len(valid_values)
 
-    if not _is_valid_rank_metric_value(player_value) or sample_size == 0:
+    if not _is_valid_rank_metric_value(player_adjusted_value) or sample_size == 0:
         return {
             "percentile": 50.0,
             "sampleSize": sample_size,
             "isNeutral": True,
+            "value": player_raw_value,
+            "rawValue": player_raw_value,
+            "adjustedValue": player_adjusted_value,
+            "rankingValue": player_adjusted_value,
+            "rankingMethod": "bayesian_shrinkage",
+            "metricSampleSize": round(metric_sample_size, 3),
+            "cohortMean": cohort_mean,
+            "priorWeight": round(prior_weight, 3),
         }
 
-    player_metric_value = float(player_value)
+    player_metric_value = float(player_adjusted_value)
     if sample_size == 1:
         return {
             "percentile": 50.0,
             "sampleSize": sample_size,
             "isNeutral": True,
+            "value": player_raw_value,
+            "rawValue": player_raw_value,
+            "adjustedValue": player_adjusted_value,
+            "rankingValue": player_adjusted_value,
+            "rankingMethod": "bayesian_shrinkage",
+            "metricSampleSize": round(metric_sample_size, 3),
+            "cohortMean": cohort_mean,
+            "priorWeight": round(prior_weight, 3),
         }
 
     worse_count = 0
@@ -1905,6 +1990,14 @@ def _build_rank_metric_comparison_payload(
         "percentile": round(max(0.0, min(100.0, percentile)), 3),
         "sampleSize": sample_size,
         "isNeutral": False,
+        "value": player_raw_value,
+        "rawValue": player_raw_value,
+        "adjustedValue": player_adjusted_value,
+        "rankingValue": player_adjusted_value,
+        "rankingMethod": "bayesian_shrinkage",
+        "metricSampleSize": round(metric_sample_size, 3),
+        "cohortMean": cohort_mean,
+        "priorWeight": round(prior_weight, 3),
     }
 
 
@@ -1938,10 +2031,37 @@ def _build_rank_comparison_payload_from_players(
     metric_comparisons: dict[str, Any] = {}
     for key, prefer_lower in _RANK_COMPARISON_METRICS:
         player_value = player_row["metrics"].get(key)
-        cohort_values = [row["metrics"].get(key) for row in metric_rows]
+        prior_weight = _resolve_rank_metric_prior_weight(key)
+        cohort_raw_values = [row["metrics"].get(key) for row in metric_rows]
+        valid_cohort_raw_values = [float(v) for v in cohort_raw_values if _is_valid_rank_metric_value(v)]
+        cohort_mean = (
+            _safe_div(sum(valid_cohort_raw_values), len(valid_cohort_raw_values))
+            if valid_cohort_raw_values
+            else None
+        )
+        player_sample_size = _compute_rank_metric_sample_size(key, next((r for r in cohort_rows if str(r.get("puuid") or "") == puuid), {}))
+        player_adjusted_value = _compute_bayesian_adjusted_value(
+            raw_value=player_value,
+            sample_size=player_sample_size,
+            cohort_mean=cohort_mean,
+            prior_weight=prior_weight,
+        )
+        cohort_adjusted_values = [
+            _compute_bayesian_adjusted_value(
+                raw_value=row["metrics"].get(key),
+                sample_size=_compute_rank_metric_sample_size(key, cohort_rows[idx]),
+                cohort_mean=cohort_mean,
+                prior_weight=prior_weight,
+            )
+            for idx, row in enumerate(metric_rows)
+        ]
         metric_comparisons[key] = _build_rank_metric_comparison_payload(
             player_value,
-            cohort_values,
+            player_adjusted_value,
+            cohort_adjusted_values,
+            player_sample_size,
+            cohort_mean,
+            prior_weight,
             prefer_lower=prefer_lower,
         )
 

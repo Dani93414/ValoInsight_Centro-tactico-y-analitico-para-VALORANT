@@ -96,8 +96,9 @@ export function AgentInlineDetail({
   onClose,
 }: Props) {
   const [activeAbilityIndex, setActiveAbilityIndex] = useState(0);
-  const [isStatsOpen, setIsStatsOpen] = useState(true);
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isAbilitiesOpen, setIsAbilitiesOpen] = useState(false);
+  const [hiddenAbilityIcons, setHiddenAbilityIcons] = useState<Record<string, boolean>>({});
   const abilityTabsId = useId();
   const statsPanelId = useId();
   const abilitiesPanelId = useId();
@@ -281,9 +282,13 @@ export function AgentInlineDetail({
                     const panelId = `${abilityTabsId}-panel-${index}`;
                     const selected = activeAbilityIndex === index;
 
+                    const abilityKey = `${ability.slot}-${ability.displayName}-${index}`;
+                    const isPassive = ability.slot.trim().toLowerCase() === "passive";
+                    const showIcon = Boolean(ability.displayIcon) && !hiddenAbilityIcons[abilityKey];
+
                     return (
                       <button
-                        key={`${ability.slot}-${ability.displayName}`}
+                        key={abilityKey}
                         id={tabId}
                         type="button"
                         className={`ability-tab ${selected ? "active" : ""}`}
@@ -292,9 +297,15 @@ export function AgentInlineDetail({
                         aria-controls={panelId}
                         onClick={() => setActiveAbilityIndex(index)}
                       >
-                        {ability.displayIcon ? (
-                          <img src={ability.displayIcon} alt="" />
-                        ) : (
+                        {showIcon ? (
+                          <img
+                            src={ability.displayIcon ?? undefined}
+                            alt=""
+                            onError={() =>
+                              setHiddenAbilityIcons((current) => ({ ...current, [abilityKey]: true }))
+                            }
+                          />
+                        ) : isPassive ? null : (
                           <strong>{formatAbilitySlot(ability.slot).charAt(0) || ability.displayName.charAt(0)}</strong>
                         )}
                         <span>{ability.displayName}</span>
@@ -311,11 +322,32 @@ export function AgentInlineDetail({
                     aria-labelledby={`${abilityTabsId}-tab-${activeAbilityIndex}`}
                   >
                     <div className="ability-tab-panel-icon">
-                      {activeAbility.displayIcon ? (
-                        <img src={activeAbility.displayIcon} alt="" />
-                      ) : (
-                        <strong>{formatAbilitySlot(activeAbility.slot).charAt(0)}</strong>
-                      )}
+                      {(() => {
+                        const activeAbilityKey = `${activeAbility.slot}-${activeAbility.displayName}-${activeAbilityIndex}`;
+                        const isPassive = activeAbility.slot.trim().toLowerCase() === "passive";
+                        const showIcon =
+                          Boolean(activeAbility.displayIcon) &&
+                          !hiddenAbilityIcons[activeAbilityKey];
+
+                        if (showIcon) {
+                          return (
+                            <img
+                              src={activeAbility.displayIcon ?? undefined}
+                              alt=""
+                              onError={() =>
+                                setHiddenAbilityIcons((current) => ({
+                                  ...current,
+                                  [activeAbilityKey]: true,
+                                }))
+                              }
+                            />
+                          );
+                        }
+
+                        if (isPassive) return null;
+
+                        return <strong>{formatAbilitySlot(activeAbility.slot).charAt(0)}</strong>;
+                      })()}
                     </div>
                     <div>
                       <span className="ability-slot">{formatAbilitySlot(activeAbility.slot)}</span>
@@ -331,6 +363,7 @@ export function AgentInlineDetail({
           </div>
         )}
       </section>
+
     </article>
   );
 }

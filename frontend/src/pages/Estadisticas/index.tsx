@@ -427,6 +427,7 @@ export default function Estadisticas() {
     metrics,
     filteredShotChart,
     filteredPlaytimeMillis,
+    filteredResultSummary,
     latestFilteredAccountLevel,
     mostPlayedAgents,
     mostPlayedWeapons,
@@ -464,7 +465,7 @@ export default function Estadisticas() {
 
   const CHART_HELP: Record<string, string> = {
     profile:
-      "Perfil de rendimiento: cada barra muestra tu posicion relativa normalizada dentro de una cohorte formada por jugadores cuyo ultimo rango valido en el mismo acto, cola, agente, mapa y party size cae en tu mismo rango, uno por encima y uno por debajo. El filtro de lado no se aplica a este bloque porque la cohorte se calcula a nivel de partida completa.",
+      "Perfil de rendimiento: cada barra muestra tu posicion relativa normalizada dentro de una cohorte formada por jugadores cuyo ultimo rango valido en el mismo acto, cola, agente, mapa y party size cae en tu mismo rango, uno por encima y uno por debajo. El filtro de lado no se aplica a este bloque porque la cohorte se calcula a nivel de partida completa. La estadistica visible es real. Para ordenar jugadores dentro de la cohorte se aplica Bayesian shrinkage hacia la media de la cohorte, reduciendo el sesgo de muestras pequenas.",
     precision:
       "Precision de disparos: distribucion de impactos en cabeza, cuerpo y piernas sobre las partidas filtradas.",
     tacticalRadar:
@@ -1175,7 +1176,22 @@ export default function Estadisticas() {
 
   return (
     <div className="stats-container">
-      <BackButton />
+      <div className="stats-top-actions">
+        <BackButton />
+        <div className="stats-result-summary" aria-label="Resumen de resultados filtrados">
+          <span className="stats-result-summary-item">
+            Wins: <strong>{formatNumber(filteredResultSummary.wins)}</strong>
+          </span>
+          <span className="stats-result-summary-separator">|</span>
+          <span className="stats-result-summary-item">
+            Loses: <strong>{formatNumber(filteredResultSummary.losses)}</strong>
+          </span>
+          <span className="stats-result-summary-separator">|</span>
+          <span className="stats-result-summary-item">
+            Empates: <strong>{formatNumber(filteredResultSummary.draws)}</strong>
+          </span>
+        </div>
+      </div>
       <div className="stats-header">
         <span className="stats-eyebrow">Valorant</span>
 

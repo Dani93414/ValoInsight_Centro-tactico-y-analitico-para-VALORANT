@@ -1,6 +1,7 @@
 import type { CSSProperties, MouseEvent } from "react";
 import { GitCompare } from "lucide-react";
 import { formatNumber, formatPercent } from "../../../utils/formatters";
+import { getAgentThemeColors } from "../domain/agentThemeColors";
 import type { EnrichedAgent } from "../types";
 
 type Props = {
@@ -24,9 +25,15 @@ export function AgentCard({
 }: Props) {
   const picks = agent.globalStats?.picks ?? 0;
   const hasStats = picks > 0;
+  const [accent, accent2, accent3] = getAgentThemeColors(
+    agent.displayName,
+    agent.backgroundGradientColors,
+  );
   const cardStyle = {
     ...style,
-    "--agent-accent": agent.backgroundGradientColors?.[0] ?? "#ff4655",
+    "--agent-accent": accent,
+    "--agent-accent-2": accent2,
+    "--agent-accent-3": accent3,
   } as CSSProperties;
 
   const handleCompareClick = (event: MouseEvent<HTMLSpanElement>) => {
