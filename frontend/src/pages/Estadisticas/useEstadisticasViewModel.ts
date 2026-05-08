@@ -607,9 +607,29 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
     );
   }, [filteredMatches]);
 
+  const filteredDrawsTotal = useMemo(() => {
+    return filteredMatches.reduce(
+      (sum, match) => sum + (match.result === "Empate" ? 1 : 0),
+      0,
+    );
+  }, [filteredMatches]);
+
   const filteredLossesTotal = useMemo(() => {
-    return Math.max(filteredMatches.length - filteredWinsTotal, 0);
-  }, [filteredMatches.length, filteredWinsTotal]);
+    return filteredMatches.reduce(
+      (sum, match) => sum + (match.result === "Derrota" ? 1 : 0),
+      0,
+    );
+  }, [filteredMatches]);
+
+  const filteredResultSummary = useMemo(
+    () => ({
+      wins: filteredWinsTotal,
+      losses: filteredLossesTotal,
+      draws: filteredDrawsTotal,
+      total: filteredMatches.length,
+    }),
+    [filteredDrawsTotal, filteredLossesTotal, filteredMatches.length, filteredWinsTotal],
+  );
 
   const latestFilteredAccountLevel = useMemo(() => {
     if (!filteredMatches.length) {
@@ -1093,6 +1113,10 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
             ? ` Muestras validas para esta metrica: ${comparisonSampleSize} de ${cohortSampleSize} jugadores de la cohorte.`
             : ` Muestras validas para esta metrica: ${comparisonSampleSize} jugadores.`
           : " Sin muestra valida para esta metrica; la barra se muestra en 50% neutral.";
+      const rankingMethodDetails =
+        comparison?.rankingMethod === "bayesian_shrinkage"
+          ? ` La estadistica visible es real. Para el ranking se aplica Bayesian shrinkage (muestra=${Number(comparison?.metricSampleSize ?? 0).toFixed(0)}, media cohorte=${Number(comparison?.cohortMean ?? 0).toFixed(metric.decimals)}, prior=${Number(comparison?.priorWeight ?? 0).toFixed(0)}).`
+          : "";
 
       const neutralDetails =
         isNeutral && comparisonSampleSize > 0
@@ -1106,7 +1130,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
         fillPercent,
         isPercent: metric.isPercent,
         decimals: metric.decimals,
-        tooltip: `${metric.description}${sampleDetails}${neutralDetails}`,
+        tooltip: `${metric.description}${sampleDetails}${rankingMethodDetails}${neutralDetails}`,
         comparisonSampleSize,
         isNeutral,
       };
@@ -1661,6 +1685,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
 
     // extra computed values
     filteredPlaytimeMillis,
+    filteredResultSummary,
     latestFilteredAccountLevel,
     mostPlayedAgents,
     mostPlayedWeapons,

@@ -66,6 +66,36 @@ body {
   padding: 2rem 1.5rem 4rem;
 }
 
+.stats-top-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.stats-result-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--surface-05);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  flex-wrap: wrap;
+}
+
+.stats-result-summary-item strong {
+  color: var(--text-primary);
+}
+
+.stats-result-summary-separator {
+  color: var(--text-muted);
+}
+
 .reveal-on-scroll {
   transform: translate3d(0, 48px, 0);
   transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
@@ -3536,6 +3566,17 @@ body {
 @media (max-width: 768px) {
   .stats-container {
     padding: 1.5rem 1rem 3rem;
+  }
+
+  .stats-top-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .stats-result-summary {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .stats-header {
