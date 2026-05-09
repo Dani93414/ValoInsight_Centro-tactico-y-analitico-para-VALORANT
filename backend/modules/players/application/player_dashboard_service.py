@@ -118,9 +118,39 @@ _RANK_COMPARISON_METRICS: tuple[tuple[str, bool], ...] = (
 )
 
 _RANK_METRIC_DEFAULT_PRIOR_WEIGHT = 10.0
+_RANK_METRIC_SAMPLE_BASIS_BY_KEY: dict[str, str] = {
+    # Totals that scale primarily with exposure per round.
+    "k": "rounds",
+    "d": "rounds",
+    "a": "rounds",
+    # Ratios treated as per-round reliability in this project.
+    "kd": "rounds",
+    "kda": "rounds",
+    # Per-round performance rates.
+    "acs": "rounds",
+    "incDamage": "rounds",
+    # Match-level outcomes.
+    "wr": "matches",
+    "wins": "matches",
+    "losses": "matches",
+    # Aim / tactical rates with dedicated denominators.
+    "hsPct": "impacts",
+    "kast": "kast_rounds_or_fallback",
+}
 _RANK_METRIC_PRIOR_WEIGHT_BY_KEY: dict[str, float] = {
-    "hsPct": 20.0,
-    "kast": 20.0,
+    # Priors are expressed in the same unit as each metric sample basis.
+    "k": 120.0,
+    "d": 120.0,
+    "a": 120.0,
+    "kd": 120.0,
+    "kda": 120.0,
+    "acs": 120.0,
+    "incDamage": 120.0,
+    "wr": 10.0,
+    "wins": 10.0,
+    "losses": 10.0,
+    "hsPct": 200.0,
+    "kast": 120.0,
 }
 
 
@@ -1803,6 +1833,7 @@ def _build_empty_rank_comparison_payload(
                 "rankingValue": None,
                 "rankingMethod": "bayesian_shrinkage",
                 "metricSampleSize": 0,
+                "metricSampleBasis": _resolve_rank_metric_sample_basis(key),
                 "cohortMean": None,
                 "priorWeight": _resolve_rank_metric_prior_weight(key),
             }
@@ -1823,22 +1854,34 @@ def _resolve_rank_metric_prior_weight(metric_key: str) -> float:
     return max(float(configured), 0.0)
 
 
+def _resolve_rank_metric_sample_basis(metric_key: str) -> str:
+    return _RANK_METRIC_SAMPLE_BASIS_BY_KEY.get(metric_key, "matches")
+
+
 def _compute_rank_metric_sample_size(metric_key: str, row: dict[str, Any]) -> float:
     match_count = float(max(int(row.get("matchCount") or 0), 0))
     rounds = float(max(int(row.get("rounds") or 0), 0))
+    deaths = float(max(int(row.get("deaths") or 0), 0))
     total_shots = float(max(int(row.get("headshots") or 0), 0) + max(int(row.get("bodyshots") or 0), 0) + max(int(row.get("legshots") or 0), 0))
     round_based_kast_source_rounds = float(max(int(row.get("roundBasedKastSourceRounds") or 0), 0))
     raw_kast_count = float(max(int(row.get("rawKastFallbackCount") or 0), 0))
+    basis = _resolve_rank_metric_sample_basis(metric_key)
 
-    if metric_key in {"hsPct"}:
+    if basis == "impacts":
         return total_shots if total_shots > 0 else match_count
-    if metric_key in {"kast"}:
+    if basis == "kast_rounds_or_fallback":
         if round_based_kast_source_rounds > 0:
             return round_based_kast_source_rounds
         if raw_kast_count > 0:
             return raw_kast_count
         return match_count
-    if metric_key in {"kd", "kda", "acs", "incDamage"}:
+    if basis == "deaths":
+        if deaths > 0:
+            return deaths
+        if rounds > 0:
+            return rounds
+        return match_count
+    if basis == "rounds":
         return rounds if rounds > 0 else match_count
     return match_count
 
@@ -1925,6 +1968,7 @@ def _build_rank_metric_comparison_payload(
     player_adjusted_value: float | None,
     cohort_adjusted_values: list[float | None],
     metric_sample_size: float,
+    metric_sample_basis: str,
     cohort_mean: float | None,
     prior_weight: float,
     *,
@@ -1948,6 +1992,7 @@ def _build_rank_metric_comparison_payload(
             "rankingValue": player_adjusted_value,
             "rankingMethod": "bayesian_shrinkage",
             "metricSampleSize": round(metric_sample_size, 3),
+            "metricSampleBasis": metric_sample_basis,
             "cohortMean": cohort_mean,
             "priorWeight": round(prior_weight, 3),
         }
@@ -1964,6 +2009,7 @@ def _build_rank_metric_comparison_payload(
             "rankingValue": player_adjusted_value,
             "rankingMethod": "bayesian_shrinkage",
             "metricSampleSize": round(metric_sample_size, 3),
+            "metricSampleBasis": metric_sample_basis,
             "cohortMean": cohort_mean,
             "priorWeight": round(prior_weight, 3),
         }
@@ -1996,6 +2042,7 @@ def _build_rank_metric_comparison_payload(
         "rankingValue": player_adjusted_value,
         "rankingMethod": "bayesian_shrinkage",
         "metricSampleSize": round(metric_sample_size, 3),
+        "metricSampleBasis": metric_sample_basis,
         "cohortMean": cohort_mean,
         "priorWeight": round(prior_weight, 3),
     }
@@ -2032,6 +2079,7 @@ def _build_rank_comparison_payload_from_players(
     for key, prefer_lower in _RANK_COMPARISON_METRICS:
         player_value = player_row["metrics"].get(key)
         prior_weight = _resolve_rank_metric_prior_weight(key)
+        sample_basis = _resolve_rank_metric_sample_basis(key)
         cohort_raw_values = [row["metrics"].get(key) for row in metric_rows]
         valid_cohort_raw_values = [float(v) for v in cohort_raw_values if _is_valid_rank_metric_value(v)]
         cohort_mean = (
@@ -2060,6 +2108,7 @@ def _build_rank_comparison_payload_from_players(
             player_adjusted_value,
             cohort_adjusted_values,
             player_sample_size,
+            sample_basis,
             cohort_mean,
             prior_weight,
             prefer_lower=prefer_lower,
