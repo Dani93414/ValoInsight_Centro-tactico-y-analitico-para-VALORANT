@@ -1,5 +1,7 @@
-import { formatNumber, formatPercent } from "../../../utils/formatters";
+import { formatNumber, formatPercent, normalizeLabel } from "../../../utils/formatters";
+import type { RegionAgentStats } from "../../../types/globalStats";
 import type { AgentCompareMetric, EnrichedAgent } from "../types";
+import { formatNormalizedMetricValue, getNormalizedRegionMetricValue } from "./agentMetricNormalization";
 
 type MetricConfig = {
   key: keyof NonNullable<EnrichedAgent["globalStats"]> | "score" | "tier";
@@ -42,10 +44,23 @@ function formatValue(value: number | string | undefined, format: MetricConfig["f
 export function buildAgentCompareMetrics(
   first: EnrichedAgent,
   second: EnrichedAgent,
+  statsByRole: Map<string, RegionAgentStats[]> = new Map(),
+  globalStats: RegionAgentStats[] = [],
 ): AgentCompareMetric[] {
+  const firstRoleStats = statsByRole.get(normalizeLabel(first.role.displayName)) ?? [];
+  const secondRoleStats = statsByRole.get(normalizeLabel(second.role.displayName)) ?? [];
+
   return compareMetricConfigs.map((config) => {
     const firstValue = getMetricValue(first, config.key);
     const secondValue = getMetricValue(second, config.key);
+    const firstNormalizedValue =
+      config.key === "score" || config.key === "tier"
+        ? undefined
+        : getNormalizedRegionMetricValue(first.globalStats, config.key, firstRoleStats, globalStats);
+    const secondNormalizedValue =
+      config.key === "score" || config.key === "tier"
+        ? undefined
+        : getNormalizedRegionMetricValue(second.globalStats, config.key, secondRoleStats, globalStats);
     return {
       key: String(config.key),
       label: config.label,
@@ -53,6 +68,10 @@ export function buildAgentCompareMetrics(
       secondLabel: formatValue(secondValue, config.format),
       firstValue: typeof firstValue === "number" ? firstValue : undefined,
       secondValue: typeof secondValue === "number" ? secondValue : undefined,
+      firstNormalizedLabel: formatNormalizedMetricValue(firstNormalizedValue, config.format === "text" ? "number" : config.format),
+      secondNormalizedLabel: formatNormalizedMetricValue(secondNormalizedValue, config.format === "text" ? "number" : config.format),
+      firstNormalizedValue,
+      secondNormalizedValue,
     };
   });
 }

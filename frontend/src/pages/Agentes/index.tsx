@@ -99,6 +99,54 @@ export default function Agentes() {
     setIsCompareSelectorOpen((current) => !current);
   };
 
+  const closeOpenAgentViews = () => {
+    setIsCompareSelectorOpen(false);
+    viewModel.closeDetail();
+    viewModel.clearCompareAgents();
+    previousScrollBeforeDetailRef.current = null;
+    previousScrollBeforeCompareRef.current = null;
+  };
+
+  const handleRegionChange = (value: string) => {
+    viewModel.setSelectedRegion(value);
+    closeOpenAgentViews();
+  };
+
+  const handleRoleChange = (value: string) => {
+    viewModel.setActiveRole(value);
+    closeOpenAgentViews();
+  };
+
+  const handleMapFilterChange = (value: string) => {
+    viewModel.setMapFilter(value);
+    closeOpenAgentViews();
+  };
+
+  const handleRankFilterChange = (value: string) => {
+    viewModel.setRankFilter(value);
+    closeOpenAgentViews();
+  };
+
+  const handleActFilterChange = (value: string) => {
+    viewModel.setActFilter(value);
+    closeOpenAgentViews();
+  };
+
+  const handleSearchChange = (value: string) => {
+    viewModel.setSearch(value);
+    closeOpenAgentViews();
+  };
+
+  const handleSortChange = (value: (typeof viewModel.sortKey)) => {
+    viewModel.setSortKey(value);
+    closeOpenAgentViews();
+  };
+
+  const handleResetFilters = () => {
+    viewModel.resetFilters();
+    closeOpenAgentViews();
+  };
+
   if (viewModel.isLoading) {
     return (
       <div className="loading-screen">
@@ -176,14 +224,14 @@ export default function Agentes() {
         search={viewModel.search}
         selectedRegion={viewModel.selectedRegion}
         sortKey={viewModel.sortKey}
-        onActFilterChange={viewModel.setActFilter}
-        onMapFilterChange={viewModel.setMapFilter}
-        onRankFilterChange={viewModel.setRankFilter}
-        onRegionChange={viewModel.setSelectedRegion}
-        onRoleChange={viewModel.setActiveRole}
-        onSearchChange={viewModel.setSearch}
-        onSortChange={viewModel.setSortKey}
-        onResetFilters={viewModel.resetFilters}
+        onActFilterChange={handleActFilterChange}
+        onMapFilterChange={handleMapFilterChange}
+        onRankFilterChange={handleRankFilterChange}
+        onRegionChange={handleRegionChange}
+        onRoleChange={handleRoleChange}
+        onSearchChange={handleSearchChange}
+        onSortChange={handleSortChange}
+        onResetFilters={handleResetFilters}
       />
       <AgentCompareSelector
         agents={viewModel.filteredAgents}

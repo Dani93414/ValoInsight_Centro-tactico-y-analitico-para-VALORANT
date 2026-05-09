@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 from typing import Any
 
 try:
@@ -60,6 +62,10 @@ _RANK_NAMES = {
     26: "Immortal 3",
     27: "Radiant",
 }
+
+_OPTIONS_CACHE_TTL_SECONDS = 600.0
+_options_cache: dict[str, tuple[float, dict[str, list[dict[str, Any]]]]] = {}
+_options_cache_lock = Lock()
 
 
 def _safe_div(num: float, den: float) -> float:
@@ -182,6 +188,20 @@ def _build_options(region: str | None) -> dict[str, list[dict[str, Any]]]:
     return {"maps": maps, "acts": acts, "ranks": ranks}
 
 
+def _build_options_cached(region: str | None) -> dict[str, list[dict[str, Any]]]:
+    cache_key = region or "__all__"
+    now = monotonic()
+    with _options_cache_lock:
+        cached = _options_cache.get(cache_key)
+        if cached and cached[0] > now:
+            return cached[1]
+
+    options = _build_options(region)
+    with _options_cache_lock:
+        _options_cache[cache_key] = (now + _OPTIONS_CACHE_TTL_SECONDS, options)
+    return options
+
+
 def get_global_agent_stats(
     *,
     region: str | None = None,
@@ -283,7 +303,7 @@ def get_global_agent_stats(
             "act": act_norm,
             "role": role_norm,
         },
-        "options": _build_options(region_norm),
+        "options": _build_options_cached(region_norm),
         "sampleSize": {
             "matches": len(match_ids),
             "picks": filtered_picks,

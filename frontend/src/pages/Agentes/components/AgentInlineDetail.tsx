@@ -50,6 +50,14 @@ function getDiffTone(metric: AgentComparisonMetric) {
   return "neutral";
 }
 
+function getNormalizedDiffTone(metric: AgentComparisonMetric) {
+  if (typeof metric.normalizedDiff === "number") {
+    if (metric.normalizedDiff > 0) return "positive";
+    if (metric.normalizedDiff < 0) return "negative";
+  }
+  return "neutral";
+}
+
 function formatStatValue(value: number | undefined, format: "number" | "percent") {
   return format === "percent" ? formatPercent(value) : formatNumber(value, 2);
 }
@@ -219,6 +227,9 @@ export function AgentInlineDetail({
                   <span role="columnheader">Global</span>
                   <span role="columnheader">Tú</span>
                   <span role="columnheader">Diferencia</span>
+                  <span role="columnheader">Global norm.</span>
+                  <span role="columnheader">Tú norm.</span>
+                  <span role="columnheader">Diferencia norm.</span>
                 </div>
                 {agent.comparisonMetrics.map((metric) => (
                   <div key={metric.key} className="agents-comparison-row" role="row">
@@ -227,6 +238,11 @@ export function AgentInlineDetail({
                     <strong role="cell">{metric.personalLabel}</strong>
                     <em role="cell" className={`metric-diff metric-diff-${getDiffTone(metric)}`}>
                       {metric.diffLabel}
+                    </em>
+                    <strong role="cell">{metric.globalNormalizedLabel ?? "-"}</strong>
+                    <strong role="cell">{metric.personalNormalizedLabel ?? "-"}</strong>
+                    <em role="cell" className={`metric-diff metric-diff-${getNormalizedDiffTone(metric)}`}>
+                      {metric.normalizedDiffLabel ?? "-"}
                     </em>
                   </div>
                 ))}
@@ -367,3 +383,4 @@ export function AgentInlineDetail({
     </article>
   );
 }
+

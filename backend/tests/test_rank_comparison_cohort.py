@@ -397,6 +397,128 @@ class RankComparisonCohortTest(unittest.TestCase):
             many_payload["metricComparisons"]["d"]["percentile"],
         )
 
+    def test_kills_assists_deaths_display_totals_but_rank_per_round(self):
+        cohort_rows = [
+            {
+                "puuid": "fast-impact",
+                "latestTier": 19,
+                "matchCount": 2,
+                "wins": 1,
+                "kills": 40,
+                "deaths": 20,
+                "assists": 10,
+                "rounds": 40,
+                "score": 9000,
+                "headshots": 10,
+                "bodyshots": 30,
+                "legshots": 0,
+                "roundBasedKastRounds": 28,
+                "roundBasedKastSourceRounds": 40,
+                "rawKastFallbackSum": 0,
+                "rawKastFallbackCount": 0,
+                "damageDelta": 40,
+            },
+            {
+                "puuid": "slow-volume",
+                "latestTier": 19,
+                "matchCount": 4,
+                "wins": 2,
+                "kills": 40,
+                "deaths": 20,
+                "assists": 10,
+                "rounds": 80,
+                "score": 16000,
+                "headshots": 10,
+                "bodyshots": 30,
+                "legshots": 0,
+                "roundBasedKastRounds": 50,
+                "roundBasedKastSourceRounds": 80,
+                "rawKastFallbackSum": 0,
+                "rawKastFallbackCount": 0,
+                "damageDelta": 20,
+            },
+        ]
+
+        fast_payload = _build_rank_comparison_payload_from_players("fast-impact", 19, cohort_rows)
+        slow_payload = _build_rank_comparison_payload_from_players("slow-volume", 19, cohort_rows)
+
+        self.assertEqual(fast_payload["metricComparisons"]["k"]["rawValue"], 40.0)
+        self.assertEqual(slow_payload["metricComparisons"]["k"]["rawValue"], 40.0)
+        self.assertGreater(
+            fast_payload["metricComparisons"]["k"]["rankingValue"],
+            slow_payload["metricComparisons"]["k"]["rankingValue"],
+        )
+        self.assertGreater(
+            fast_payload["metricComparisons"]["k"]["percentile"],
+            slow_payload["metricComparisons"]["k"]["percentile"],
+        )
+
+    def test_wins_losses_display_totals_but_rank_per_match(self):
+        cohort_rows = [
+            {
+                "puuid": "efficient-wins",
+                "latestTier": 19,
+                "matchCount": 5,
+                "wins": 4,
+                "kills": 80,
+                "deaths": 60,
+                "assists": 20,
+                "rounds": 120,
+                "score": 25000,
+                "headshots": 20,
+                "bodyshots": 60,
+                "legshots": 0,
+                "roundBasedKastRounds": 80,
+                "roundBasedKastSourceRounds": 120,
+                "rawKastFallbackSum": 0,
+                "rawKastFallbackCount": 0,
+                "damageDelta": 50,
+            },
+            {
+                "puuid": "volume-wins",
+                "latestTier": 19,
+                "matchCount": 10,
+                "wins": 4,
+                "kills": 160,
+                "deaths": 120,
+                "assists": 40,
+                "rounds": 240,
+                "score": 50000,
+                "headshots": 40,
+                "bodyshots": 120,
+                "legshots": 0,
+                "roundBasedKastRounds": 150,
+                "roundBasedKastSourceRounds": 240,
+                "rawKastFallbackSum": 0,
+                "rawKastFallbackCount": 0,
+                "damageDelta": 20,
+            },
+        ]
+
+        efficient_payload = _build_rank_comparison_payload_from_players("efficient-wins", 19, cohort_rows)
+        volume_payload = _build_rank_comparison_payload_from_players("volume-wins", 19, cohort_rows)
+
+        self.assertEqual(efficient_payload["metricComparisons"]["wins"]["rawValue"], 4.0)
+        self.assertEqual(volume_payload["metricComparisons"]["wins"]["rawValue"], 4.0)
+        self.assertGreater(
+            efficient_payload["metricComparisons"]["wins"]["rankingValue"],
+            volume_payload["metricComparisons"]["wins"]["rankingValue"],
+        )
+        self.assertGreater(
+            efficient_payload["metricComparisons"]["wins"]["percentile"],
+            volume_payload["metricComparisons"]["wins"]["percentile"],
+        )
+        self.assertEqual(efficient_payload["metricComparisons"]["losses"]["rawValue"], 1.0)
+        self.assertEqual(volume_payload["metricComparisons"]["losses"]["rawValue"], 6.0)
+        self.assertLess(
+            efficient_payload["metricComparisons"]["losses"]["rankingValue"],
+            volume_payload["metricComparisons"]["losses"]["rankingValue"],
+        )
+        self.assertGreater(
+            efficient_payload["metricComparisons"]["losses"]["percentile"],
+            volume_payload["metricComparisons"]["losses"]["percentile"],
+        )
+
     def test_players_without_hs_denominator_are_excluded_for_hs_metric(self):
         cohort_rows = [
             {

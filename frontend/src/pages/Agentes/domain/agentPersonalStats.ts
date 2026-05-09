@@ -158,6 +158,11 @@ export function buildPersonalStatsByAgent(
     result.set(agentKey, {
       picks: stats.picks,
       wins: stats.wins,
+      losses: Math.max(0, stats.picks - stats.wins),
+      rounds: stats.totals.rounds,
+      kills: stats.totals.kills,
+      deaths: stats.totals.deaths,
+      assists: stats.totals.assists,
       ...buildPersonalDerivedStats(stats),
       usagePct: safeDivide(stats.picks * 100, totalPicks),
       winRate: safeDivide(stats.wins * 100, stats.picks),

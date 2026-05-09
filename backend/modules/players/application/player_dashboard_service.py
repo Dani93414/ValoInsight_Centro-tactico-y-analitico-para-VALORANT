@@ -152,6 +152,8 @@ _RANK_METRIC_PRIOR_WEIGHT_BY_KEY: dict[str, float] = {
     "hsPct": 200.0,
     "kast": 120.0,
 }
+_RANK_ROUND_RATE_METRIC_KEYS = {"k", "d", "a"}
+_RANK_MATCH_RATE_METRIC_KEYS = {"wins", "losses"}
 
 
 def _normalize_rank_label(value: Any) -> str:
@@ -1892,14 +1894,14 @@ def _compute_bayesian_adjusted_value(
     sample_size: Any,
     cohort_mean: Any,
     prior_weight: Any,
-) -> float:
+) -> float | None:
     raw_numeric = float(raw_value) if _is_valid_rank_metric_value(raw_value) else None
     sample_numeric = float(sample_size) if _is_valid_rank_metric_value(sample_size) else 0.0
     cohort_mean_numeric = float(cohort_mean) if _is_valid_rank_metric_value(cohort_mean) else None
     prior_numeric = float(prior_weight) if _is_valid_rank_metric_value(prior_weight) else 0.0
 
     if raw_numeric is None:
-        raw_numeric = cohort_mean_numeric if cohort_mean_numeric is not None else 0.0
+        return None
     if cohort_mean_numeric is None:
         return raw_numeric
     if sample_numeric <= 0:
@@ -1961,6 +1963,26 @@ def _build_rank_metric_values(row: dict[str, Any]) -> dict[str, float | None]:
         "wins": wins,
         "losses": losses,
     }
+
+
+def _build_rank_metric_ranking_value(
+    metric_key: str,
+    display_value: float | None,
+    row: dict[str, Any],
+) -> float | None:
+    if metric_key not in _RANK_ROUND_RATE_METRIC_KEYS and metric_key not in _RANK_MATCH_RATE_METRIC_KEYS:
+        return display_value
+    if not _is_valid_rank_metric_value(display_value):
+        return None
+    if metric_key in _RANK_MATCH_RATE_METRIC_KEYS:
+        matches = float(max(int(row.get("matchCount") or 0), 0))
+        if matches <= 0:
+            return None
+        return _safe_div(float(display_value), matches)
+    rounds = float(max(int(row.get("rounds") or 0), 0))
+    if rounds <= 0:
+        return None
+    return _safe_div(float(display_value), rounds)
 
 
 def _build_rank_metric_comparison_payload(
@@ -2080,23 +2102,28 @@ def _build_rank_comparison_payload_from_players(
         player_value = player_row["metrics"].get(key)
         prior_weight = _resolve_rank_metric_prior_weight(key)
         sample_basis = _resolve_rank_metric_sample_basis(key)
-        cohort_raw_values = [row["metrics"].get(key) for row in metric_rows]
-        valid_cohort_raw_values = [float(v) for v in cohort_raw_values if _is_valid_rank_metric_value(v)]
+        cohort_ranking_values = [
+            _build_rank_metric_ranking_value(key, row["metrics"].get(key), cohort_rows[idx])
+            for idx, row in enumerate(metric_rows)
+        ]
+        valid_cohort_raw_values = [float(v) for v in cohort_ranking_values if _is_valid_rank_metric_value(v)]
         cohort_mean = (
             _safe_div(sum(valid_cohort_raw_values), len(valid_cohort_raw_values))
             if valid_cohort_raw_values
             else None
         )
-        player_sample_size = _compute_rank_metric_sample_size(key, next((r for r in cohort_rows if str(r.get("puuid") or "") == puuid), {}))
+        player_source_row = next((r for r in cohort_rows if str(r.get("puuid") or "") == puuid), {})
+        player_ranking_value = _build_rank_metric_ranking_value(key, player_value, player_source_row)
+        player_sample_size = _compute_rank_metric_sample_size(key, player_source_row)
         player_adjusted_value = _compute_bayesian_adjusted_value(
-            raw_value=player_value,
+            raw_value=player_ranking_value,
             sample_size=player_sample_size,
             cohort_mean=cohort_mean,
             prior_weight=prior_weight,
         )
         cohort_adjusted_values = [
             _compute_bayesian_adjusted_value(
-                raw_value=row["metrics"].get(key),
+                raw_value=cohort_ranking_values[idx],
                 sample_size=_compute_rank_metric_sample_size(key, cohort_rows[idx]),
                 cohort_mean=cohort_mean,
                 prior_weight=prior_weight,
