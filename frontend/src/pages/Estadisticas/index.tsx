@@ -97,6 +97,13 @@ function getProfilePerformanceFillColor(percent: number) {
   return `linear-gradient(90deg, ${baseColor} 0%, ${accentColor} 100%)`;
 }
 
+function getProfilePerformanceMetricFillColor(metricKey: string, percent: number) {
+  if (metricKey === "d" || metricKey === "losses") {
+    return "linear-gradient(90deg, hsl(355 76% 49%) 0%, hsl(8 82% 58%) 100%)";
+  }
+  return getProfilePerformanceFillColor(percent);
+}
+
 const TACTICAL_TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
   background: "rgba(20,22,28,0.95)",
   border: "1px solid rgba(255,255,255,0.1)",
@@ -1390,7 +1397,8 @@ export default function Estadisticas() {
                           className="profile-performance-bar-fill"
                           style={{
                             width: `${metric.fillPercent}%`,
-                            background: getProfilePerformanceFillColor(
+                            background: getProfilePerformanceMetricFillColor(
+                              metric.key,
                               metric.fillPercent,
                             ),
                           }}

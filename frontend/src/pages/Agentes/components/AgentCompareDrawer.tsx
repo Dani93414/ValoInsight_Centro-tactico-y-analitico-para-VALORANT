@@ -49,14 +49,18 @@ export function AgentCompareDrawer({ agents, metrics, onClear, onRemove }: Props
       <div className="agent-compare-table" role="table" aria-label="Métricas comparadas entre agentes">
         <div className="agent-compare-row agent-compare-row--head" role="row">
           <span role="columnheader">Métrica</span>
-          <span role="columnheader">{first.displayName}</span>
-          <span role="columnheader">{second.displayName}</span>
+          <span role="columnheader">{first.displayName} real</span>
+          <span role="columnheader">{first.displayName} norm.</span>
+          <span role="columnheader">{second.displayName} real</span>
+          <span role="columnheader">{second.displayName} norm.</span>
         </div>
         {metrics.map((metric) => (
           <div key={metric.key} className="agent-compare-row" role="row">
             <span role="cell">{metric.label}</span>
             <strong role="cell">{metric.firstLabel}</strong>
+            <strong role="cell">{metric.firstNormalizedLabel ?? "-"}</strong>
             <strong role="cell">{metric.secondLabel}</strong>
+            <strong role="cell">{metric.secondNormalizedLabel ?? "-"}</strong>
           </div>
         ))}
       </div>

@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, LogIn, LogOut } from "lucide-react";
+import { ChevronDown, LogIn, LogOut, Search } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AuthModal } from "../auth/AuthModal";
+import { PlayerSearchModal } from "../search/PlayerSearchModal";
 import { useAuth } from "../../context/AuthContext";
 import "./AppTopbar.css";
 
@@ -74,6 +75,7 @@ function getCurrentPage(pathname: string): CurrentPage {
 export function AppTopbar() {
   const { user, isLoggedIn, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isPlayerSearchOpen, setIsPlayerSearchOpen] = useState(false);
   const [moreMenuMode, setMoreMenuMode] = useState<"default" | "open" | "closed">(
     "default",
   );
@@ -193,6 +195,16 @@ export function AppTopbar() {
         </nav>
 
         <div className="app-topbar__actions">
+          <button
+            className="app-topbar__search-button"
+            type="button"
+            onClick={() => setIsPlayerSearchOpen(true)}
+            aria-label="Buscar jugador"
+          >
+            <Search size={16} aria-hidden="true" />
+            <span>Buscar jugador</span>
+          </button>
+
           {isLoggedIn && user?.puuid && (
             <button
               className={`app-topbar__nav-button${
@@ -230,6 +242,10 @@ export function AppTopbar() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+      <PlayerSearchModal
+        isOpen={isPlayerSearchOpen}
+        onClose={() => setIsPlayerSearchOpen(false)}
       />
     </>
   );

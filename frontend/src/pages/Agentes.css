@@ -836,7 +836,7 @@ body {
 
 .agents-comparison-row {
   display: grid;
-  grid-template-columns: minmax(118px, 1.35fr) repeat(3, minmax(72px, 0.85fr));
+  grid-template-columns: minmax(118px, 1.28fr) repeat(6, minmax(62px, 0.78fr));
   gap: 0.55rem;
   align-items: center;
   min-width: 0;
@@ -1938,7 +1938,7 @@ body {
   }
 
   .agents-comparison-row {
-    grid-template-columns: minmax(90px, 1.2fr) repeat(3, minmax(58px, 0.8fr));
+    grid-template-columns: minmax(90px, 1.2fr) repeat(6, minmax(48px, 0.78fr));
     gap: 0.35rem;
     padding: 0.5rem;
     font-size: 0.7rem;
@@ -3011,7 +3011,7 @@ body {
 
 .agent-compare-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) repeat(2, minmax(90px, 0.8fr));
+  grid-template-columns: minmax(120px, 1fr) repeat(4, minmax(76px, 0.78fr));
   gap: 0.65rem;
   padding: 0.58rem 0.72rem;
   border-top: 1px solid var(--border-color);

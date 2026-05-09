@@ -280,6 +280,36 @@
     transform var(--app-topbar-ease);
 }
 
+.app-topbar__search-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid var(--app-topbar-border);
+  border-radius: var(--app-topbar-radius);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--app-topbar-muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+  gap: 8px;
+  letter-spacing: 0.07em;
+  padding: 0 12px;
+  text-transform: uppercase;
+  transition:
+    color var(--app-topbar-ease),
+    background var(--app-topbar-ease),
+    border-color var(--app-topbar-ease),
+    transform var(--app-topbar-ease);
+}
+
+.app-topbar__search-button:hover {
+  color: #fff;
+  border-color: var(--app-topbar-border-red);
+  background: rgba(255, 70, 85, 0.12);
+  transform: translateY(-1px);
+}
+
 .app-topbar__login-button:hover {
   background: rgba(255, 70, 85, 0.18);
   box-shadow: 0 0 28px rgba(255, 70, 85, 0.18);

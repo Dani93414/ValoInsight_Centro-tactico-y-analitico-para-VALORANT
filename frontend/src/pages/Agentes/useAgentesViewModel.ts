@@ -18,6 +18,12 @@ import {
 } from "../../utils/formatters";
 import { buildAgentCompareMetrics } from "./domain/agentComparisons";
 import { getAgentKey } from "./domain/agentKeys";
+import {
+  formatNormalizedMetricValue,
+  type NormalizationMetricKey,
+  getNormalizedPersonalMetricValue,
+  getNormalizedRegionMetricValue,
+} from "./domain/agentMetricNormalization";
 import { buildPersonalStatsByAgent } from "./domain/agentPersonalStats";
 import { buildAgentProfileMetrics } from "./domain/agentProfile";
 import {
@@ -43,7 +49,8 @@ type RouteState = {
 } | null;
 
 type ComparisonMetricConfig = {
-  key: keyof RegionAgentStats;
+  key: keyof RegionAgentStats | "wins" | "losses" | "kills" | "deaths" | "assists";
+  normalizationKey?: NormalizationMetricKey;
   personalKey?: keyof PersonalAgentStats;
   label: string;
   format: "number" | "percent";
@@ -51,7 +58,12 @@ type ComparisonMetricConfig = {
 
 const comparisonMetricConfigs: ComparisonMetricConfig[] = [
   { key: "win_rate", personalKey: "winRate", label: "Win Rate", format: "percent" },
+  { key: "wins", personalKey: "wins", normalizationKey: "wins_per_match", label: "Wins", format: "number" },
+  { key: "losses", personalKey: "losses", normalizationKey: "losses_per_match", label: "Losses", format: "number" },
   { key: "pick_rate", personalKey: "usagePct", label: "Pick Rate", format: "percent" },
+  { key: "kills", personalKey: "kills", normalizationKey: "kills_per_round", label: "Kills", format: "number" },
+  { key: "deaths", personalKey: "deaths", normalizationKey: "deaths_per_round", label: "Deaths", format: "number" },
+  { key: "assists", personalKey: "assists", normalizationKey: "assists_per_round", label: "Assists", format: "number" },
   { key: "avg_kd", label: "KD medio", format: "number" },
   { key: "avg_kda", label: "KDA medio", format: "number" },
   { key: "avg_acs", label: "ACS medio", format: "number" },
@@ -143,8 +155,21 @@ function getPersonalMetricValue(personalStats: PersonalAgentStats | null | undef
   return typeof value === "number" ? value : undefined;
 }
 
-function getGlobalMetricValue(globalStats: RegionAgentStats | undefined, key: keyof RegionAgentStats) {
-  const value = globalStats?.[key];
+function getGlobalMetricValue(
+  globalStats: RegionAgentStats | undefined,
+  key: ComparisonMetricConfig["key"],
+) {
+  if (key === "wins") return globalStats?.wins;
+  if (key === "losses") {
+    const picks = globalStats?.picks;
+    const wins = globalStats?.wins;
+    if (typeof picks !== "number" || typeof wins !== "number") return undefined;
+    return Math.max(0, picks - wins);
+  }
+  if (key === "kills") return globalStats?.totals?.kills;
+  if (key === "deaths") return globalStats?.totals?.deaths;
+  if (key === "assists") return globalStats?.totals?.assists;
+  const value = globalStats?.[key as keyof RegionAgentStats];
   return typeof value === "number" ? value : undefined;
 }
 
@@ -162,16 +187,53 @@ function formatDiff(globalValue: number | undefined, personalValue: number | und
   return `${sign}${formatNumber(diff, 2)}`;
 }
 
+function formatNormalizedDiff(
+  globalValue: number | undefined,
+  personalValue: number | undefined,
+  format: ComparisonMetricConfig["format"],
+) {
+  if (globalValue === undefined || personalValue === undefined) return "-";
+  const diff = personalValue - globalValue;
+  const sign = diff > 0 ? "+" : "";
+  if (format === "percent") return `${sign}${formatPercent(diff)}`;
+  return `${sign}${formatNumber(diff, 2)}`;
+}
+
 function buildComparisonMetrics(
   globalStats: RegionAgentStats | undefined,
   personalStats: PersonalAgentStats | null | undefined,
+  roleStats: RegionAgentStats[],
+  globalCohort: RegionAgentStats[],
 ): AgentComparisonMetric[] {
   return comparisonMetricConfigs
-    .map((config) => {
+    .map<AgentComparisonMetric | null>((config) => {
       const globalValue = getGlobalMetricValue(globalStats, config.key);
       const personalValue = getPersonalMetricValue(personalStats, config);
       if (globalValue === undefined && personalValue === undefined) return null;
       const diff = globalValue === undefined || personalValue === undefined ? undefined : personalValue - globalValue;
+      const normalizedMetricKey = (config.normalizationKey ?? config.key) as NormalizationMetricKey;
+      const globalNormalizedValue = getNormalizedRegionMetricValue(
+        globalStats,
+        normalizedMetricKey,
+        roleStats,
+        globalCohort,
+      );
+      const personalNormalizedValue = getNormalizedPersonalMetricValue(
+        personalStats,
+        globalStats,
+        normalizedMetricKey,
+        roleStats,
+        globalCohort,
+      );
+      const normalizedDiff =
+        globalNormalizedValue === undefined || personalNormalizedValue === undefined
+          ? undefined
+          : personalNormalizedValue - globalNormalizedValue;
+      const normalizedDiffLabel = formatNormalizedDiff(
+        globalNormalizedValue,
+        personalNormalizedValue,
+        config.format,
+      );
       return {
         key: config.key,
         label: config.label,
@@ -179,6 +241,16 @@ function buildComparisonMetrics(
         personalLabel: formatComparisonValue(personalValue, config.format),
         diffLabel: formatDiff(globalValue, personalValue, config.format),
         ...(diff !== undefined ? { diff } : {}),
+        ...(globalNormalizedValue !== undefined
+          ? { globalNormalizedLabel: formatNormalizedMetricValue(globalNormalizedValue, config.format) }
+          : {}),
+        ...(personalNormalizedValue !== undefined
+          ? { personalNormalizedLabel: formatNormalizedMetricValue(personalNormalizedValue, config.format) }
+          : {}),
+        ...(globalNormalizedValue !== undefined ? { globalNormalizedValue } : {}),
+        ...(personalNormalizedValue !== undefined ? { personalNormalizedValue } : {}),
+        ...(normalizedDiff !== undefined ? { normalizedDiff } : {}),
+        normalizedDiffLabel,
       };
     })
     .filter((metric): metric is AgentComparisonMetric => metric !== null);
@@ -244,7 +316,6 @@ export function useAgentesViewModel() {
     rank: rankFilter,
     map: mapFilter,
     act: actFilter,
-    role: activeRole,
   });
 
   const baseAgents = useMemo(() => normalizeArrayResponse<Agente>(rawAgentes), [rawAgentes]);
@@ -295,13 +366,15 @@ export function useAgentesViewModel() {
           confidence,
           lowSample: isLowSample(globalStats),
         };
-        enriched.comparisonMetrics = buildComparisonMetrics(enriched.globalStats, enriched.personalStats);
         return enriched;
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
     const scoreByKey = calculateAgentScores(initialAgents);
     const statsByRole = new Map<string, RegionAgentStats[]>();
+    const globalCohort = initialAgents
+      .map((agent) => agent.globalStats)
+      .filter((stats): stats is RegionAgentStats => Boolean(stats));
     initialAgents.forEach((agent) => {
       if (!agent.globalStats) return;
       const key = normalizeLabel(agent.role.displayName);
@@ -311,14 +384,17 @@ export function useAgentesViewModel() {
     return initialAgents.map((agent) => {
       const score = scoreByKey.get(getAgentKey(agent)) ?? 50;
       const lowSample = isLowSample(agent.globalStats);
+      const roleStats = statsByRole.get(normalizeLabel(agent.role.displayName)) ?? [];
+      const tier = getAgentTier(score, lowSample);
       return {
         ...agent,
         score,
-        tier: getAgentTier(score, lowSample),
+        tier,
         lowSample,
+        comparisonMetrics: buildComparisonMetrics(agent.globalStats, agent.personalStats, roleStats, globalCohort),
         profileMetrics: buildAgentProfileMetrics(
-          { ...agent, score, tier: getAgentTier(score, lowSample), lowSample },
-          statsByRole.get(normalizeLabel(agent.role.displayName)) ?? [],
+          { ...agent, score, tier, lowSample },
+          roleStats,
         ),
       };
     });
@@ -396,10 +472,13 @@ export function useAgentesViewModel() {
 
   const filteredAgents = useMemo(() => {
     const normalizedSearch = normalizeLabel(search);
+    const normalizedRole = normalizeLabel(activeRole);
     const filtered = agents.filter((agent) => {
       const matchesSearch = normalizeLabel(agent.displayName).includes(normalizedSearch);
-      const hasGlobalData = activeRole === "all" ? true : Boolean(agent.globalStats);
-      return matchesSearch && hasGlobalData;
+      const matchesRole =
+        activeRole === "all" ||
+        normalizeLabel(agent.role.displayName) === normalizedRole;
+      return matchesSearch && matchesRole;
     });
     return sortAgents(filtered, sortKey);
   }, [activeRole, agents, search, sortKey]);
@@ -490,12 +569,29 @@ export function useAgentesViewModel() {
 
   const clearCompareAgents = () => setCompareAgents([]);
 
+  const roleStatsByRole = useMemo(() => {
+    const byRole = new Map<string, RegionAgentStats[]>();
+    agents.forEach((agent) => {
+      if (!agent.globalStats) return;
+      const role = normalizeLabel(agent.role.displayName);
+      byRole.set(role, [...(byRole.get(role) ?? []), agent.globalStats]);
+    });
+    return byRole;
+  }, [agents]);
+
   const compareMetrics = useMemo(
     () =>
       compareAgents.length === 2
-        ? buildAgentCompareMetrics(compareAgents[0], compareAgents[1])
+        ? buildAgentCompareMetrics(
+            compareAgents[0],
+            compareAgents[1],
+            roleStatsByRole,
+            agents
+              .map((agent) => agent.globalStats)
+              .filter((stats): stats is RegionAgentStats => Boolean(stats)),
+          )
         : [],
-    [compareAgents],
+    [agents, compareAgents, roleStatsByRole],
   );
 
   const currentSelectedAgent = selectedAgent

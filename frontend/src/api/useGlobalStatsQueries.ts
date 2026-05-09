@@ -21,7 +21,6 @@ export function useGlobalAgentStats(filters: GlobalAgentStatsFilters) {
       filters.rank ?? "all",
       filters.map ?? "all",
       filters.act ?? "all",
-      filters.role ?? "all",
     ],
     queryFn: () => getGlobalAgentStats(filters),
     enabled: Boolean(filters.region),

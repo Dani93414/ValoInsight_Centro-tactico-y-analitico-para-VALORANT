@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Check, Search, ShieldCheck, X } from "lucide-react";
 import { searchPlayers } from "../../api/playerApi";
 import { useAuth } from "../../context/AuthContext";
+import "./AuthModal.css";
 
 type AuthMode = "login" | "register";
 

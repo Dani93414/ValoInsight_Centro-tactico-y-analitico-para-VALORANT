@@ -18,6 +18,10 @@ export type AgentCompareMetric = {
   secondLabel: string;
   firstValue?: number;
   secondValue?: number;
+  firstNormalizedLabel?: string;
+  secondNormalizedLabel?: string;
+  firstNormalizedValue?: number;
+  secondNormalizedValue?: number;
 };
 
 export type EnrichedAgent = Agente & {
@@ -34,6 +38,11 @@ export type EnrichedAgent = Agente & {
 export type PersonalAgentStats = {
   picks: number;
   wins: number;
+  losses: number;
+  rounds?: number;
+  kills: number;
+  deaths: number;
+  assists: number;
   usagePct: number;
   winRate: number;
   avg_kd?: number;
@@ -58,7 +67,13 @@ export type AgentComparisonMetric = {
   globalLabel: string;
   personalLabel: string;
   diffLabel: string;
+  normalizedDiffLabel?: string;
   diff?: number;
+  normalizedDiff?: number;
+  globalNormalizedLabel?: string;
+  personalNormalizedLabel?: string;
+  globalNormalizedValue?: number;
+  personalNormalizedValue?: number;
 };
 
 export type AgentFilterSummary = {
