@@ -288,6 +288,7 @@ export type RankComparisonMetricComparison = {
   rankingValue?: number | null;
   rankingMethod?: "bayesian_shrinkage" | string;
   metricSampleSize?: number;
+  metricSampleBasis?: string;
   cohortMean?: number | null;
   priorWeight?: number;
 };
