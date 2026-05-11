@@ -381,6 +381,12 @@ def get_skins(limit=None):
     if not ultimo:
         return []
 
+    themes_by_uuid = {
+        theme_uuid: theme.get("displayName")
+        for theme in ultimo.get("themes", [])
+        for theme_uuid in (theme.get("uuid") or theme.get("id"),)
+        if theme_uuid and theme.get("displayName")
+    }
     skins = []
 
     for weapon in ultimo.get("weapons", []):
@@ -393,6 +399,40 @@ def get_skins(limit=None):
             if not name:
                 continue
 
+            theme_uuid = skin.get("themeUuid") or skin.get("themeUUID")
+            theme_name = themes_by_uuid.get(theme_uuid) if theme_uuid else None
+            chromas = []
+            for chroma in skin.get("chromas", []) or []:
+                chroma_uuid = chroma.get("uuid") or chroma.get("id")
+                if not chroma_uuid:
+                    continue
+                chromas.append({
+                    "uuid": chroma_uuid,
+                    "displayName": chroma.get("displayName") or "Chroma",
+                    "displayIcon": (
+                        f"/content/weapons/{weapon_uuid}/skins/{skin_uuid}/"
+                        f"chromas/{chroma_uuid}/displayIcon.png"
+                    ),
+                    "fullRender": (
+                        f"/content/weapons/{weapon_uuid}/skins/{skin_uuid}/"
+                        f"chromas/{chroma_uuid}/fullRender.png"
+                    ),
+                })
+
+            levels = []
+            for level in skin.get("levels", []) or []:
+                level_uuid = level.get("uuid") or level.get("id")
+                if not level_uuid:
+                    continue
+                levels.append({
+                    "uuid": level_uuid,
+                    "displayName": level.get("displayName") or "Nivel",
+                    "displayIcon": (
+                        f"/content/weapons/{weapon_uuid}/skins/{skin_uuid}/"
+                        f"levels/{level_uuid}/displayIcon.png"
+                    ),
+                })
+
             skins.append({
                 "uuid": skin_uuid,
                 "displayName": name,
@@ -402,7 +442,8 @@ def get_skins(limit=None):
                     skin.get("contentTierUuid")
                     or skin.get("contentTierUUID")
                 ),
-                "themeUuid": skin.get("themeUuid"),
+                "themeUuid": theme_uuid,
+                "themeName": theme_name or "Default",
                 "displayIcon": _local_weapon_skin_image(
                     weapon_uuid,
                     skin_uuid,
@@ -413,8 +454,10 @@ def get_skins(limit=None):
                     skin_uuid,
                     "wallpaper",
                 ),
-                "chromasCount": len(skin.get("chromas", []) or []),
-                "levelsCount": len(skin.get("levels", []) or []),
+                "chromasCount": len(chromas),
+                "levelsCount": len(levels),
+                "chromas": chromas,
+                "levels": levels,
             })
 
             if limit is not None and len(skins) >= limit:

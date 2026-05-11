@@ -98,14 +98,21 @@ export type GearContent = NamedContentItem & {
   shopImage?: ContentImage;
 };
 
+export type SkinVariantContent = NamedContentItem & {
+  fullRender?: ContentImage;
+};
+
 export type SkinContent = NamedContentItem & {
   weaponUuid?: string | null;
   weaponName?: string | null;
   contentTierUuid?: string | null;
   themeUuid?: string | null;
+  themeName?: string | null;
   wallpaper?: ContentImage;
   chromasCount?: number;
   levelsCount?: number;
+  chromas?: SkinVariantContent[];
+  levels?: SkinVariantContent[];
 };
 
 export type BuddyContent = NamedContentItem & {

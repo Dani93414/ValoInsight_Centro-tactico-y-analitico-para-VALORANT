@@ -11,6 +11,7 @@ DEFAULT_TARGETS = [
     ("No Filling", "GFS"),
     ("No AFK", "zzz"),
     ("No Reason", "GFS"),
+    ("TA JLodbrok", "8674")
 ]
 
 

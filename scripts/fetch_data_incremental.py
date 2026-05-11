@@ -4,6 +4,7 @@ import os
 import sys
 from collections import Counter
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 # 1. PRIMERO configuramos el path para que Python encuentre el paquete backend
@@ -50,6 +51,7 @@ IDENTITY_KEYS = (
     "themeUuid",
     "assetObjectName",
 )
+CHANGE_REPORT_PATH = Path(__file__).resolve().parent / "last_incremental_content_changes.json"
 
 
 def stable_json(value: Any) -> str:
@@ -66,6 +68,15 @@ def get_item_identity(item: Any) -> str | None:
             return f"{key}:{val}"
 
     return None
+
+
+def get_item_identity_value(item: Any) -> str | None:
+    """Return only the raw identity value for reporting/filtering."""
+    identity = get_item_identity(item)
+    if not identity:
+        return None
+    _, _, value = identity.partition(":")
+    return value or None
 
 
 def merge_incremental_list(existing: List[Any], incoming: List[Any]) -> Tuple[List[Any], Dict[str, int]]:
@@ -263,6 +274,7 @@ def sync_incremental_content() -> None:
 
     set_fields: Dict[str, Any] = {}
     summary: Dict[str, Dict[str, int]] = {}
+    changed_items: Dict[str, Dict[str, List[str]]] = {}
 
     for field, incoming_value in new_doc.items():
         if field == "type":
@@ -273,6 +285,34 @@ def sync_incremental_content() -> None:
         if isinstance(incoming_value, list):
             merged_list, report = merge_incremental_list(existing_value or [], incoming_value)
             summary[field] = report
+
+            existing_by_identity = {
+                get_item_identity(item): item
+                for item in (existing_value or [])
+                if get_item_identity(item)
+            }
+            incoming_by_identity = {
+                get_item_identity(item): item
+                for item in (incoming_value or [])
+                if get_item_identity(item)
+            }
+            added_ids: List[str] = []
+            updated_ids: List[str] = []
+            for identity, incoming_item in incoming_by_identity.items():
+                existing_item = existing_by_identity.get(identity)
+                identity_value = get_item_identity_value(incoming_item)
+                if not identity_value:
+                    continue
+                if existing_item is None:
+                    added_ids.append(identity_value)
+                elif stable_json(existing_item) != stable_json(incoming_item):
+                    updated_ids.append(identity_value)
+
+            if added_ids or updated_ids:
+                changed_items[field] = {
+                    "added": sorted(set(added_ids)),
+                    "updated": sorted(set(updated_ids)),
+                }
 
             if stable_json(existing_value or []) != stable_json(merged_list):
                 set_fields[field] = merged_list
@@ -296,6 +336,16 @@ def sync_incremental_content() -> None:
                 f"[{field}] +{report['added']} nuevos, {report['updated']} actualizados, "
                 f"{report['unchanged']} sin cambios, {report['kept_existing']} conservados"
             )
+
+    report_payload = {
+        "changed_fields": sorted(changed_items.keys()),
+        "changed_items": changed_items,
+    }
+    CHANGE_REPORT_PATH.write_text(
+        json.dumps(report_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    logger.info(f"📝 Reporte de cambios incremental guardado en: {CHANGE_REPORT_PATH}")
 
 
 def main() -> None:
