@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import argparse
+import json
 import os
 import re
 from pathlib import Path
@@ -12,6 +14,7 @@ from pymongo import MongoClient
 TIMEOUT = 10
 OVERWRITE = False
 CONTENT_COLLECTION_NAME = "content"
+DEFAULT_CHANGES_FILE = Path(__file__).resolve().parent / "last_incremental_content_changes.json"
 
 IMAGE_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg",
@@ -44,6 +47,8 @@ stats = {
 
 jobs = []
 queued_targets = set()
+ONLY_CHANGED_IDS_BY_COLLECTION = {}
+OVERWRITE_RUNTIME = OVERWRITE
 
 
 def is_plain_object(value):
@@ -157,6 +162,24 @@ def enqueue_download(url, file_base_path):
     stats["found_urls"] += 1
 
 
+def load_changes_filter(path: Path) -> dict[str, set[str]]:
+    if not path.exists():
+        return {}
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    changed = payload.get("changed_items") or {}
+    result: dict[str, set[str]] = {}
+    for collection_name, data in changed.items():
+        ids = set((data or {}).get("added", []) + (data or {}).get("updated", []))
+        if ids:
+            result[str(collection_name)] = ids
+    return result
+
+
 def walk_node(node, current_dir, field_name=None, index_in_array=None):
     if node is None:
         return
@@ -210,7 +233,7 @@ def walk_node(node, current_dir, field_name=None, index_in_array=None):
 
 def download_image(url, file_base_path):
     try:
-        if not OVERWRITE and already_downloaded(file_base_path):
+        if not OVERWRITE_RUNTIME and already_downloaded(file_base_path):
             stats["skipped_existing"] += 1
             return
 
@@ -231,7 +254,7 @@ def download_image(url, file_base_path):
 
         output_path = f"{file_base_path}{final_ext}"
 
-        if not OVERWRITE and already_downloaded(file_base_path):
+        if not OVERWRITE_RUNTIME and already_downloaded(file_base_path):
             stats["skipped_existing"] += 1
             response.close()
             return
@@ -298,6 +321,30 @@ def collect_all_content_from_content_collection(db):
 
 
 def main():
+    global ONLY_CHANGED_IDS_BY_COLLECTION, OVERWRITE_RUNTIME
+    parser = argparse.ArgumentParser(description="Descarga imágenes referenciadas desde content en MongoDB.")
+    parser.add_argument(
+        "--only-changed",
+        action="store_true",
+        help="Descarga solo para elementos changed (added/updated) del reporte incremental.",
+    )
+    parser.add_argument(
+        "--changes-file",
+        default=str(DEFAULT_CHANGES_FILE),
+        help="Ruta al JSON de cambios generado por fetch_data_incremental.py.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Sobrescribe imágenes ya existentes.",
+    )
+    args = parser.parse_args()
+
+    OVERWRITE_RUNTIME = bool(args.overwrite)
+    if args.only_changed:
+        ONLY_CHANGED_IDS_BY_COLLECTION = load_changes_filter(Path(args.changes_file))
+        OVERWRITE_RUNTIME = True
+
     project_root = Path(__file__).resolve().parent.parent
     public_path = (project_root / "frontend" / "public").resolve()
     output_root = public_path / "content"
@@ -322,23 +369,42 @@ def main():
 
         stats["collections_found"] = len(collections)
         print(f"Bloques encontrados dentro de content: {list(collections.keys())}")
+        if args.only_changed:
+            print(f"Filtro cambios activo (archivo): {args.changes_file}")
 
         for collection_name, collection_value in collections.items():
             if collection_value is None:
                 continue
 
             collection_dir = output_root / sanitize_segment(collection_name)
+            allowed_ids = ONLY_CHANGED_IDS_BY_COLLECTION.get(collection_name, set()) if args.only_changed else set()
 
             if isinstance(collection_value, list):
                 print(f"\n📁 Procesando colección: {collection_name} ({len(collection_value)} elementos)")
                 for index, item in enumerate(collection_value):
                     if isinstance(item, dict):
+                        if args.only_changed:
+                            identity_value = (
+                                item.get("uuid")
+                                or item.get("id")
+                                or item.get("_id")
+                                or item.get("relationUuid")
+                                or item.get("levelUuid")
+                                or item.get("themeUuid")
+                                or item.get("assetObjectName")
+                            )
+                            if not identity_value or str(identity_value) not in allowed_ids:
+                                continue
                         object_dir = collection_dir / pick_object_folder_name(item, index)
                         walk_node(item, str(object_dir))
                     else:
+                        if args.only_changed:
+                            continue
                         walk_node(item, str(collection_dir), collection_name, index)
 
             elif isinstance(collection_value, dict):
+                if args.only_changed:
+                    continue
                 print(f"\n📁 Procesando objeto raíz: {collection_name}")
                 walk_node(collection_value, str(collection_dir))
 
