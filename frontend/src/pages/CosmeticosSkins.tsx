@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { useArmas, useBundles, useContentTiers, useSkins, useThemes } from "../api/hooks";
 import type {
   BundleContent,
@@ -33,6 +34,24 @@ type ResolvedCollection = {
   image?: string | null;
 };
 
+type SearchFolderSuggestion = {
+  type: "collection" | "weapon";
+  key: string;
+  label: string;
+  image?: string | null;
+  count: number;
+};
+
+type SearchSkinSuggestion = {
+  type: "skin";
+  key: string;
+  label: string;
+  image?: string | null;
+  meta: string;
+};
+
+type SearchSuggestion = SearchFolderSuggestion | SearchSkinSuggestion;
+
 type WeaponLite = {
   uuid?: string | null;
   displayName?: string | null;
@@ -45,8 +64,8 @@ function uniqueImages(images: Array<string | null | undefined>) {
   return [...new Set(images.filter((image): image is string => Boolean(image)))];
 }
 
-function getBundleDisplayIcon(collectionUuid?: string | null) {
-  return collectionUuid ? `/content/bundles/${collectionUuid}/displayIcon.png` : null;
+function getBundleIcon(bundle?: BundleContent | null) {
+  return bundle?.displayIcon || null;
 }
 
 function normalizeCollectionKey(value?: string | null) {
@@ -78,6 +97,17 @@ function getSkinKey(item: SkinContent) {
   return item.uuid ?? item.displayName;
 }
 
+function isExcludedSkin(item: SkinContent) {
+  const name = normalizeText(item.displayName);
+  return (
+    name.includes("diseño favorito aleatorio")
+    || name.includes("diseno favorito aleatorio")
+    || name.includes("random favorite")
+    || name.includes("estandar")
+    || name.includes("standard")
+  );
+}
+
 function getPrimarySkinImage(item: SkinContent) {
   return getSkinImageCandidates(item)[0] ?? null;
 }
@@ -107,6 +137,99 @@ function getVariantImage(item?: SkinChromaContent | SkinLevelContent | null) {
   return item?.fullRender || item?.displayIcon || null;
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getLevelLabel(level: SkinLevelContent) {
+  const match = level.displayName.match(/\b(?:nivel|level)\s*(\d+)\b/i);
+  return `Nivel ${match?.[1] ?? "1"}`;
+}
+
+function getChromaLabel(chroma: SkinChromaContent, skinName: string, index: number) {
+  let text = chroma.displayName;
+  text = text.replace(new RegExp(escapeRegExp(skinName), "i"), "");
+  text = text.replace(/\b(?:chroma|croma|variante|variant)\b/gi, "");
+  text = text.replace(/\bde\s+(?:nivel|level)\s*\d*\b/gi, "");
+  text = text.replace(/\b(?:nivel|level)\s*\d*\b/gi, "");
+  text = text.replace(/\b\d+\b/g, "");
+  text = text.replace(/[()[\]]/g, " ");
+  text = text.replace(/^[\s\-:|/]+|[\s\-:|/]+$/g, "").trim();
+
+  const normalized = normalizeText(text);
+  if (
+    !normalized
+    || normalized.includes("default")
+    || normalized.includes("standard")
+    || normalized.includes("estandar")
+    || normalized.includes("predeterminado")
+    || normalized.includes("base")
+  ) {
+    return "Por defecto";
+  }
+
+  if (index === 0 && normalizeText(chroma.displayName) === normalizeText(skinName)) {
+    return "Por defecto";
+  }
+
+  return text
+    .toLocaleLowerCase()
+    .replace(/(^|\s)\S/g, (match) => match.toLocaleUpperCase());
+}
+
+function getLevelInfo(level: SkinLevelContent, skinName: string) {
+  let text = level.displayName;
+  text = text.replace(new RegExp(escapeRegExp(skinName), "i"), "");
+  text = text.replace(/\b(?:nivel|level)\s*\d+\b/i, "");
+  text = text.replace(/(?:^|[\s\-:|/])de(?:$|[\s\-:|/])/i, " ");
+  text = text.replace(/^[\s\-:|/]+|[\s\-:|/]+$/g, "").trim();
+  return text || null;
+}
+
+function formatLevelItem(value?: string | null) {
+  const normalized = normalizeText(value ?? "");
+  if (!normalized) return null;
+  if (normalized.includes("transformation")) return "Transformacion";
+  if (normalized.includes("finisher")) return "Remate";
+  if (normalized.includes("animation")) return "Animacion";
+  if (normalized.includes("vfx")) return "VFX";
+  if (normalized.includes("sound") || normalized.includes("audio")) return "Sonido";
+  if (normalized.includes("killbanner")) return "Banner de baja";
+  if (normalized.includes("killcounter")) return "Contador de bajas";
+  if (normalized.includes("kill")) return "Efecto de baja";
+  if (normalized.includes("inspect")) return "Inspeccion";
+  if (normalized.includes("reload")) return "Recarga";
+  if (normalized.includes("equip")) return "Equipado";
+  if (normalized.includes("voice")) return "Voz";
+  return value
+    ?.split("::")
+    .pop()
+    ?.replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    ?? null;
+}
+
+function getLevelVideoCandidates(level: SkinLevelContent) {
+  return [level.streamedVideo];
+}
+
+function getLevelCards(levels: SkinLevelContent[], skin: SkinContent) {
+  let previousLevelImage: string | null = null;
+  return levels.map((level) => {
+    const ownImage = getVariantImage(level);
+    const image = ownImage || previousLevelImage;
+    if (ownImage) previousLevelImage = ownImage;
+    return {
+      level,
+      image,
+      info: getLevelInfo(level, skin.displayName),
+      item: formatLevelItem(level.levelItem),
+      videos: getLevelVideoCandidates(level),
+    };
+  });
+}
+
 function FallbackImage({
   sources,
   alt,
@@ -118,8 +241,8 @@ function FallbackImage({
   className?: string;
   loading?: "eager" | "lazy";
 }) {
-  const resolvedSources = useMemo(() => uniqueImages(sources), [sources]);
-  const sourcesKey = resolvedSources.join("|");
+  const sourcesKey = sources.filter(Boolean).join("|");
+  const resolvedSources = uniqueImages(sources);
   const [imageState, setImageState] = useState({ key: sourcesKey, index: 0 });
   const index = imageState.key === sourcesKey ? imageState.index : 0;
 
@@ -143,21 +266,45 @@ function FallbackImage({
   );
 }
 
+function LevelVideoButton({
+  sources,
+  onPlay,
+}: {
+  sources: Array<string | null | undefined>;
+  onPlay: (source: string) => void;
+}) {
+  const resolvedSources = uniqueImages(sources);
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [playableSource, setPlayableSource] = useState<string | null>(null);
+  const candidate = playableSource ? null : resolvedSources[candidateIndex];
+
+  return (
+    <>
+      {playableSource && (
+        <button
+          className="cskins-video-button"
+          type="button"
+          onClick={() => onPlay(playableSource)}
+        >
+          Play
+        </button>
+      )}
+      {candidate && (
+        <video
+          className="cskins-video-probe"
+          src={candidate}
+          preload="metadata"
+          muted
+          onLoadedMetadata={() => setPlayableSource(candidate)}
+          onError={() => setCandidateIndex((index) => index + 1)}
+        />
+      )}
+    </>
+  );
+}
+
 function resolveCollectionName(item: SkinContent) {
   return item.collectionName || item.themeName || "Sin coleccion";
-}
-
-function resolveCollectionSource(item: SkinContent): "bundle" | "theme" | "none" {
-  if (item.collectionSource === "bundle" || item.collectionSource === "theme") {
-    return item.collectionSource;
-  }
-  return item.themeUuid || item.themeName ? "theme" : "none";
-}
-
-function formatCollectionSource(source?: SkinGroup["source"]) {
-  if (source === "bundle") return "Bundle";
-  if (source === "theme") return "Theme";
-  return "Sin coleccion";
 }
 
 function getTopbarOffset() {
@@ -174,6 +321,17 @@ function scrollToElement(element: HTMLElement | null) {
   window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
 }
 
+function getGridColumns(container: HTMLElement | null) {
+  if (!container) return 1;
+  const template = window.getComputedStyle(container).gridTemplateColumns;
+  return Math.max(1, template.split(" ").filter(Boolean).length);
+}
+
+function getInsertIndex(selectedIndex: number, columns: number, total: number) {
+  const rowEnd = selectedIndex + (columns - (selectedIndex % columns));
+  return Math.min(rowEnd, total);
+}
+
 function getWeaponImageForSkin(item: SkinContent, weaponByUuid: Map<string, WeaponLite>) {
   if (!item.weaponUuid) return null;
   const fromApi = item.weaponImage || weaponByUuid.get(item.weaponUuid)?.displayIcon;
@@ -183,31 +341,45 @@ function getWeaponImageForSkin(item: SkinContent, weaponByUuid: Map<string, Weap
 function SkinDetail({
   skin,
   tierLabel,
+  themeIcon,
   onClose,
 }: {
   skin: SkinContent;
   tierLabel: string;
+  themeIcon?: string | null;
   onClose: () => void;
 }) {
   const chromas = skin.chromas ?? [];
   const levels = skin.levels ?? [];
   const [showChromas, setShowChromas] = useState(false);
   const [showLevels, setShowLevels] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
 
   const primaryImage = getPrimarySkinImage(skin);
+  const wallpaperStyle = skin.wallpaper
+    ? ({ "--cskins-wallpaper": `url("${skin.wallpaper}")` } as CSSProperties)
+    : undefined;
+  const levelCards = getLevelCards(levels, skin);
 
   return (
-    <article className="content-detail skin-inline-detail cskins-detail" key={getSkinKey(skin)}>
+    <article
+      className="content-detail skin-inline-detail cskins-detail"
+      key={getSkinKey(skin)}
+    >
       <button
         className="content-detail-close"
         type="button"
         aria-label="Cerrar detalle"
         onClick={onClose}
       >
-        x
+        <span className="content-detail-close-icon" aria-hidden="true" />
       </button>
       <div className="content-detail-grid cskins-detail-grid">
-        <div className="cskins-detail-media">
+        <div
+          className={`cskins-detail-media ${skin.wallpaper ? "cskins-detail-media--wallpaper" : ""}`}
+          style={wallpaperStyle}
+        >
           {primaryImage ? (
             <FallbackImage
               className="cskins-detail-main-image"
@@ -219,7 +391,7 @@ function SkinDetail({
           )}
         </div>
 
-        <div>
+        <div className="cskins-detail-summary">
           <h2 className="content-detail-title">{skin.displayName}</h2>
           <div className="content-badge-row">
             <span className="content-badge">{skin.weaponName || "Arma"}</span>
@@ -227,15 +399,21 @@ function SkinDetail({
             <span className="content-badge">{tierLabel}</span>
           </div>
 
-          <div className="content-kv-grid">
-            <div className="content-kv"><span>Arma</span><strong>{skin.weaponName || "Desconocida"}</strong></div>
-            <div className="content-kv"><span>Rareza</span><strong>{tierLabel}</strong></div>
-            <div className="content-kv"><span>Coleccion</span><strong>{resolveCollectionName(skin)}</strong></div>
-            <div className="content-kv"><span>Origen</span><strong>{formatCollectionSource(resolveCollectionSource(skin))}</strong></div>
-            <div className="content-kv"><span>Chromas</span><strong>{skin.chromasCount ?? chromas.length}</strong></div>
-            <div className="content-kv"><span>Levels</span><strong>{skin.levelsCount ?? levels.length}</strong></div>
-          </div>
+          {themeIcon && (
+            <section className="cskins-theme-kill-icon">
+              <span>Icono de baja</span>
+              <FallbackImage
+                sources={[themeIcon]}
+                alt={`Icono de baja de ${resolveCollectionName(skin)}`}
+                loading="lazy"
+              />
+            </section>
+          )}
+        </div>
+      </div>
 
+      <div className="cskins-detail-accordions">
+        {chromas.length > 1 && (
           <section className={`cskins-accordion ${showChromas ? "is-open" : ""}`}>
             <button type="button" className="cskins-accordion-toggle" onClick={() => setShowChromas((v) => !v)} aria-expanded={showChromas}>
               <span>Chromas</span>
@@ -244,13 +422,26 @@ function SkinDetail({
             </button>
             {showChromas && (
               <div className="cskins-accordion-panel">
-                {chromas.length === 0 && <p className="content-detail-text">No hay chromas.</p>}
-                {chromas.length > 0 && (
                   <div className="cskins-variant-grid">
-                    {chromas.map((chroma) => {
+                    {chromas.map((chroma, index) => {
                       const image = getVariantImage(chroma) || chroma.swatch;
+                      const previewSource = uniqueImages([
+                        chroma.fullRender,
+                        chroma.displayIcon,
+                        chroma.swatch,
+                      ])[0];
                       return (
-                        <article className="cskins-variant-card" key={chroma.uuid ?? chroma.displayName}>
+                        <button
+                          className="cskins-variant-card cskins-chroma-card"
+                          key={chroma.uuid ?? chroma.displayName}
+                          type="button"
+                          onClick={() => {
+                            if (previewSource) {
+                              setPreviewImage({ src: previewSource, alt: chroma.displayName });
+                            }
+                          }}
+                          disabled={!previewSource}
+                        >
                           {image && (
                             <FallbackImage
                               sources={[chroma.fullRender, chroma.displayIcon, chroma.swatch]}
@@ -258,16 +449,17 @@ function SkinDetail({
                               loading="lazy"
                             />
                           )}
-                          <h4>{chroma.displayName}</h4>
-                        </article>
+                          <h4>{getChromaLabel(chroma, skin.displayName, index)}</h4>
+                        </button>
                       );
                     })}
                   </div>
-                )}
               </div>
             )}
           </section>
+        )}
 
+        {levels.length > 1 && (
           <section className={`cskins-accordion ${showLevels ? "is-open" : ""}`}>
             <button type="button" className="cskins-accordion-toggle" onClick={() => setShowLevels((v) => !v)} aria-expanded={showLevels}>
               <span>Levels</span>
@@ -276,28 +468,57 @@ function SkinDetail({
             </button>
             {showLevels && (
               <div className="cskins-accordion-panel">
-                {levels.length === 0 && <p className="content-detail-text">No hay levels.</p>}
-                {levels.length > 0 && (
                   <div className="cskins-variant-grid">
-                    {levels.map((level) => (
-                      <article className="cskins-variant-card" key={level.uuid ?? level.displayName}>
-                        {getVariantImage(level) && (
-                          <FallbackImage
-                            sources={[level.fullRender, level.displayIcon]}
-                            alt={level.displayName}
-                            loading="lazy"
-                          />
-                        )}
-                        <h4>{level.displayName}</h4>
-                      </article>
-                    ))}
+                    {levelCards.map(({ level, image, info, item, videos }) => {
+                      return (
+                        <article className="cskins-variant-card cskins-level-card" key={level.uuid ?? level.displayName}>
+                          {image && (
+                            <FallbackImage
+                              sources={[image]}
+                              alt={level.displayName}
+                              loading="lazy"
+                            />
+                          )}
+                          <h4>{getLevelLabel(level)}</h4>
+                          {item && <p>{item}</p>}
+                          {info && <small>Informacion: {info}</small>}
+                          <LevelVideoButton sources={videos} onPlay={setVideoUrl} />
+                        </article>
+                      );
+                    })}
                   </div>
-                )}
               </div>
             )}
           </section>
-        </div>
+        )}
       </div>
+
+      {videoUrl && (
+        <div className="cskins-video-modal" role="dialog" aria-modal="true">
+          <button
+            className="content-detail-close"
+            type="button"
+            aria-label="Cerrar video"
+            onClick={() => setVideoUrl(null)}
+          >
+            <span className="content-detail-close-icon" aria-hidden="true" />
+          </button>
+          <video src={videoUrl} controls autoPlay />
+        </div>
+      )}
+      {previewImage && (
+        <div className="cskins-image-modal" role="dialog" aria-modal="true">
+          <button
+            className="content-detail-close"
+            type="button"
+            aria-label="Cerrar imagen"
+            onClick={() => setPreviewImage(null)}
+          >
+            <span className="content-detail-close-icon" aria-hidden="true" />
+          </button>
+          <img src={previewImage.src} alt={previewImage.alt} />
+        </div>
+      )}
     </article>
   );
 }
@@ -311,14 +532,24 @@ export default function CosmeticosSkins() {
 
   const [mode, setMode] = useState<OrganizationMode>("collections");
   const [search, setSearch] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "bundle" | "theme" | "none">("all");
+  const [searchMenuOpen, setSearchMenuOpen] = useState(false);
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [selectedSkinKey, setSelectedSkinKey] = useState<string | null>(null);
+  const [groupGridColumns, setGroupGridColumns] = useState(1);
+  const [groupSkinGridColumns, setGroupSkinGridColumns] = useState(1);
+  const [allSkinGridColumns, setAllSkinGridColumns] = useState(1);
+  const groupGridRef = useRef<HTMLDivElement | null>(null);
+  const groupSkinGridRef = useRef<HTMLDivElement | null>(null);
+  const allSkinGridRef = useRef<HTMLDivElement | null>(null);
   const inlineGroupRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
+  const groupCardRefs = useRef(new Map<string, HTMLButtonElement>());
+  const skinCardRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const skins = useMemo(
-    () => [...(skinsQuery.data ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    () => [...(skinsQuery.data ?? [])]
+      .filter((skin) => !isExcludedSkin(skin))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [skinsQuery.data],
   );
 
@@ -350,21 +581,26 @@ export default function CosmeticosSkins() {
     const byUuid = new Map<string, BundleContent>();
     const byThemeToken = new Map<string, BundleContent>();
     const byName = new Map<string, BundleContent[]>();
+    const lastDisplayIconByName = new Map<string, string>();
 
     (bundlesQuery.data ?? []).forEach((bundle) => {
       if (bundle.uuid) byUuid.set(bundle.uuid, bundle);
 
       const nameKey = normalizeCollectionKey(bundle.displayName);
+      const displayIcon = getBundleIcon(bundle);
       const token = bundleAssetToken(bundle.assetPath);
       if (nameKey && token) {
         byThemeToken.set(`${nameKey}:${token}`, bundle);
       }
       if (nameKey) {
         byName.set(nameKey, [...(byName.get(nameKey) ?? []), bundle]);
+        if (displayIcon) {
+          lastDisplayIconByName.set(nameKey, displayIcon);
+        }
       }
     });
 
-    return { byUuid, byThemeToken, byName };
+    return { byUuid, byThemeToken, byName, lastDisplayIconByName };
   }, [bundlesQuery.data]);
 
   const resolveCollection = useMemo(() => {
@@ -375,7 +611,7 @@ export default function CosmeticosSkins() {
           uuid: skin.collectionUuid,
           name: bundle?.displayName || skin.collectionName || skin.themeName || "Sin coleccion",
           source: "bundle",
-          image: getBundleDisplayIcon(skin.collectionUuid),
+          image: getBundleIcon(bundle),
         };
       }
 
@@ -398,7 +634,7 @@ export default function CosmeticosSkins() {
           uuid: matchedBundle.uuid,
           name: matchedBundle.displayName,
           source: "bundle",
-          image: getBundleDisplayIcon(matchedBundle.uuid),
+          image: getBundleIcon(matchedBundle),
         };
       }
 
@@ -423,41 +659,12 @@ export default function CosmeticosSkins() {
   const filteredSkins = useMemo(() => {
     const needle = normalizeText(search);
     return skins.filter((skin) => {
-      const source = resolveCollection(skin).source;
-      if (sourceFilter !== "all" && source !== sourceFilter) {
-        return false;
-      }
       const tier = skin.contentTierUuid ? tierNames.get(skin.contentTierUuid) : "";
       const collection = resolveCollection(skin).name;
       const text = `${skin.displayName} ${skin.weaponName ?? ""} ${collection} ${tier ?? ""}`;
       return normalizeText(text).includes(needle);
     });
-  }, [resolveCollection, search, skins, sourceFilter, tierNames]);
-
-  const catalogStats = useMemo(() => {
-    const sources = skins.reduce(
-      (acc, skin) => {
-        acc[resolveCollection(skin).source] += 1;
-        return acc;
-      },
-      { bundle: 0, theme: 0, none: 0 },
-    );
-    const weapons = new Set(skins.map((skin) => skin.weaponUuid || skin.weaponName).filter(Boolean));
-    const collections = new Set(
-      skins.map((skin) => {
-        const collection = resolveCollection(skin);
-        return `${collection.source}:${collection.uuid ?? collection.name}`;
-      }),
-    );
-    return {
-      total: skins.length,
-      shown: filteredSkins.length,
-      bundles: sources.bundle,
-      themes: sources.theme,
-      weapons: weapons.size,
-      collections: collections.size,
-    };
-  }, [filteredSkins.length, resolveCollection, skins]);
+  }, [resolveCollection, search, skins, tierNames]);
 
   const groups = useMemo(() => {
     if (mode === "skins") {
@@ -470,14 +677,17 @@ export default function CosmeticosSkins() {
         const collection = resolveCollection(skin);
         const groupSource = collection.source;
         const label = collection.name || "Sin coleccion";
+        const labelKey = normalizeCollectionKey(label);
+        const latestBundleIcon = bundleIndexes.lastDisplayIconByName.get(labelKey);
 
         const groupKey =
           groupSource === "none" && label === "Sin coleccion"
             ? NO_COLLECTION_KEY
-            : `${groupSource}:${collection.uuid ?? "none"}:${label}`;
+            : `collection:${labelKey || label}`;
         const collectionImage =
-          groupSource === "bundle"
-            ? collection.image
+          groupSource === "bundle" || latestBundleIcon
+            ? latestBundleIcon
+              ?? collection.image
               ?? skin.collectionPromoImage
               ?? getSkinPreviewImage(skin)
             : collection.image ?? getSkinPreviewImage(skin);
@@ -485,8 +695,11 @@ export default function CosmeticosSkins() {
         const current = map.get(groupKey);
         if (current) {
           current.items.push(skin);
-          if (!current.image && collectionImage) {
+          if (latestBundleIcon || (!current.image && collectionImage)) {
             current.image = collectionImage;
+          }
+          if (current.source !== "bundle" && groupSource === "bundle") {
+            current.source = "bundle";
           }
           return;
         }
@@ -527,7 +740,86 @@ export default function CosmeticosSkins() {
     });
 
     return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
-  }, [filteredSkins, mode, resolveCollection, weaponByUuid]);
+  }, [bundleIndexes, filteredSkins, mode, resolveCollection, weaponByUuid]);
+
+  const searchSuggestions = useMemo(() => {
+    const needle = normalizeText(search);
+    if (!needle) return [] as SearchSuggestion[];
+
+    const collectionMap = new Map<string, SearchFolderSuggestion>();
+    const weaponMap = new Map<string, SearchFolderSuggestion>();
+    const skinMatches: SearchSkinSuggestion[] = [];
+
+    skins.forEach((skin) => {
+      const collection = resolveCollection(skin);
+      const collectionLabel = collection.name || "Sin coleccion";
+      const collectionKey =
+        collection.source === "none" && collectionLabel === "Sin coleccion"
+          ? NO_COLLECTION_KEY
+          : `collection:${normalizeCollectionKey(collectionLabel) || collectionLabel}`;
+      const collectionMatch = normalizeText(collectionLabel).includes(needle);
+      const collectionImage =
+        bundleIndexes.lastDisplayIconByName.get(normalizeCollectionKey(collectionLabel))
+          ?? collection.image
+          ?? skin.collectionPromoImage
+          ?? getSkinPreviewImage(skin);
+
+      if (collectionMatch) {
+        const current = collectionMap.get(collectionKey);
+        if (current) {
+          current.count += 1;
+          if (!current.image && collectionImage) current.image = collectionImage;
+        } else {
+          collectionMap.set(collectionKey, {
+            type: "collection",
+            key: collectionKey,
+            label: collectionLabel,
+            image: collectionImage,
+            count: 1,
+          });
+        }
+      }
+
+      const weapon = (skin.weaponUuid && weaponByUuid.get(skin.weaponUuid)) || null;
+      const weaponLabel = weapon?.displayName || skin.weaponName || "Sin arma";
+      const weaponKey = `weapon:${skin.weaponUuid ?? weaponLabel}`;
+      const weaponMatch = normalizeText(weaponLabel).includes(needle);
+      const weaponImage = weapon?.displayIcon || getWeaponImageForSkin(skin, weaponByUuid);
+
+      if (weaponMatch) {
+        const current = weaponMap.get(weaponKey);
+        if (current) {
+          current.count += 1;
+          if (!current.image && weaponImage) current.image = weaponImage;
+        } else {
+          weaponMap.set(weaponKey, {
+            type: "weapon",
+            key: weaponKey,
+            label: weaponLabel,
+            image: weaponImage,
+            count: 1,
+          });
+        }
+      }
+
+      const skinText = `${skin.displayName} ${skin.weaponName ?? ""} ${collectionLabel}`;
+      if (normalizeText(skinText).includes(needle)) {
+        skinMatches.push({
+          type: "skin",
+          key: getSkinKey(skin),
+          label: skin.displayName,
+          image: getSkinPreviewImage(skin),
+          meta: `${skin.weaponName || "Arma"} - ${collectionLabel}`,
+        });
+      }
+    });
+
+    return [
+      ...collectionMap.values(),
+      ...weaponMap.values(),
+      ...skinMatches.slice(0, 20),
+    ].slice(0, 32);
+  }, [bundleIndexes, resolveCollection, search, skins, weaponByUuid]);
 
   const effectiveSelectedGroupKey = selectedGroupKey;
   const selectedGroup = groups.find((group) => group.key === effectiveSelectedGroupKey) ?? null;
@@ -540,6 +832,115 @@ export default function CosmeticosSkins() {
     selectedSkin?.contentTierUuid && tierNames.get(selectedSkin.contentTierUuid)
       ? tierNames.get(selectedSkin.contentTierUuid)!
       : "Sin rareza";
+  const selectedSkinThemeUuid =
+    selectedSkin?.themeUuid
+      || (selectedSkin?.collectionSource === "theme" ? selectedSkin.collectionUuid : null);
+  const selectedSkinThemeIcon =
+    selectedSkinThemeUuid
+      ? themeByUuid.get(selectedSkinThemeUuid)?.displayIcon
+      : null;
+  const selectedGroupIndex = groups.findIndex((group) => group.key === selectedGroupKey);
+  const groupPanelInsertIndex =
+    selectedGroup && selectedGroupIndex >= 0
+      ? getInsertIndex(selectedGroupIndex, groupGridColumns, groups.length)
+      : -1;
+  const selectedGroupSkinIndex = selectedGroup
+    ? selectedGroup.items.findIndex((skin) => getSkinKey(skin) === selectedSkinKey)
+    : -1;
+  const groupSkinDetailInsertIndex =
+    selectedGroup && selectedGroupSkinIndex >= 0
+      ? getInsertIndex(selectedGroupSkinIndex, groupSkinGridColumns, selectedGroup.items.length)
+      : -1;
+  const allSkinIndex = mode === "skins"
+    ? selectedItems.findIndex((skin) => getSkinKey(skin) === selectedSkinKey)
+    : -1;
+  const allSkinDetailInsertIndex =
+    allSkinIndex >= 0 ? getInsertIndex(allSkinIndex, allSkinGridColumns, selectedItems.length) : -1;
+
+  const setGroupCardRef = (key: string) => (element: HTMLButtonElement | null) => {
+    if (element) groupCardRefs.current.set(key, element);
+    else groupCardRefs.current.delete(key);
+  };
+
+  const setSkinCardRef = (key: string) => (element: HTMLButtonElement | null) => {
+    if (element) skinCardRefs.current.set(key, element);
+    else skinCardRefs.current.delete(key);
+  };
+
+  const closeGroupPanel = () => {
+    const target = selectedGroupKey ? groupCardRefs.current.get(selectedGroupKey) ?? null : null;
+    setSelectedGroupKey(null);
+    setSelectedSkinKey(null);
+    window.requestAnimationFrame(() => scrollToElement(target));
+  };
+
+  const closeSkinDetail = () => {
+    const target = selectedSkinKey ? skinCardRefs.current.get(selectedSkinKey) ?? null : null;
+    setSelectedSkinKey(null);
+    window.requestAnimationFrame(() => scrollToElement(target));
+  };
+
+  const selectSkin = (key: string) => {
+    if (selectedSkinKey === key) {
+      closeSkinDetail();
+      return;
+    }
+    setSelectedSkinKey(key);
+  };
+
+  const selectSearchSuggestion = (suggestion: SearchSuggestion) => {
+    setSearchMenuOpen(false);
+
+    if (suggestion.type === "collection") {
+      setMode("collections");
+      setSelectedGroupKey(suggestion.key);
+      setSelectedSkinKey(null);
+      return;
+    }
+
+    if (suggestion.type === "weapon") {
+      setMode("weapons");
+      setSelectedGroupKey(suggestion.key);
+      setSelectedSkinKey(null);
+      return;
+    }
+
+    setMode("skins");
+    setSelectedGroupKey(null);
+    setSelectedSkinKey(suggestion.key);
+  };
+
+  useLayoutEffect(() => {
+    const measurements: Array<[HTMLDivElement | null, (columns: number) => void]> = [
+      [groupGridRef.current, setGroupGridColumns],
+      [groupSkinGridRef.current, setGroupSkinGridColumns],
+      [allSkinGridRef.current, setAllSkinGridColumns],
+    ];
+
+    const updateColumns = () => {
+      measurements.forEach(([element, setter]) => setter(getGridColumns(element)));
+    };
+
+    updateColumns();
+
+    const observers =
+      typeof ResizeObserver === "undefined"
+        ? []
+        : measurements
+            .map(([element]) => {
+              if (!element) return null;
+              const observer = new ResizeObserver(updateColumns);
+              observer.observe(element);
+              return observer;
+            })
+            .filter((observer): observer is ResizeObserver => Boolean(observer));
+
+    window.addEventListener("resize", updateColumns);
+    return () => {
+      observers.forEach((observer) => observer.disconnect());
+      window.removeEventListener("resize", updateColumns);
+    };
+  }, [groups.length, mode, selectedGroupKey, selectedItems.length]);
 
   useEffect(() => {
     if (!selectedGroupKey) return;
@@ -573,32 +974,51 @@ export default function CosmeticosSkins() {
                 value={search}
                 onChange={(event) => {
                   setSearch(event.target.value);
-                  setSourceFilter("all");
+                  setSearchMenuOpen(true);
                   setSelectedGroupKey(null);
                   setSelectedSkinKey(null);
                 }}
+                onFocus={() => setSearchMenuOpen(true)}
+                onBlur={() => window.setTimeout(() => setSearchMenuOpen(false), 120)}
               />
+              {searchMenuOpen && searchSuggestions.length > 0 && (
+                <div className="cskins-search-menu" role="listbox">
+                  {searchSuggestions.map((suggestion) => (
+                    <button
+                      key={`${suggestion.type}:${suggestion.key}`}
+                      type="button"
+                      className="cskins-search-option"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => selectSearchSuggestion(suggestion)}
+                    >
+                      <span className="cskins-search-option-thumb">
+                        {suggestion.type === "skin" && suggestion.image ? (
+                          <FallbackImage
+                            sources={[suggestion.image]}
+                            alt={suggestion.label}
+                            loading="lazy"
+                          />
+                        ) : suggestion.type === "skin" ? (
+                          <span>SK</span>
+                        ) : (
+                          <span className="cskins-search-folder-icon" aria-hidden="true" />
+                        )}
+                      </span>
+                      <span className="cskins-search-option-copy">
+                        <strong>{suggestion.label}</strong>
+                        <small>
+                          {suggestion.type === "skin"
+                            ? suggestion.meta
+                            : `${suggestion.count} skins`}
+                        </small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </label>
 
             <div className="content-inline-controls content-inline-controls--premium">
-              <label className="content-select-label content-select-label--premium">
-                Origen
-                <select
-                  className="content-select content-select--premium"
-                  value={sourceFilter}
-                  onChange={(event) => {
-                    setSourceFilter(event.target.value as typeof sourceFilter);
-                    setSelectedGroupKey(null);
-                    setSelectedSkinKey(null);
-                  }}
-                >
-                  <option value="all">Todos</option>
-                  <option value="bundle">Bundles</option>
-                  <option value="theme">Themes</option>
-                  <option value="none">Sin coleccion</option>
-                </select>
-              </label>
-
               <label className="content-select-label content-select-label--premium">
                 Agrupar
                 <select
@@ -618,22 +1038,13 @@ export default function CosmeticosSkins() {
             </div>
           </div>
 
-          <div className="cskins-catalog-stats" aria-label="Resumen del catalogo de skins">
-            <span><strong>{catalogStats.shown}</strong> visibles</span>
-            <span><strong>{catalogStats.total}</strong> skins</span>
-            <span><strong>{catalogStats.collections}</strong> colecciones</span>
-            <span><strong>{catalogStats.weapons}</strong> armas</span>
-            <span><strong>{catalogStats.bundles}</strong> por bundle</span>
-            <span><strong>{catalogStats.themes}</strong> por theme</span>
-          </div>
-
           {groups.length === 0 && <ContentEmpty message="No hay resultados con ese filtro." />}
 
           {groups.length > 0 && mode !== "skins" && (
-            <section className="content-section">
+            <section className="content-section cskins-content-section">
               <h2 className="content-section-title">{mode === "collections" ? "Colecciones" : "Armas"}</h2>
-              <div className="content-grid cskins-group-grid">
-                {groups.map((group) => {
+              <div className="content-grid cskins-group-grid" ref={groupGridRef}>
+                {groups.map((group, index) => {
                   const isOpen = effectiveSelectedGroupKey === group.key;
                   const firstSkin = group.items[0];
                   const groupImageSources = firstSkin
@@ -645,9 +1056,14 @@ export default function CosmeticosSkins() {
                   return (
                     <div key={group.key} className="cskins-group-slot">
                       <button
+                        ref={setGroupCardRef(group.key)}
                         type="button"
                         className={`content-card cskins-group-card cskins-group-card--${mode === "weapons" ? "weapon" : group.source ?? "none"} ${isOpen ? "active" : ""}`}
                         onClick={() => {
+                          if (isOpen) {
+                            closeGroupPanel();
+                            return;
+                          }
                           setSelectedGroupKey(group.key);
                           setSelectedSkinKey(null);
                         }}
@@ -667,82 +1083,81 @@ export default function CosmeticosSkins() {
                         <h3 className="content-card-title">{group.label}</h3>
                         <p className="content-card-meta">
                           <span>{group.items.length} skins</span>
-                          <strong>{mode === "weapons" ? "Arma" : formatCollectionSource(group.source)}</strong>
                           <i className={`cskins-toggle-indicator ${isOpen ? "is-open" : ""}`} />
                         </p>
                       </button>
+                      {selectedGroup && index + 1 === groupPanelInsertIndex && (
+                        <div className="cskins-inline-panel" ref={inlineGroupRef}>
+                          <button
+                            className="content-detail-close"
+                            type="button"
+                            aria-label="Cerrar grupo"
+                            onClick={closeGroupPanel}
+                          >
+                            <span className="content-detail-close-icon" aria-hidden="true" />
+                          </button>
+                          <div className="content-grid cskins-skin-grid" ref={groupSkinGridRef}>
+                            {selectedGroup.items.map((skin, skinIndex) => {
+                              const key = getSkinKey(skin);
+                              const skinOpen = selectedSkinKey === key;
+                              const imageSources = [
+                                ...getSkinImageCandidates(skin),
+                                getWeaponImageForSkin(skin, weaponByUuid),
+                              ];
+                              const image = imageSources[0] ?? null;
+                              const tierLabel = (skin.contentTierUuid && tierNames.get(skin.contentTierUuid)) || "Sin rareza";
+                              return (
+                                <div key={key} className="cskins-skin-slot">
+                                  <button
+                                    ref={setSkinCardRef(key)}
+                                    type="button"
+                                    className={`content-card cskins-skin-card ${skinOpen ? "active" : ""}`}
+                                    onClick={() => selectSkin(key)}
+                                  >
+                                    <span className="content-card-image-wrap cskins-skin-image-wrap">
+                                      {image ? (
+                                        <FallbackImage
+                                          className="content-card-image cskins-skin-image"
+                                          sources={imageSources}
+                                          alt={skin.displayName}
+                                          loading="lazy"
+                                        />
+                                      ) : (
+                                        <span className="cskins-image-fallback">SK</span>
+                                      )}
+                                    </span>
+                                    <h3 className="content-card-title">{skin.displayName}</h3>
+                                    <p className="content-card-meta">{skin.weaponName || "Arma"} - {tierLabel}</p>
+                                    <p className="content-card-meta">{resolveCollectionName(skin)}</p>
+                                  </button>
+                                  {selectedSkin && skinIndex + 1 === groupSkinDetailInsertIndex && (
+                                    <div className="cskins-detail-slot" ref={detailRef}>
+                                      <SkinDetail
+                                        skin={selectedSkin}
+                                        tierLabel={selectedSkinTierLabel}
+                                        themeIcon={selectedSkinThemeIcon}
+                                        onClose={closeSkinDetail}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-
-              {selectedGroup && (
-                <div className="cskins-inline-panel" ref={inlineGroupRef}>
-                  {selectedSkin && selectedGroup.items.some((skin) => getSkinKey(skin) === selectedSkinKey) && (
-                    <div className="cskins-detail-slot" ref={detailRef}>
-                      <SkinDetail
-                        skin={selectedSkin}
-                        tierLabel={selectedSkinTierLabel}
-                        onClose={() => setSelectedSkinKey(null)}
-                      />
-                    </div>
-                  )}
-                  <div className="content-grid cskins-skin-grid">
-                    {selectedGroup.items.map((skin) => {
-                      const key = getSkinKey(skin);
-                      const skinOpen = selectedSkinKey === key;
-                      const imageSources = [
-                        ...getSkinImageCandidates(skin),
-                        getWeaponImageForSkin(skin, weaponByUuid),
-                      ];
-                      const image = imageSources[0] ?? null;
-                      const tierLabel = (skin.contentTierUuid && tierNames.get(skin.contentTierUuid)) || "Sin rareza";
-                      return (
-                        <div key={key} className="cskins-skin-slot">
-                          <button
-                            type="button"
-                            className={`content-card cskins-skin-card ${skinOpen ? "active" : ""}`}
-                            onClick={() => setSelectedSkinKey((curr) => (curr === key ? null : key))}
-                          >
-                            <span className="content-card-image-wrap cskins-skin-image-wrap">
-                              {image ? (
-                                <FallbackImage
-                                  className="content-card-image cskins-skin-image"
-                                  sources={imageSources}
-                                  alt={skin.displayName}
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <span className="cskins-image-fallback">SK</span>
-                              )}
-                            </span>
-                            <h3 className="content-card-title">{skin.displayName}</h3>
-                            <p className="content-card-meta">{skin.weaponName || "Arma"} - {tierLabel}<i className={`cskins-toggle-indicator ${skinOpen ? "is-open" : ""}`} /></p>
-                            <p className="content-card-meta">{resolveCollectionName(skin)}</p>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </section>
           )}
 
           {mode === "skins" && (
-            <section className="content-section">
+            <section className="content-section cskins-content-section">
               <h2 className="content-section-title">Skins</h2>
-              {selectedSkin && (
-                <div className="cskins-detail-slot" ref={detailRef}>
-                  <SkinDetail
-                    skin={selectedSkin}
-                    tierLabel={selectedSkinTierLabel}
-                    onClose={() => setSelectedSkinKey(null)}
-                  />
-                </div>
-              )}
-              <div className="content-grid cskins-skin-grid">
-                {selectedItems.map((skin) => {
+              <div className="content-grid cskins-skin-grid" ref={allSkinGridRef}>
+                {selectedItems.map((skin, index) => {
                   const key = getSkinKey(skin);
                   const skinOpen = selectedSkinKey === key;
                   const imageSources = [
@@ -754,9 +1169,10 @@ export default function CosmeticosSkins() {
                   return (
                     <div key={key} className="cskins-skin-slot">
                       <button
+                        ref={setSkinCardRef(key)}
                         type="button"
                         className={`content-card cskins-skin-card ${skinOpen ? "active" : ""}`}
-                        onClick={() => setSelectedSkinKey((curr) => (curr === key ? null : key))}
+                        onClick={() => selectSkin(key)}
                       >
                         <span className="content-card-image-wrap cskins-skin-image-wrap">
                           {image ? (
@@ -771,9 +1187,19 @@ export default function CosmeticosSkins() {
                           )}
                         </span>
                         <h3 className="content-card-title">{skin.displayName}</h3>
-                        <p className="content-card-meta">{skin.weaponName || "Arma"} - {tierLabel}<i className={`cskins-toggle-indicator ${skinOpen ? "is-open" : ""}`} /></p>
+                        <p className="content-card-meta">{skin.weaponName || "Arma"} - {tierLabel}</p>
                         <p className="content-card-meta">{resolveCollectionName(skin)}</p>
                       </button>
+                      {selectedSkin && index + 1 === allSkinDetailInsertIndex && (
+                        <div className="cskins-detail-slot" ref={detailRef}>
+                          <SkinDetail
+                            skin={selectedSkin}
+                            tierLabel={selectedSkinTierLabel}
+                            themeIcon={selectedSkinThemeIcon}
+                            onClose={closeSkinDetail}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
