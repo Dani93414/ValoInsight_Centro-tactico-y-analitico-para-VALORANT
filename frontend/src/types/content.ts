@@ -108,7 +108,9 @@ export type SkinChromaContent = SkinVariantContent & {
   swatch?: ContentImage;
 };
 
-export type SkinLevelContent = SkinVariantContent;
+export type SkinLevelContent = SkinVariantContent & {
+  levelItem?: string | null;
+};
 
 export type SkinContent = NamedContentItem & {
   weaponUuid?: string | null;
