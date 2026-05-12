@@ -376,17 +376,185 @@ def get_armas_detalladas():
 
     return armas
 
+def _iter_bundle_item_uuids(bundle: dict) -> set[str]:
+    uuids: set[str] = set()
+
+    def _maybe_add(raw_uuid):
+        if isinstance(raw_uuid, str) and raw_uuid:
+            uuids.add(raw_uuid)
+
+    for key in ("items", "bundleItems", "bundleItemsData"):
+        raw_items = bundle.get(key)
+        if not isinstance(raw_items, list):
+            continue
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            _maybe_add(item.get("uuid") or item.get("itemUuid") or item.get("id"))
+
+            inner = item.get("item")
+            if isinstance(inner, dict):
+                _maybe_add(inner.get("uuid") or inner.get("id"))
+
+            nested = item.get("itemData")
+            if isinstance(nested, dict):
+                _maybe_add(nested.get("uuid") or nested.get("id"))
+
+    return uuids
+
+
+def _bundle_promo_image(bundle: dict, bundle_uuid: str | None):
+    if not bundle_uuid:
+        return None
+    return (
+        _local_content_image("bundles", bundle_uuid, "displayIcon")
+        or _local_content_image("bundles", bundle_uuid, "displayIcon2")
+        or _local_content_image("bundles", bundle_uuid, "verticalPromoImage")
+    )
+
+
+def _normalize_collection_key(value: str | None) -> str:
+    if not value:
+        return ""
+    return (
+        str(value)
+        .casefold()
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .strip()
+    )
+
+
+def _theme_asset_token(asset_path: str | None) -> str:
+    if not asset_path:
+        return ""
+    tail = str(asset_path).rsplit("/", 1)[-1]
+    tail = tail.removeprefix("Theme_").removesuffix("_PrimaryAsset")
+    return _normalize_collection_key(tail)
+
+
+def _bundle_asset_token(asset_path: str | None) -> str:
+    if not asset_path:
+        return ""
+    tail = str(asset_path).rsplit("/", 1)[-1]
+    for prefix in ("StorefrontItem_", "Storefrontitem_"):
+        tail = tail.removeprefix(prefix)
+    tail = tail.removesuffix("_ThemeBundle_DataAsset")
+    tail = tail.removesuffix("ThemeBundle_DataAsset")
+    return _normalize_collection_key(tail)
+
+
+def _build_bundle_indexes(bundles: list[dict]) -> tuple[dict[str, dict], dict[str, list[dict]]]:
+    by_theme_token = {}
+    by_name: dict[str, list[dict]] = {}
+
+    for bundle in bundles:
+        bundle_name = bundle.get("displayName")
+        name_key = _normalize_collection_key(bundle_name)
+        token = _bundle_asset_token(bundle.get("assetPath"))
+
+        if token and name_key:
+            by_theme_token[f"{name_key}:{token}"] = bundle
+        if name_key:
+            by_name.setdefault(name_key, []).append(bundle)
+
+    return by_theme_token, by_name
+
+
+def _resolve_bundle_for_theme(
+    theme: dict | None,
+    bundles_by_theme_token: dict[str, dict],
+    bundles_by_name: dict[str, list[dict]],
+) -> dict | None:
+    if not theme:
+        return None
+
+    name_key = _normalize_collection_key(theme.get("displayName"))
+    token = _theme_asset_token(theme.get("assetPath"))
+    if name_key and token:
+        bundle = bundles_by_theme_token.get(f"{name_key}:{token}")
+        if bundle:
+            return bundle
+
+    matches = bundles_by_name.get(name_key, []) if name_key else []
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def _skin_image_path_if_present(
+    weapon_uuid: str | None,
+    skin_uuid: str | None,
+    skin: dict,
+    field_name: str,
+) -> str | None:
+    if not skin.get(field_name):
+        return None
+    return _local_weapon_skin_image(weapon_uuid, skin_uuid, field_name)
+
+
+def _skin_bundle_item_candidates(skin: dict) -> set[str]:
+    candidates: set[str] = set()
+
+    def _maybe_add(raw_uuid):
+        if isinstance(raw_uuid, str) and raw_uuid:
+            candidates.add(raw_uuid)
+
+    _maybe_add(skin.get("uuid") or skin.get("id"))
+    for chroma in skin.get("chromas", []) or []:
+        if isinstance(chroma, dict):
+            _maybe_add(chroma.get("uuid") or chroma.get("id"))
+    for level in skin.get("levels", []) or []:
+        if isinstance(level, dict):
+            _maybe_add(level.get("uuid") or level.get("id"))
+
+    return candidates
+
+
+def _nested_weapon_skin_image_if_present(
+    weapon_uuid: str | None,
+    skin_uuid: str | None,
+    collection: str,
+    item_uuid: str | None,
+    item: dict,
+    field_name: str,
+) -> str | None:
+    if not item.get(field_name):
+        return None
+    return (
+        f"/content/weapons/{weapon_uuid}/skins/{skin_uuid}/"
+        f"{collection}/{item_uuid}/{field_name}.png"
+    )
+
+
 def get_skins(limit=None):
     ultimo = mongo_content_repo.get_raw_latest()
     if not ultimo:
         return []
 
+    themes = ultimo.get("themes", []) or []
     themes_by_uuid = {
-        theme_uuid: theme.get("displayName")
-        for theme in ultimo.get("themes", [])
+        theme_uuid: theme
+        for theme in themes
         for theme_uuid in (theme.get("uuid") or theme.get("id"),)
-        if theme_uuid and theme.get("displayName")
+        if theme_uuid
     }
+    bundles = ultimo.get("bundles", []) or []
+    bundles_by_theme_token, bundles_by_name = _build_bundle_indexes(bundles)
+    bundle_links: dict[str, dict] = {}
+    for bundle in bundles:
+        bundle_uuid = bundle.get("uuid") or bundle.get("id")
+        bundle_name = bundle.get("displayName") or "Sin coleccion"
+        for item_uuid in _iter_bundle_item_uuids(bundle):
+            bundle_links[item_uuid] = {
+                "uuid": bundle_uuid,
+                "name": bundle_name,
+                "promoImage": _bundle_promo_image(bundle, bundle_uuid),
+            }
+
     skins = []
 
     for weapon in ultimo.get("weapons", []):
@@ -400,7 +568,47 @@ def get_skins(limit=None):
                 continue
 
             theme_uuid = skin.get("themeUuid") or skin.get("themeUUID")
-            theme_name = themes_by_uuid.get(theme_uuid) if theme_uuid else None
+            theme = themes_by_uuid.get(theme_uuid) if theme_uuid else None
+            theme_name = theme.get("displayName") if theme else None
+            bundle_info = next(
+                (
+                    bundle_links[item_uuid]
+                    for item_uuid in _skin_bundle_item_candidates(skin)
+                    if item_uuid in bundle_links
+                ),
+                None,
+            )
+            matched_bundle = (
+                None
+                if bundle_info
+                else _resolve_bundle_for_theme(
+                    theme,
+                    bundles_by_theme_token,
+                    bundles_by_name,
+                )
+            )
+            if bundle_info:
+                collection_uuid = bundle_info.get("uuid")
+                collection_name = bundle_info.get("name") or "Sin coleccion"
+                collection_source = "bundle"
+                collection_promo_image = bundle_info.get("promoImage")
+            elif matched_bundle:
+                bundle_uuid = matched_bundle.get("uuid") or matched_bundle.get("id")
+                collection_uuid = bundle_uuid
+                collection_name = matched_bundle.get("displayName") or theme_name or "Sin coleccion"
+                collection_source = "bundle"
+                collection_promo_image = _bundle_promo_image(matched_bundle, bundle_uuid)
+            elif theme_uuid and theme_name:
+                collection_uuid = theme_uuid
+                collection_name = theme_name
+                collection_source = "theme"
+                collection_promo_image = None
+            else:
+                collection_uuid = None
+                collection_name = "Sin coleccion"
+                collection_source = "none"
+                collection_promo_image = None
+
             chromas = []
             for chroma in skin.get("chromas", []) or []:
                 chroma_uuid = chroma.get("uuid") or chroma.get("id")
@@ -409,14 +617,32 @@ def get_skins(limit=None):
                 chromas.append({
                     "uuid": chroma_uuid,
                     "displayName": chroma.get("displayName") or "Chroma",
-                    "displayIcon": (
-                        f"/content/weapons/{weapon_uuid}/skins/{skin_uuid}/"
-                        f"chromas/{chroma_uuid}/displayIcon.png"
+                    "displayIcon": _nested_weapon_skin_image_if_present(
+                        weapon_uuid,
+                        skin_uuid,
+                        "chromas",
+                        chroma_uuid,
+                        chroma,
+                        "displayIcon",
                     ),
-                    "fullRender": (
-                        f"/content/weapons/{weapon_uuid}/skins/{skin_uuid}/"
-                        f"chromas/{chroma_uuid}/fullRender.png"
+                    "fullRender": _nested_weapon_skin_image_if_present(
+                        weapon_uuid,
+                        skin_uuid,
+                        "chromas",
+                        chroma_uuid,
+                        chroma,
+                        "fullRender",
                     ),
+                    "swatch": _nested_weapon_skin_image_if_present(
+                        weapon_uuid,
+                        skin_uuid,
+                        "chromas",
+                        chroma_uuid,
+                        chroma,
+                        "swatch",
+                    ),
+                    "streamedVideo": chroma.get("streamedVideo"),
+                    "assetPath": chroma.get("assetPath"),
                 })
 
             levels = []
@@ -427,35 +653,86 @@ def get_skins(limit=None):
                 levels.append({
                     "uuid": level_uuid,
                     "displayName": level.get("displayName") or "Nivel",
-                    "displayIcon": (
-                        f"/content/weapons/{weapon_uuid}/skins/{skin_uuid}/"
-                        f"levels/{level_uuid}/displayIcon.png"
+                    "displayIcon": _nested_weapon_skin_image_if_present(
+                        weapon_uuid,
+                        skin_uuid,
+                        "levels",
+                        level_uuid,
+                        level,
+                        "displayIcon",
                     ),
+                    "levelItem": level.get("levelItem"),
+                    "streamedVideo": level.get("streamedVideo"),
+                    "assetPath": level.get("assetPath"),
                 })
+
+            display_icon = _skin_image_path_if_present(
+                weapon_uuid,
+                skin_uuid,
+                skin,
+                "displayIcon",
+            )
+            wallpaper = _skin_image_path_if_present(
+                weapon_uuid,
+                skin_uuid,
+                skin,
+                "wallpaper",
+            )
+            first_chroma_image = next(
+                (
+                    chroma.get("fullRender")
+                    or chroma.get("displayIcon")
+                    for chroma in chromas
+                    if (
+                        chroma.get("fullRender")
+                        or chroma.get("displayIcon")
+                    )
+                ),
+                None,
+            )
+            first_level_image = next(
+                (
+                    level.get("displayIcon")
+                    for level in levels
+                    if level.get("displayIcon")
+                ),
+                None,
+            )
+            card_image = (
+                display_icon
+                or first_chroma_image
+                or wallpaper
+                or first_level_image
+            )
+            detail_image = (
+                display_icon
+                or first_chroma_image
+                or wallpaper
+                or first_level_image
+            )
 
             skins.append({
                 "uuid": skin_uuid,
                 "displayName": name,
                 "weaponUuid": weapon_uuid,
                 "weaponName": weapon_name,
+                "weaponImage": _local_weapon_image(weapon_uuid),
                 "contentTierUuid": (
                     skin.get("contentTierUuid")
                     or skin.get("contentTierUUID")
                 ),
                 "themeUuid": theme_uuid,
                 "themeName": theme_name or "Default",
-                "displayIcon": _local_weapon_skin_image(
-                    weapon_uuid,
-                    skin_uuid,
-                    "displayIcon",
-                ),
-                "wallpaper": _local_weapon_skin_image(
-                    weapon_uuid,
-                    skin_uuid,
-                    "wallpaper",
-                ),
+                "displayIcon": display_icon,
+                "wallpaper": wallpaper,
+                "cardImage": card_image,
+                "detailImage": detail_image,
                 "chromasCount": len(chromas),
                 "levelsCount": len(levels),
+                "collectionUuid": collection_uuid,
+                "collectionName": collection_name,
+                "collectionSource": collection_source,
+                "collectionPromoImage": collection_promo_image,
                 "chromas": chromas,
                 "levels": levels,
             })
@@ -500,6 +777,9 @@ def get_bundles_filtrados():
         nombre = b.get("displayName")
         if not nombre:
             continue
+        item_uuid = b.get("uuid") or b.get("id")
+        if not item_uuid:
+            continue
 
         nombre_norm = (
             nombre.lower()
@@ -513,11 +793,10 @@ def get_bundles_filtrados():
         if "capsulas" in nombre_norm:
             continue
 
-        if nombre in vistos:
+        if item_uuid in vistos:
             continue
 
-        vistos.add(nombre)
-        item_uuid = b.get("uuid") or b.get("id")
+        vistos.add(item_uuid)
         resultado.append({
             "uuid": item_uuid,
             "displayName": nombre,
@@ -526,6 +805,7 @@ def get_bundles_filtrados():
             "verticalPromoImage": _local_content_image(
                 "bundles", item_uuid, "verticalPromoImage"
             ),
+            "assetPath": b.get("assetPath"),
         })
 
     return resultado
@@ -967,7 +1247,22 @@ def get_themes(limit=None):
             continue
 
         vistos.add(nombre)
-        resultado.append({"displayName": nombre})
+        theme_uuid = t.get("uuid") or t.get("id")
+        resultado.append({
+            "uuid": theme_uuid,
+            "displayName": nombre,
+            "displayIcon": _local_content_image(
+                "themes",
+                theme_uuid,
+                "displayIcon",
+            ) if t.get("displayIcon") else None,
+            "storeFeaturedImage": _local_content_image(
+                "themes",
+                theme_uuid,
+                "storeFeaturedImage",
+            ) if t.get("storeFeaturedImage") else None,
+            "assetPath": t.get("assetPath"),
+        })
 
     return resultado
 
