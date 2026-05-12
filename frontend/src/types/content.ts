@@ -100,19 +100,45 @@ export type GearContent = NamedContentItem & {
 
 export type SkinVariantContent = NamedContentItem & {
   fullRender?: ContentImage;
+  streamedVideo?: string | null;
+  assetPath?: string | null;
 };
+
+export type SkinChromaContent = SkinVariantContent & {
+  swatch?: ContentImage;
+};
+
+export type SkinLevelContent = SkinVariantContent;
 
 export type SkinContent = NamedContentItem & {
   weaponUuid?: string | null;
   weaponName?: string | null;
+  weaponImage?: ContentImage;
   contentTierUuid?: string | null;
   themeUuid?: string | null;
   themeName?: string | null;
   wallpaper?: ContentImage;
+  cardImage?: ContentImage;
+  detailImage?: ContentImage;
   chromasCount?: number;
   levelsCount?: number;
-  chromas?: SkinVariantContent[];
-  levels?: SkinVariantContent[];
+  collectionUuid?: string | null;
+  collectionName?: string | null;
+  collectionSource?: "bundle" | "theme" | "none" | string | null;
+  collectionPromoImage?: ContentImage;
+  chromas?: SkinChromaContent[];
+  levels?: SkinLevelContent[];
+};
+
+export type BundleContent = NamedContentItem & {
+  displayIcon2?: ContentImage;
+  verticalPromoImage?: ContentImage;
+  assetPath?: string | null;
+};
+
+export type ThemeContent = NamedContentItem & {
+  storeFeaturedImage?: ContentImage;
+  assetPath?: string | null;
 };
 
 export type BuddyContent = NamedContentItem & {

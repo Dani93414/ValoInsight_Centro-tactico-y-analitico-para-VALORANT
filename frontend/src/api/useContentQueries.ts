@@ -4,6 +4,7 @@ import {
   getAgentes,
   getArmas,
   getBuddies,
+  getBundles,
   getCeremonies,
   getCompetitiveTiers,
   getContentSummary,
@@ -22,6 +23,7 @@ import {
   getPlayerTitles,
   getSkins,
   getSprays,
+  getThemes,
   getVersion,
 } from "./content";
 
@@ -124,6 +126,14 @@ export function useBuddies() {
   });
 }
 
+export function useBundles() {
+  return useQuery({
+    queryKey: ["content", "bundles"],
+    queryFn: getBundles,
+    staleTime: CONTENT_STALE,
+  });
+}
+
 export function useFlex() {
   return useQuery({
     queryKey: ["content", "flex"],
@@ -160,6 +170,14 @@ export function useSprays() {
   return useQuery({
     queryKey: ["content", "sprays"],
     queryFn: getSprays,
+    staleTime: CONTENT_STALE,
+  });
+}
+
+export function useThemes() {
+  return useQuery({
+    queryKey: ["content", "themes"],
+    queryFn: getThemes,
     staleTime: CONTENT_STALE,
   });
 }

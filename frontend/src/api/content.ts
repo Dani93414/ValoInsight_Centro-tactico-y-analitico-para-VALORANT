@@ -2,6 +2,7 @@ import { apiUrl } from "./config.ts";
 import type {
   ActContent,
   BuddyContent,
+  BundleContent,
   CeremonyContent,
   CompetitiveTierContent,
   ContentSummary,
@@ -19,6 +20,7 @@ import type {
   PlayerTitleContent,
   SkinContent,
   SprayContent,
+  ThemeContent,
   VersionInfo,
 } from "../types/content";
 
@@ -84,6 +86,10 @@ export async function getBuddies(): Promise<BuddyContent[]> {
   return getJson("/content/buddies", "Error buddies");
 }
 
+export async function getBundles(): Promise<BundleContent[]> {
+  return getJson("/content/bundles", "Error bundles");
+}
+
 export async function getFlex(): Promise<FlexContent[]> {
   return getJson("/content/flex", "Error flex");
 }
@@ -102,6 +108,10 @@ export async function getPlayerTitles(): Promise<PlayerTitleContent[]> {
 
 export async function getSprays(): Promise<SprayContent[]> {
   return getJson("/content/sprays", "Error sprays");
+}
+
+export async function getThemes(): Promise<ThemeContent[]> {
+  return getJson("/content/themes", "Error themes");
 }
 
 export async function getVersion(): Promise<VersionInfo> {

@@ -4,6 +4,7 @@ export {
   useAgentes,
   useArmas,
   useBuddies,
+  useBundles,
   useCeremonies,
   useCompetitiveTiers,
   useContentSummary,
@@ -22,6 +23,7 @@ export {
   usePlayerTitles,
   useSkins,
   useSprays,
+  useThemes,
   useVersion,
 } from "./useContentQueries";
 
