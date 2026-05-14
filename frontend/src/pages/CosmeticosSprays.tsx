@@ -1,102 +1,289 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSprays } from "../api/hooks";
 import type { SprayContent } from "../types/content";
-import CosmeticGridPage from "./CosmeticGridPage";
+import {
+  ClearableSearchInput,
+  ContentEmpty,
+  ContentError,
+  ContentLoading,
+  ContentShell,
+} from "./contentPageUtils";
+import { hideBrokenImage, normalizeText } from "./contentFormatters";
+import "./ContentPages.css";
+
+type AnimationFilter = "all" | "animated" | "static";
+
+function getTopbarOffset() {
+  const topbar = document.querySelector(".app-topbar");
+  if (!(topbar instanceof HTMLElement)) {
+    return 96;
+  }
+  return Math.ceil(topbar.getBoundingClientRect().height + 20);
+}
+
+function scrollToElement(element: HTMLElement | null) {
+  if (!element) return;
+  const top = element.getBoundingClientRect().top + window.scrollY - getTopbarOffset();
+  window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+}
+
+function getGridColumns(container: HTMLElement | null) {
+  if (!container) return 1;
+  const template = window.getComputedStyle(container).gridTemplateColumns;
+  return Math.max(1, template.split(" ").filter(Boolean).length);
+}
+
+function getInsertIndex(selectedIndex: number, columns: number, total: number) {
+  const rowEnd = selectedIndex + (columns - (selectedIndex % columns));
+  return Math.min(rowEnd, total);
+}
+
+function getSprayPreview(item: SprayContent) {
+  return item.displayIcon || item.fullTransparentIcon || item.fullIcon;
+}
+
+function getSprayDetailImage(item: SprayContent) {
+  if (item.isAnimated && item.animationGif) return item.animationGif;
+  if (item.isAnimated && item.uuid) return `/content/sprays/${item.uuid}/animationGif.gif`;
+  return item.fullTransparentIcon || item.fullIcon || item.displayIcon;
+}
 
 export default function CosmeticosSprays() {
   const query = useSprays();
-  const [animationFilter, setAnimationFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [visibilityFilter, setVisibilityFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [animationFilter, setAnimationFilter] = useState<AnimationFilter>("all");
+  const [selectedSpray, setSelectedSpray] = useState<SprayContent | null>(null);
+  const [gridColumns, setGridColumns] = useState(1);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  const categories = useMemo(() => {
-    const values = new Set(
-      (query.data ?? [])
-        .map((item) => item.category)
-        .filter((category): category is string => Boolean(category)),
-    );
-    return [...values].sort((a, b) => a.localeCompare(b));
-  }, [query.data]);
+  const sprays = useMemo(
+    () =>
+      [...(query.data ?? [])].sort((a, b) =>
+        a.displayName.localeCompare(b.displayName),
+      ),
+    [query.data],
+  );
 
-  const getSprayMeta = (item: SprayContent) =>
-    [
-      item.category,
-      item.isAnimated ? "Animado" : "Estatico",
-      item.levelsCount ? `${item.levelsCount} niveles` : null,
-      item.hideIfNotOwned ? "Oculto" : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
+  const filteredSprays = useMemo(() => {
+    const needle = normalizeText(search);
+    return sprays.filter((item) => {
+      const matchesSearch = normalizeText(
+        `${item.displayName} ${item.themeUuid ?? ""}`,
+      ).includes(needle);
+      const matchesAnimation =
+        animationFilter === "all" ||
+        (animationFilter === "animated" && item.isAnimated) ||
+        (animationFilter === "static" && !item.isAnimated);
+      return matchesSearch && matchesAnimation;
+    });
+  }, [animationFilter, search, sprays]);
+
+  const selectedKey = selectedSpray ? selectedSpray.uuid ?? selectedSpray.displayName : null;
+  const selectedIndex = selectedKey
+    ? filteredSprays.findIndex((item) => (item.uuid ?? item.displayName) === selectedKey)
+    : -1;
+  const detailInsertIndex =
+    selectedSpray && selectedIndex >= 0
+      ? getInsertIndex(selectedIndex, gridColumns, filteredSprays.length)
+      : -1;
+
+  useEffect(() => {
+    const updateColumns = () => setGridColumns(getGridColumns(gridRef.current));
+    updateColumns();
+
+    const observer =
+      typeof ResizeObserver === "undefined" || !gridRef.current
+        ? null
+        : new ResizeObserver(updateColumns);
+
+    if (observer && gridRef.current) {
+      observer.observe(gridRef.current);
+    }
+
+    window.addEventListener("resize", updateColumns);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateColumns);
+    };
+  }, [filteredSprays.length]);
+
+  useEffect(() => {
+    if (!selectedSpray) return;
+    window.requestAnimationFrame(() => scrollToElement(detailRef.current));
+  }, [selectedSpray]);
+
+  const closeSelectedSpray = (sprayKey?: string) => {
+    const targetKey = sprayKey ?? selectedKey;
+    setSelectedSpray(null);
+    window.requestAnimationFrame(() => {
+      if (targetKey) {
+        scrollToElement(cardRefs.current.get(targetKey) ?? null);
+      }
+    });
+  };
+
+  const selectSpray = (item: SprayContent) => {
+    const itemKey = item.uuid ?? item.displayName;
+    if (selectedKey === itemKey) {
+      closeSelectedSpray(itemKey);
+      return;
+    }
+    setSelectedSpray(item);
+  };
+
+  const selectedDetail = selectedSpray ? (
+    <article className="content-detail cskins-detail csprays-detail">
+      <button
+        className="content-detail-close"
+        type="button"
+        aria-label="Cerrar detalle"
+        onClick={() => closeSelectedSpray()}
+      >
+        <span className="content-detail-close-icon" aria-hidden="true" />
+      </button>
+      <div>
+        <h2 className="content-detail-title">{selectedSpray.displayName}</h2>
+        <div className="content-badge-row">
+          <span className="content-badge">
+            {selectedSpray.isAnimated ? "Animado" : "Estatico"}
+          </span>
+        </div>
+      </div>
+      <div className="csprays-detail-media">
+        <section className="csprays-asset csprays-asset--icon">
+          <span>Icono</span>
+          <div className="csprays-preview-box">
+            {selectedSpray.displayIcon ? (
+              <img
+                src={selectedSpray.displayIcon}
+                alt={`Icono de ${selectedSpray.displayName}`}
+                onError={hideBrokenImage}
+              />
+            ) : (
+              <div className="csprays-empty">Sin icono</div>
+            )}
+          </div>
+        </section>
+        <section className="csprays-asset csprays-asset--spray">
+          <span>Spray</span>
+          <div className="csprays-preview-box">
+            {getSprayDetailImage(selectedSpray) ? (
+              <img
+                src={getSprayDetailImage(selectedSpray) ?? ""}
+                alt={selectedSpray.displayName}
+                onError={hideBrokenImage}
+              />
+            ) : (
+              <div className="csprays-empty">Sin imagen</div>
+            )}
+          </div>
+        </section>
+      </div>
+    </article>
+  ) : null;
+
+  if (query.isLoading) {
+    return <ContentLoading title="Cargando sprays" />;
+  }
 
   return (
-    <CosmeticGridPage
+    <ContentShell
       title="Sprays"
       subtitle="Sprays y variantes animadas del contenido disponible."
-      query={query}
-      searchPlaceholder="Buscar spray..."
-      getImage={(item) =>
-        item.fullTransparentIcon || item.fullIcon || item.displayIcon
-      }
-      getMeta={getSprayMeta}
-      getSearchText={(item) =>
-        `${item.displayName} ${item.category ?? ""} ${item.themeUuid ?? ""}`
-      }
-      extraFilter={(item) => {
-        const matchesAnimation =
-          animationFilter === "all" ||
-          (animationFilter === "animated" && item.isAnimated) ||
-          (animationFilter === "static" && !item.isAnimated);
-        const matchesCategory =
-          categoryFilter === "all" || item.category === categoryFilter;
-        const matchesVisibility =
-          visibilityFilter === "all" ||
-          (visibilityFilter === "hidden" && item.hideIfNotOwned) ||
-          (visibilityFilter === "visible" && !item.hideIfNotOwned);
-        return matchesAnimation && matchesCategory && matchesVisibility;
-      }}
-      filterControls={
-        <div className="content-inline-controls">
-          <label className="content-select-label">
-            Animacion
-            <select
-              className="content-select"
-              value={animationFilter}
-              onChange={(event) => setAnimationFilter(event.target.value)}
-            >
-              <option value="all">Todos</option>
-              <option value="animated">Animados</option>
-              <option value="static">Estaticos</option>
-            </select>
-          </label>
-          <label className="content-select-label">
-            Categoria
-            <select
-              className="content-select"
-              value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
-            >
-              <option value="all">Todas</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="content-select-label">
-            Visibilidad
-            <select
-              className="content-select"
-              value={visibilityFilter}
-              onChange={(event) => setVisibilityFilter(event.target.value)}
-            >
-              <option value="all">Todos</option>
-              <option value="visible">Visibles</option>
-              <option value="hidden">Ocultos</option>
-            </select>
-          </label>
-        </div>
-      }
-    />
+    >
+      {query.isError && (
+        <ContentError
+          message="No se pudo cargar esta categoria de cosmeticos."
+          onRetry={() => query.refetch()}
+        />
+      )}
+
+      {!query.isError && sprays.length === 0 && (
+        <ContentEmpty message="No hay sprays disponibles." />
+      )}
+
+      {!query.isError && sprays.length > 0 && (
+        <>
+          <div className="content-toolbar content-toolbar--catalog csprays-toolbar">
+            <ClearableSearchInput
+              inputClassName="content-search--catalog"
+              placeholder="Buscar spray..."
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setSelectedSpray(null);
+              }}
+              onClear={() => {
+                setSearch("");
+                setSelectedSpray(null);
+              }}
+            />
+
+            <span className="content-result-count">{filteredSprays.length}</span>
+
+            <label className="content-select-label content-level-selector">
+              Animacion
+              <select
+                className="content-select content-level-select"
+                value={animationFilter}
+                onChange={(event) => {
+                  setAnimationFilter(event.target.value as AnimationFilter);
+                  setSelectedSpray(null);
+                }}
+              >
+                <option value="all">Todos</option>
+                <option value="animated">Animados</option>
+                <option value="static">Estaticos</option>
+              </select>
+            </label>
+          </div>
+
+          {filteredSprays.length === 0 ? (
+            <ContentEmpty message="No hay resultados con esa busqueda." />
+          ) : (
+            <div className="content-grid csprays-grid" ref={gridRef}>
+              {filteredSprays.map((item, index) => {
+                const itemKey = item.uuid ?? item.displayName;
+                const active = selectedKey === itemKey;
+                const image = getSprayPreview(item);
+                return (
+                  <div key={itemKey} className="csprays-slot">
+                    <button
+                      ref={(element) => {
+                        if (element) cardRefs.current.set(itemKey, element);
+                        else cardRefs.current.delete(itemKey);
+                      }}
+                      className={`content-card csprays-card ${active ? "active" : ""}`}
+                      type="button"
+                      onClick={() => selectSpray(item)}
+                    >
+                      {image && (
+                        <span className="content-card-image-wrap csprays-card-image-wrap">
+                          <img
+                            className="content-card-image csprays-card-image"
+                            src={image}
+                            alt={item.displayName}
+                            loading="lazy"
+                            onError={hideBrokenImage}
+                          />
+                        </span>
+                      )}
+                      <h2 className="content-card-title">{item.displayName}</h2>
+                    </button>
+                    {selectedDetail && detailInsertIndex === index + 1 && (
+                      <div className="csprays-detail-slot" ref={detailRef}>
+                        {selectedDetail}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </ContentShell>
   );
 }

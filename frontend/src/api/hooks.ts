@@ -16,6 +16,7 @@ export {
   useGameModes,
   useGear,
   useLeaderboard,
+  useLeaderboardRegions,
   useLevelBorders,
   useMapas,
   useMapasGeo,
@@ -25,6 +26,7 @@ export {
   useSprays,
   useThemes,
   useVersion,
+  useRankDistribution,
 } from "./useContentQueries";
 
 export { useGlobalAgentStats, useRegions } from "./useGlobalStatsQueries";

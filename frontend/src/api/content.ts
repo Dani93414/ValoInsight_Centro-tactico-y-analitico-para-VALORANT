@@ -14,6 +14,7 @@ import type {
   GameModeContent,
   GearContent,
   LeaderboardContent,
+  LeaderboardRankDistributionItem,
   LevelBorderContent,
   MapGroups,
   PlayerCardContent,
@@ -57,12 +58,32 @@ export async function getActos(): Promise<ActContent[]> {
 export async function getLeaderboard(
   actId: string,
   region = "eu",
+  platform = "pc",
   limit = 100,
+  page = 1,
+  search = "",
+  gameName = "",
+  tagLine = "",
 ): Promise<LeaderboardContent> {
-  const params = new URLSearchParams({ region, limit: String(limit) });
+  const params = new URLSearchParams({ region, platform, limit: String(limit), page: String(page) });
+  if (search.trim()) params.set("search", search.trim());
+  if (gameName.trim()) params.set("game_name", gameName.trim());
+  if (tagLine.trim()) params.set("tag_line", tagLine.trim());
   return getJson(
     `/leaderboards/${encodeURIComponent(actId)}?${params.toString()}`,
     "Error leaderboard",
+  );
+}
+
+export async function getLeaderboardRegions(): Promise<string[]> {
+  return getJson("/leaderboards/meta/regions", "Error regiones leaderboard");
+}
+
+export async function getRankDistribution(actIds: string[]): Promise<LeaderboardRankDistributionItem[]> {
+  const params = new URLSearchParams({ act_ids: actIds.join(",") });
+  return getJson(
+    `/leaderboards/meta/rank-distribution?${params.toString()}`,
+    "Error distribucion de rangos",
   );
 }
 

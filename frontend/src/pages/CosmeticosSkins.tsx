@@ -10,6 +10,7 @@ import type {
 } from "../types/content";
 import { hideBrokenImage, normalizeText } from "./contentFormatters";
 import {
+  ClearableSearchInput,
   ContentEmpty,
   ContentError,
   ContentLoading,
@@ -470,8 +471,12 @@ function SkinDetail({
               <div className="cskins-accordion-panel">
                   <div className="cskins-variant-grid">
                     {levelCards.map(({ level, image, info, item, videos }) => {
+                      const hasVideo = videos.some(Boolean);
                       return (
-                        <article className="cskins-variant-card cskins-level-card" key={level.uuid ?? level.displayName}>
+                        <article
+                          className={`cskins-variant-card cskins-level-card ${hasVideo ? "cskins-level-card--has-video" : ""}`}
+                          key={level.uuid ?? level.displayName}
+                        >
                           {image && (
                             <FallbackImage
                               sources={[image]}
@@ -480,8 +485,10 @@ function SkinDetail({
                             />
                           )}
                           <h4>{getLevelLabel(level)}</h4>
-                          {item && <p>{item}</p>}
-                          {info && <small>Informacion: {info}</small>}
+                          <div className="cskins-level-meta-copy">
+                            {item && <p>{item}</p>}
+                            {info && <small>Informacion: {info}</small>}
+                          </div>
                           <LevelVideoButton sources={videos} onPlay={setVideoUrl} />
                         </article>
                       );
@@ -532,6 +539,7 @@ export default function CosmeticosSkins() {
 
   const [mode, setMode] = useState<OrganizationMode>("collections");
   const [search, setSearch] = useState("");
+  const [tierFilter, setTierFilter] = useState("all");
   const [searchMenuOpen, setSearchMenuOpen] = useState(false);
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [selectedSkinKey, setSelectedSkinKey] = useState<string | null>(null);
@@ -659,12 +667,16 @@ export default function CosmeticosSkins() {
   const filteredSkins = useMemo(() => {
     const needle = normalizeText(search);
     return skins.filter((skin) => {
+      if (tierFilter !== "all" && skin.contentTierUuid !== tierFilter) {
+        return false;
+      }
+
       const tier = skin.contentTierUuid ? tierNames.get(skin.contentTierUuid) : "";
       const collection = resolveCollection(skin).name;
       const text = `${skin.displayName} ${skin.weaponName ?? ""} ${collection} ${tier ?? ""}`;
       return normalizeText(text).includes(needle);
     });
-  }, [resolveCollection, search, skins, tierNames]);
+  }, [resolveCollection, search, skins, tierFilter, tierNames]);
 
   const groups = useMemo(() => {
     if (mode === "skins") {
@@ -802,14 +814,15 @@ export default function CosmeticosSkins() {
         }
       }
 
-      const skinText = `${skin.displayName} ${skin.weaponName ?? ""} ${collectionLabel}`;
+      const tier = skin.contentTierUuid ? tierNames.get(skin.contentTierUuid) : "";
+      const skinText = `${skin.displayName} ${skin.weaponName ?? ""} ${collectionLabel} ${tier ?? ""}`;
       if (normalizeText(skinText).includes(needle)) {
         skinMatches.push({
           type: "skin",
           key: getSkinKey(skin),
           label: skin.displayName,
           image: getSkinPreviewImage(skin),
-          meta: `${skin.weaponName || "Arma"} - ${collectionLabel}`,
+          meta: `${skin.weaponName || "Arma"} - ${collectionLabel}${tier ? ` - ${tier}` : ""}`,
         });
       }
     });
@@ -819,7 +832,7 @@ export default function CosmeticosSkins() {
       ...weaponMap.values(),
       ...skinMatches.slice(0, 20),
     ].slice(0, 32);
-  }, [bundleIndexes, resolveCollection, search, skins, weaponByUuid]);
+  }, [bundleIndexes, resolveCollection, search, skins, tierNames, weaponByUuid]);
 
   const effectiveSelectedGroupKey = selectedGroupKey;
   const selectedGroup = groups.find((group) => group.key === effectiveSelectedGroupKey) ?? null;
@@ -967,14 +980,19 @@ export default function CosmeticosSkins() {
           <div className="content-toolbar content-toolbar--skins">
             <label className="content-select-label content-select-label--premium content-filter-field--search">
               Buscar
-              <input
-                className="content-search content-search--premium"
-                type="search"
+              <ClearableSearchInput
+                inputClassName="content-search--premium"
                 placeholder="Buscar skins, colecciones o armas"
                 value={search}
                 onChange={(event) => {
                   setSearch(event.target.value);
                   setSearchMenuOpen(true);
+                  setSelectedGroupKey(null);
+                  setSelectedSkinKey(null);
+                }}
+                onClear={() => {
+                  setSearch("");
+                  setSearchMenuOpen(false);
                   setSelectedGroupKey(null);
                   setSelectedSkinKey(null);
                 }}
@@ -1033,6 +1051,28 @@ export default function CosmeticosSkins() {
                   <option value="collections">Por coleccion</option>
                   <option value="weapons">Por arma</option>
                   <option value="skins">Todas</option>
+                </select>
+              </label>
+
+              <label className="content-select-label content-select-label--premium">
+                Edicion
+                <select
+                  className="content-select content-select--premium"
+                  value={tierFilter}
+                  onChange={(event) => {
+                    setTierFilter(event.target.value);
+                    setSelectedGroupKey(null);
+                    setSelectedSkinKey(null);
+                  }}
+                >
+                  <option value="all">Todas</option>
+                  {[...tierNames.entries()]
+                    .sort((a, b) => a[1].localeCompare(b[1]))
+                    .map(([uuid, name]) => (
+                      <option key={uuid} value={uuid}>
+                        {name}
+                      </option>
+                    ))}
                 </select>
               </label>
             </div>

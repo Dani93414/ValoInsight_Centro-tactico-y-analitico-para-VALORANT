@@ -197,11 +197,16 @@ def obtener_datos(*, force: bool = False):
     # ---------------------------------------
     logger.info("🏆 Guardando leaderboards de todos los actos y regiones…")
 
-    real_acts = [a for a in acts if a.get("type") == "act"]
+    real_acts = [
+        act
+        for act in acts
+        if act.get("id") and "ACTO" in str(act.get("name") or "").upper()
+    ]
     logger.info(f"📌 Total de actos reales: {len(real_acts)}")
 
     # Definimos los servidores oficiales de Riot
     REGIONES = ["AP", "EU", "LATAM", "NA", "BR", "KR"]
+    PLATFORMS = ["pc"]
 
     for act in real_acts:
         act_id = act["id"]
@@ -209,27 +214,28 @@ def obtener_datos(*, force: bool = False):
         is_active = act.get("isActive", False)
 
         for region in REGIONES:
-            logger.info(f"🏅 Acto: {act_name} | Región: {region}")
+            for platform in PLATFORMS:
+                logger.info(f"🏅 Acto: {act_name} | Región: {region} | Plataforma: {platform}")
 
-            try:
-                # IMPORTANTE: get_leaderboard debe aceptar la region ahora
-                leaderboard = get_leaderboard(act_id, region)
+                try:
+                    leaderboard = get_leaderboard(act_id, region, platform=platform)
 
-                if leaderboard and "players" in leaderboard:
-                    leaderboards_collection.insert_one({
-                        "type": "leaderboard",
-                        "region": region, # Guardamos la región
-                        "act_id": act_id,
-                        "act_name": act_name,
-                        "isActive": is_active,
-                        "data": leaderboard
-                    })
-                    logger.info(f"✔ Guardado — Jugadores: {len(leaderboard.get('players', []))}")
-                else:
-                    logger.info(f"➖ Sin datos para {act_name} en {region}")
+                    if leaderboard and "players" in leaderboard:
+                        leaderboards_collection.insert_one({
+                            "type": "leaderboard",
+                            "region": region,
+                            "platform": platform,
+                            "act_id": act_id,
+                            "act_name": act_name,
+                            "isActive": is_active,
+                            "data": leaderboard
+                        })
+                        logger.info(f"✔ Guardado — Jugadores: {len(leaderboard.get('players', []))}")
+                    else:
+                        logger.info(f"➖ Sin datos para {act_name} en {region} ({platform})")
 
-            except Exception as e:
-                logger.warning(f"⚠️ Error obteniendo leaderboard ({act_name} - {region}): {e}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Error obteniendo leaderboard ({act_name} - {region} - {platform}): {e}")
 
 
 # ================================
