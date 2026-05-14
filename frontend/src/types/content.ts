@@ -53,18 +53,43 @@ export type ActContent = {
 };
 
 export type LeaderboardPlayer = {
+  prefix?: string | null;
   gameName?: string | null;
   tagLine?: string | null;
+  premierRosterType?: string | null;
   leaderboardRank?: number | null;
+  leaderboardPage?: number | null;
   rankedRating?: number | null;
   numberOfWins?: number | null;
+  competitiveTier?: number | null;
+  puuid?: string | null;
+  hasProfile?: boolean | null;
+  playerCard?: string | null;
+  playerTitle?: string | null;
+  playerCardIcon?: ContentImage;
+  rankDelta24h?: number | null;
+  rankIcon?: ContentImage;
+};
+
+export type LeaderboardRankDistributionItem = {
+  tier: number;
+  count: number;
+  percentage: number;
 };
 
 export type LeaderboardContent = {
   act_id: string;
   act_name: string;
+  region?: string;
+  platform?: string;
   total_players: number;
   returned_players: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  target_player_page?: number | null;
+  filtered_players: number;
+  rank_distribution?: LeaderboardRankDistributionItem[];
   players: LeaderboardPlayer[];
 };
 
@@ -178,6 +203,7 @@ export type SprayContent = NamedContentItem & {
   themeUuid?: string | null;
   fullIcon?: ContentImage;
   fullTransparentIcon?: ContentImage;
+  animationGif?: ContentImage;
   hideIfNotOwned?: boolean | null;
   isNullSpray?: boolean | null;
   isAnimated?: boolean;

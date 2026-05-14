@@ -16,6 +16,7 @@ import {
   getGameModes,
   getGear,
   getLeaderboard,
+  getLeaderboardRegions,
   getLevelBorders,
   getMapas,
   getMapasGeo,
@@ -25,6 +26,7 @@ import {
   getSprays,
   getThemes,
   getVersion,
+  getRankDistribution,
 } from "./content";
 
 const CONTENT_STALE = 1000 * 60 * 60 * 24;
@@ -77,11 +79,36 @@ export function useActos() {
   });
 }
 
-export function useLeaderboard(actId?: string | null, region = "eu") {
+export function useLeaderboard(
+  actId?: string | null,
+  region = "eu",
+  platform = "pc",
+  page = 1,
+  search = "",
+  gameName = "",
+  tagLine = "",
+) {
   return useQuery({
-    queryKey: ["leaderboard", actId, region],
-    queryFn: () => getLeaderboard(actId!, region),
+    queryKey: ["leaderboard", actId, region, platform, page, search, gameName, tagLine],
+    queryFn: () => getLeaderboard(actId!, region, platform, 100, page, search, gameName, tagLine),
     enabled: Boolean(actId),
+    staleTime: CONTENT_STALE,
+  });
+}
+
+export function useLeaderboardRegions() {
+  return useQuery({
+    queryKey: ["leaderboard", "regions"],
+    queryFn: getLeaderboardRegions,
+    staleTime: CONTENT_STALE,
+  });
+}
+
+export function useRankDistribution(actIds: string[]) {
+  return useQuery({
+    queryKey: ["leaderboard", "rank-distribution", actIds.join(",")],
+    queryFn: () => getRankDistribution(actIds),
+    enabled: actIds.length > 0,
     staleTime: CONTENT_STALE,
   });
 }

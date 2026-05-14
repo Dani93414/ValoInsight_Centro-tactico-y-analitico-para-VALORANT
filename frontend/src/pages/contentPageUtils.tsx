@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import BackButton from "../components/BackButton";
 
 type ContentShellProps = {
@@ -93,5 +93,55 @@ export function ContentSection({
       <h2 className="content-section-title">{title}</h2>
       {children}
     </section>
+  );
+}
+
+export function ClearableSearchInput({
+  className = "",
+  inputClassName = "",
+  value,
+  onChange,
+  onClear,
+  placeholder,
+  ariaLabel,
+  onFocus,
+  onBlur,
+}: {
+  className?: string;
+  inputClassName?: string;
+  value: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onClear?: () => void;
+  placeholder?: string;
+  ariaLabel?: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
+}) {
+  const hasValue = value.trim().length > 0;
+
+  return (
+    <span className={`content-search-wrap ${className}`.trim()}>
+      <input
+        className={`content-search ${inputClassName}`.trim()}
+        type="search"
+        placeholder={placeholder}
+        aria-label={ariaLabel ?? placeholder}
+        value={value}
+        onChange={onChange}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+      {hasValue && (
+        <button
+          className="content-search-clear"
+          type="button"
+          aria-label="Borrar busqueda"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onClear}
+        >
+          <span aria-hidden="true" />
+        </button>
+      )}
+    </span>
   );
 }

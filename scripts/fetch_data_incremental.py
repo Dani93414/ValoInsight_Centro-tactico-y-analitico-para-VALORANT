@@ -1,3 +1,4 @@
+import argparse
 import json
 import logging
 import os
@@ -11,8 +12,8 @@ from typing import Any, Dict, List, Tuple
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # 2. AHORA ya podemos importar desde backend
-from backend.infrastructure.mongo_client import content_collection
-from backend.infrastructure.riot_http_client import get_puuid, get_valorant_content
+from backend.infrastructure.mongo_client import content_collection, leaderboards_collection
+from backend.infrastructure.riot_http_client import get_leaderboard, get_puuid, get_valorant_content
 from backend.infrastructure.valorant_api_http_client import (
     get_agents_es,
     get_buddies_es,
@@ -52,6 +53,8 @@ IDENTITY_KEYS = (
     "assetObjectName",
 )
 CHANGE_REPORT_PATH = Path(__file__).resolve().parent / "last_incremental_content_changes.json"
+LEADERBOARD_REGIONS = ("AP", "EU", "LATAM", "NA", "BR", "KR")
+LEADERBOARD_PLATFORMS = ("pc",)
 
 
 def stable_json(value: Any) -> str:
@@ -263,13 +266,168 @@ def build_new_content_document() -> Dict[str, Any]:
     }
 
 
-def sync_incremental_content() -> None:
+def leaderboard_signature(leaderboard: Dict[str, Any] | None) -> str:
+    if not leaderboard:
+        return ""
+    players = leaderboard.get("players", [])
+    normalized_players = [
+        {
+            "puuid": player.get("puuid"),
+            "gameName": player.get("gameName"),
+            "tagLine": player.get("tagLine"),
+            "playerCard": player.get("playerCard") or player.get("PlayerCardID"),
+            "playerTitle": player.get("playerTitle") or player.get("TitleID"),
+            "leaderboardRank": player.get("leaderboardRank"),
+            "rankedRating": player.get("rankedRating"),
+            "numberOfWins": player.get("numberOfWins"),
+            "competitiveTier": player.get("competitiveTier"),
+        }
+        for player in players
+        if isinstance(player, dict)
+    ]
+    return stable_json(normalized_players)
+
+
+def latest_leaderboard_snapshot(act_id: str, region: str, platform: str = "pc") -> Dict[str, Any] | None:
+    return leaderboards_collection.find_one(
+        {
+            "type": "leaderboard",
+            "act_id": act_id,
+            "region": region.upper(),
+            "platform": platform.lower(),
+        },
+        sort=[("_id", -1)],
+    )
+
+
+def get_leaderboard_acts(acts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        act
+        for act in acts
+        if act.get("id") and "ACTO" in str(act.get("name") or "").upper()
+    ]
+
+
+def store_leaderboard_snapshot(
+    act: Dict[str, Any],
+    region: str,
+    platform: str,
+    leaderboard: Dict[str, Any],
+) -> None:
+    act_id = act["id"]
+    is_active = bool(act.get("isActive", False))
+
+    if is_active:
+        leaderboards_collection.update_many(
+            {
+                "type": "leaderboard",
+                "act_id": act_id,
+                "region": region.upper(),
+                "platform": platform.lower(),
+                "isActive": True,
+            },
+            {"$set": {"isActive": False}},
+        )
+
+    leaderboards_collection.insert_one({
+        "type": "leaderboard",
+        "region": region.upper(),
+        "platform": platform.lower(),
+        "act_id": act_id,
+        "act_name": act.get("name", act_id),
+        "isActive": is_active,
+        "data": leaderboard,
+    })
+
+
+def sync_incremental_leaderboards(acts: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
+    ordered_acts = get_leaderboard_acts(acts)
+    report: Dict[str, Dict[str, int]] = {}
+
+    if not ordered_acts:
+        logger.info("No hay actos reales para sincronizar leaderboards.")
+        return report
+
+    logger.info(
+        "Sincronizando leaderboards incrementales: %s actos, regiones %s, plataformas %s",
+        len(ordered_acts),
+        ", ".join(LEADERBOARD_REGIONS),
+        ", ".join(LEADERBOARD_PLATFORMS),
+    )
+
+    for platform in LEADERBOARD_PLATFORMS:
+        for region in LEADERBOARD_REGIONS:
+            report_key = f"{platform}:{region}"
+            region_report = {
+                "checked": 0,
+                "inserted": 0,
+                "unchanged": 0,
+                "errors": 0,
+            }
+            unchanged_streak = 0
+
+            for act in ordered_acts:
+                act_id = act["id"]
+                act_name = act.get("name", act_id)
+                region_report["checked"] += 1
+
+                try:
+                    logger.info("Leaderboard %s | %s | %s", platform, region, act_name)
+                    incoming = get_leaderboard(act_id, region, platform=platform)
+                except Exception as exc:
+                    region_report["errors"] += 1
+                    logger.warning("Error obteniendo leaderboard (%s - %s - %s): %s", act_name, region, platform, exc)
+                    continue
+
+                if not incoming or "players" not in incoming:
+                    region_report["unchanged"] += 1
+                    unchanged_streak += 1
+                    logger.info("Sin datos nuevos para %s | %s | %s", platform, region, act_name)
+                else:
+                    latest = latest_leaderboard_snapshot(act_id, region, platform)
+                    latest_data = (latest or {}).get("data")
+
+                    if leaderboard_signature(latest_data) == leaderboard_signature(incoming):
+                        region_report["unchanged"] += 1
+                        unchanged_streak += 1
+                        logger.info("Sin cambios en %s | %s | %s", platform, region, act_name)
+                    else:
+                        store_leaderboard_snapshot(act, region, platform, incoming)
+                        region_report["inserted"] += 1
+                        unchanged_streak = 0
+                        logger.info(
+                            "Leaderboard actualizado %s | %s | %s | jugadores=%s",
+                            platform,
+                            region,
+                            act_name,
+                            len(incoming.get("players", [])),
+                        )
+
+            report[report_key] = region_report
+
+    return report
+
+
+def sync_incremental_content(*, content_only: bool = False) -> None:
     new_doc = build_new_content_document()
     existing_doc = content_collection.find_one({"type": "valorant_content"})
 
     if not existing_doc:
         content_collection.insert_one(new_doc)
         logger.info("💾 No existía content. Insertado documento nuevo.")
+        leaderboard_report = {} if content_only else sync_incremental_leaderboards(new_doc.get("acts", []))
+        CHANGE_REPORT_PATH.write_text(
+            json.dumps(
+                {
+                    "changed_fields": sorted(key for key in new_doc.keys() if key != "type"),
+                    "changed_items": {},
+                    "leaderboards": leaderboard_report,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         return
 
     set_fields: Dict[str, Any] = {}
@@ -340,6 +498,7 @@ def sync_incremental_content() -> None:
     report_payload = {
         "changed_fields": sorted(changed_items.keys()),
         "changed_items": changed_items,
+        "leaderboards": {} if content_only else sync_incremental_leaderboards(new_doc.get("acts", [])),
     }
     CHANGE_REPORT_PATH.write_text(
         json.dumps(report_payload, ensure_ascii=False, indent=2),
@@ -349,7 +508,16 @@ def sync_incremental_content() -> None:
 
 
 def main() -> None:
-    sync_incremental_content()
+    parser = argparse.ArgumentParser(
+        description="Actualiza content de forma incremental y, salvo --content-only, tambien leaderboards.",
+    )
+    parser.add_argument(
+        "--content-only",
+        action="store_true",
+        help="Actualiza solo la coleccion content sin sincronizar leaderboards.",
+    )
+    args = parser.parse_args()
+    sync_incremental_content(content_only=args.content_only)
 
 
 if __name__ == "__main__":

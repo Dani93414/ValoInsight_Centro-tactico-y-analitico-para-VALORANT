@@ -1,3 +1,6 @@
+import re
+import unicodedata
+
 from modules.content.infrastructure import mongo_content_repo
 from modules.content.domain.services import (
     sanitize_segment as _sanitize_segment,
@@ -39,6 +42,13 @@ CONTENT_FIELDS_SUMMARY = (
     "version.buildVersion",
     "version.buildDate",
 )
+
+
+def _normalize_leaderboard_search(value) -> str:
+    text = str(value or "").replace("\u00a0", " ").strip().lower()
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(char for char in text if unicodedata.category(char) != "Mn")
+    return re.sub(r"\s+", " ", text)
 
 CONTENT_FIELDS_ACTS = (
     "acts.id",
@@ -179,19 +189,27 @@ def get_actos():
     if not ultimo:
         return []
 
+    raw_acts = ultimo.get("acts", []) or []
+    episodes_by_id = {
+        act.get("id"): act
+        for act in raw_acts
+        if str(act.get("type") or "").lower() == "episode" and act.get("id")
+    }
     actos = []
 
-    for act in ultimo.get("acts", []):
+    for act in raw_acts:
         parent_raw = act.get("parent") or {}
         parent_id = (
             act.get("parentId")
             or act.get("parent_id")
-            or parent_raw.get("id")
+            or (parent_raw.get("id") if isinstance(parent_raw, dict) else parent_raw)
         )
+        parent_doc = episodes_by_id.get(parent_id)
         parent_name = (
             act.get("parentName")
-            or parent_raw.get("name")
-            or parent_raw.get("displayName")
+            or (parent_raw.get("name") if isinstance(parent_raw, dict) else None)
+            or (parent_raw.get("displayName") if isinstance(parent_raw, dict) else None)
+            or (parent_doc.get("name") if parent_doc else None)
         )
 
         actos.append({
@@ -205,32 +223,177 @@ def get_actos():
 
     return actos
 
-def get_leaderboard_acto(act_id: str, region: str = "eu", limit: int = 100):
-    entry = mongo_content_repo.find_leaderboard(act_id, region)
+def get_leaderboard_acto(
+    act_id: str,
+    region: str = "eu",
+    platform: str = "pc",
+    limit: int = 100,
+    page: int = 1,
+    search: str = "",
+    game_name: str = "",
+    tag_line: str = "",
+):
+    entry = mongo_content_repo.find_leaderboard(act_id, region, platform)
     if not entry:
         return None
 
     players_raw = entry.get("data", {}).get("players", [])
     total_players = len(players_raw)
+    search_norm = _normalize_leaderboard_search(search)
+    game_name_clean = (game_name or "").strip()
+    tag_line_clean = (tag_line or "").strip()
+    if "#" in game_name_clean and not tag_line_clean:
+        split_name, split_tag = game_name_clean.split("#", 1)
+        game_name_clean = split_name.strip()
+        tag_line_clean = split_tag.strip()
 
+    game_name_norm = _normalize_leaderboard_search(game_name_clean)
+    tag_line_norm = _normalize_leaderboard_search(tag_line_clean)
+    has_structured_search = bool(game_name_norm or tag_line_norm)
+    if has_structured_search:
+        require_exact_identity = bool(game_name_norm and tag_line_norm)
+        players_filtered = [
+            p for p in players_raw
+            if (
+                (
+                    _normalize_leaderboard_search(p.get("gameName", "")) == game_name_norm
+                    if require_exact_identity and game_name_norm
+                    else not game_name_norm or game_name_norm in _normalize_leaderboard_search(p.get("gameName", ""))
+                )
+                and (
+                    _normalize_leaderboard_search(p.get("tagLine", "")) == tag_line_norm
+                    if require_exact_identity and tag_line_norm
+                    else not tag_line_norm or tag_line_norm in _normalize_leaderboard_search(p.get("tagLine", ""))
+                )
+            )
+        ]
+    elif search_norm:
+        players_filtered = [
+            p for p in players_raw
+            if search_norm in _normalize_leaderboard_search(f"{p.get('gameName', '')}#{p.get('tagLine', '')}")
+            or search_norm in _normalize_leaderboard_search(p.get("gameName", ""))
+            or search_norm in _normalize_leaderboard_search(p.get("tagLine", ""))
+        ]
+    else:
+        players_filtered = players_raw
+
+    page_size = min(max(int(limit or 100), 1), 500)
+    page = max(int(page or 1), 1)
+    filtered_total = len(players_filtered)
+    total_pages = max(1, (filtered_total + page_size - 1) // page_size)
+    page = min(page, total_pages)
+    start = (page - 1) * page_size
+    players_page = players_filtered[start:start + page_size]
+    target_player_page = None
+
+    if has_structured_search:
+        for index, candidate in enumerate(players_raw):
+            candidate_name = _normalize_leaderboard_search(candidate.get("gameName"))
+            candidate_tag = _normalize_leaderboard_search(candidate.get("tagLine"))
+            name_matches = (
+                candidate_name == game_name_norm
+                if game_name_norm
+                else True
+            )
+            tag_matches = (
+                candidate_tag == tag_line_norm
+                if tag_line_norm
+                else True
+            )
+            if name_matches and tag_matches:
+                target_player_page = (index // page_size) + 1
+                break
+
+    local_players = mongo_content_repo.find_local_leaderboard_players(players_page)
+    previous_entry = (
+        mongo_content_repo.find_previous_leaderboard(act_id, region, platform, entry.get("_id"))
+        if entry.get("isActive")
+        else None
+    )
+    previous_ranks = {
+        p.get("puuid"): p.get("leaderboardRank")
+        for p in ((previous_entry or {}).get("data", {}).get("players", []) or [])
+        if p.get("puuid") and isinstance(p.get("leaderboardRank"), int)
+    }
     players = []
 
-    for p in players_raw[:limit]:
+    original_indexes_by_identity = {
+        id(player): index
+        for index, player in enumerate(players_raw)
+        if isinstance(player, dict)
+    }
+
+    for p in players_page:
+        original_index = original_indexes_by_identity.get(id(p))
+        leaderboard_page = (
+            (original_index // page_size) + 1
+            if isinstance(original_index, int)
+            else None
+        )
+        player_key = f"{str(p.get('gameName') or '').lower()}#{str(p.get('tagLine') or '').lower()}"
+        local = local_players.get(player_key, {})
+        player_card = p.get("playerCard") or p.get("PlayerCardID")
+        player_title = p.get("playerTitle") or p.get("TitleID")
+        game_name_value = str(p.get("gameName") or "").strip() or "Desconocido"
+        tag_line_value = str(p.get("tagLine") or "").strip()
+        fallback_seed = (
+            p.get("puuid")
+            or f"{game_name_value.lower()}#{tag_line_value.lower()}#{p.get('leaderboardRank') or ''}"
+        )
+        player_card_icon = (
+            local.get("playerCardIcon")
+            or mongo_content_repo.local_player_card_icon(player_card)
+            or mongo_content_repo.fallback_player_card_icon(str(fallback_seed))
+        )
         players.append({
-            "gameName": p.get("gameName", "Unknown"),
-            "tagLine": p.get("tagLine", ""),
+            "prefix": p.get("prefix"),
+            "gameName": game_name_value,
+            "tagLine": tag_line_value,
+            "premierRosterType": p.get("premierRosterType"),
             "leaderboardRank": p.get("leaderboardRank"),
+            "leaderboardPage": leaderboard_page,
             "rankedRating": p.get("rankedRating"),
             "numberOfWins": p.get("numberOfWins"),
+            "competitiveTier": p.get("competitiveTier"),
+            "rankDelta24h": (
+                previous_ranks[p.get("puuid")] - p.get("leaderboardRank")
+                if p.get("puuid") in previous_ranks and isinstance(p.get("leaderboardRank"), int)
+                else None
+            ),
+            "puuid": local.get("puuid"),
+            "hasProfile": bool(local.get("hasProfile")),
+            "playerCard": player_card,
+            "playerTitle": player_title,
+            "playerCardIcon": player_card_icon,
         })
 
     return {
         "act_id": act_id,
         "act_name": entry.get("act_name", act_id),
+        "region": entry.get("region", region.upper()),
+        "platform": entry.get("platform", platform.lower()),
         "total_players": total_players,
+        "filtered_players": filtered_total,
         "returned_players": len(players),
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "target_player_page": target_player_page,
+        "rank_distribution": mongo_content_repo.get_rank_distribution_for_acts([act_id]),
         "players": players
     }
+
+
+def get_leaderboard_regions():
+    return mongo_content_repo.get_leaderboard_regions()
+
+
+def get_leaderboard_platforms():
+    return mongo_content_repo.get_leaderboard_platforms()
+
+
+def get_rank_distribution(act_ids: list[str]):
+    return mongo_content_repo.get_rank_distribution_for_acts(act_ids)
 
 def get_region_stats():
     """
@@ -1223,6 +1386,7 @@ def get_sprays(limit=None):
                 item_uuid,
                 "fullTransparentIcon",
             ),
+            "animationGif": _local_content_image("sprays", item_uuid, "animationGif", "gif"),
             "isAnimated": is_animated
         })
 
