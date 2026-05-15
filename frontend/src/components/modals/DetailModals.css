@@ -1312,30 +1312,45 @@
 }
 
 .loading-card {
-  background: linear-gradient(145deg, #1a1d23, #13161b);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: 2rem 2.4rem;
+  position: relative;
+  overflow: hidden;
+  width: min(420px, 100%);
+  background:
+    linear-gradient(135deg, rgba(255, 70, 85, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(28, 32, 40, 0.96), rgba(11, 14, 20, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: clamp(2rem, 5vw, 2.75rem);
   text-align: center;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  animation: loading-card-in 0.28s ease both;
+}
+
+.loading-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #ff4655, #ffffff, #2dd4bf);
 }
 
 .loading-card h2 {
-  margin-top: 1.2rem;
-  font-size: 1.25rem;
+  margin: 1.1rem 0 0;
+  font-size: clamp(1.1rem, 3vw, 1.35rem);
   font-weight: 900;
   letter-spacing: 1px;
+  line-height: 1.15;
   text-transform: uppercase;
 }
 
 .loading-spinner {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   margin: 0 auto;
   border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.12);
+  border: 3px solid rgba(255, 255, 255, 0.13);
   border-top-color: #ff4655;
-  animation: spin 0.9s linear infinite;
+  animation: loading-spin 0.85s linear infinite;
 }
 
 @keyframes spin {

@@ -1100,25 +1100,47 @@ body {
   position: fixed;
   inset: 0;
   z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 1.5rem;
   background:
-    radial-gradient(circle at center, rgba(255, 70, 85, 0.08), transparent 60%),
-    var(--bg-dark);
+    radial-gradient(circle at 28% 24%, rgba(255, 70, 85, 0.2), transparent 30%),
+    radial-gradient(circle at 74% 68%, rgba(45, 212, 191, 0.12), transparent 32%),
+    linear-gradient(145deg, #05070b 0%, #10131a 58%, #080a0f 100%);
 }
 
 .loading-card,
 .weapons-empty-state,
 .weapons-state-card {
+  position: relative;
+  overflow: hidden;
   padding: 2.2rem;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   background:
     radial-gradient(circle at top right, rgba(255, 70, 85, 0.1), transparent 34%),
     linear-gradient(180deg, rgba(26, 29, 35, 0.98), rgba(17, 20, 26, 0.98));
   text-align: center;
   box-shadow: var(--shadow-soft);
+}
+
+.loading-card {
+  width: min(420px, 100%);
+  padding: clamp(2rem, 5vw, 2.75rem);
+  background:
+    linear-gradient(135deg, rgba(255, 70, 85, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(28, 32, 40, 0.96), rgba(11, 14, 20, 0.98));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  animation: loading-card-in 0.28s ease both;
+}
+
+.loading-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--valorant-red), #ffffff, #2dd4bf);
 }
 
 .loading-card h2,
@@ -1136,18 +1158,19 @@ body {
 .weapons-state-card p {
   margin: 0.45rem auto 0;
   max-width: 580px;
-  color: var(--text-secondary);
+  color: rgba(229, 231, 235, 0.76);
   font-family: var(--font-reading);
+  line-height: 1.55;
 }
 
 .loading-spinner {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   margin: 0 auto;
-  border: 3px solid rgba(255, 255, 255, 0.12);
+  border: 3px solid rgba(255, 255, 255, 0.13);
   border-top-color: var(--valorant-red);
   border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+  animation: loading-spin 0.85s linear infinite;
 }
 
 .weapons-state-card--error {
