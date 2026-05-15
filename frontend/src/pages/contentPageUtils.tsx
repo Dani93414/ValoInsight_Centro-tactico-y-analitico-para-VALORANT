@@ -36,7 +36,7 @@ export function ContentLoading({
   message?: string;
 }) {
   return (
-    <div className="loading-screen">
+    <div className="loading-screen" role="status" aria-live="polite">
       <div className="loading-card">
         <div className="loading-spinner" />
         <h2>{title}</h2>

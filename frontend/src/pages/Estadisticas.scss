@@ -3431,45 +3431,64 @@ body {
   position: fixed;
   inset: 0;
   z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 1.5rem;
   background:
-    radial-gradient(circle at center, rgba(255, 70, 85, 0.08), transparent 60%),
-    var(--bg-dark);
+    radial-gradient(circle at 28% 24%, rgba(255, 70, 85, 0.2), transparent 30%),
+    radial-gradient(circle at 74% 68%, rgba(45, 212, 191, 0.12), transparent 32%),
+    linear-gradient(145deg, #05070b 0%, #10131a 58%, #080a0f 100%);
 }
 
 .loading-card {
-  padding: 2.5rem 3rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  background: linear-gradient(145deg, #1a1d23, #13161b);
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+  position: relative;
+  overflow: hidden;
+  width: min(420px, 100%);
+  padding: clamp(2rem, 5vw, 2.75rem);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 70, 85, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(28, 32, 40, 0.96), rgba(11, 14, 20, 0.98));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
   text-align: center;
+  animation: loading-card-in 0.28s ease both;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: linear-gradient(90deg, var(--valorant-red), #ffffff, #2dd4bf);
+  }
 
   h2 {
-    margin-top: 1.2rem;
-    font-size: 1.25rem;
+    margin: 1.1rem 0 0;
+    font-size: clamp(1.1rem, 3vw, 1.35rem);
     font-weight: 900;
     letter-spacing: 1px;
+    line-height: 1.15;
     text-transform: uppercase;
   }
 
   p {
-    margin-top: 0.45rem;
-    color: var(--text-secondary);
+    margin: 0.5rem auto 0;
+    max-width: 28rem;
+    color: rgba(229, 231, 235, 0.76);
     font-family: var(--font-reading);
+    line-height: 1.55;
   }
 }
 
 .loading-spinner {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   margin: 0 auto;
-  border: 3px solid rgba(255, 255, 255, 0.12);
+  border: 3px solid rgba(255, 255, 255, 0.13);
   border-top-color: var(--valorant-red);
   border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+  animation: loading-spin 0.85s linear infinite;
 }
 
 @keyframes spin {

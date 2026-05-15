@@ -27,7 +27,17 @@ function App() {
     <BrowserRouter>
       <div className="page-scale">
         <AppTopbar />
-        <Suspense fallback={<div className="loading-screen">Cargando...</div>}>
+        <Suspense
+          fallback={
+            <div className="loading-screen" role="status" aria-live="polite">
+              <div className="loading-card">
+                <div className="loading-spinner" />
+                <h2>Cargando pagina</h2>
+                <p>Preparando la experiencia...</p>
+              </div>
+            </div>
+          }
+        >
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/agentes" element={<Agentes />} />
