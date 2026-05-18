@@ -2,13 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import type { GlobalAgentStatsFilters } from "../types/globalStats";
 import { getGlobalAgentStats, getRegions } from "./globalStats";
 
-const GLOBAL_STATS_STALE = 1000 * 60 * 60;
+const GLOBAL_STATS_STALE = 0;
 
 export function useRegions() {
   return useQuery({
     queryKey: ["global-stats", "regions"],
     queryFn: getRegions,
     staleTime: GLOBAL_STATS_STALE,
+    refetchOnMount: "always",
   });
 }
 

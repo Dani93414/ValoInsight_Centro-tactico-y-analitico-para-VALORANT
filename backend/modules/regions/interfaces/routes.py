@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from modules.regions.application.agent_stats_service import get_global_agent_stats
 from modules.regions.infrastructure import mongo_region_repo
 
 router = APIRouter()
 
 @router.get("/")
-def get_regions():
+def get_regions(response: Response):
     """
     Devuelve las estadísticas globales de todas las regiones 
     recalculadas por el motor central.
     """
+    response.headers["Cache-Control"] = "no-store"
     return mongo_region_repo.get_all_sorted()
 
 

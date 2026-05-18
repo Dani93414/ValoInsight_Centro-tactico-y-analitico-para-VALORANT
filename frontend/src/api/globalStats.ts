@@ -6,7 +6,9 @@ import type {
 } from "../types/globalStats";
 
 export async function getRegions(): Promise<RegionStats[]> {
-  const res = await fetch(apiUrl("/regions/"));
+  const res = await fetch(apiUrl("/regions/"), {
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error("Error regiones");
   return res.json();
 }

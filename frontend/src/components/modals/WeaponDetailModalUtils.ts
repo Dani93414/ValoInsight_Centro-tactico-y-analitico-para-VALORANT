@@ -30,7 +30,13 @@ export function getWeaponEntry(
   weaponId: string,
 ): Record<string, unknown> | null {
   const rows = match.overview?.weapon_stats;
-  if (!Array.isArray(rows)) return null;
+  if (!Array.isArray(rows)) {
+    if (rows && typeof rows === "object") {
+      const item = (rows as Record<string, Record<string, unknown>>)[weaponId];
+      return item && typeof item === "object" ? item : null;
+    }
+    return null;
+  }
 
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
@@ -87,10 +93,14 @@ export function calculateWeaponStats(
   let matchesUsed = 0;
   let wins = 0;
   let rounds = 0;
+  let totalRoundsPlayed = 0;
   let kills = 0;
   let deaths = 0;
   let assists = 0;
   let damageDealt = 0;
+  let damageReceived = 0;
+  let survivalRounds = 0;
+  let loadoutValueTotal = 0;
   let headshots = 0;
   let bodyshots = 0;
   let legshots = 0;
@@ -98,6 +108,7 @@ export function calculateWeaponStats(
   const timeline: Array<WeaponTimelinePoint & { timestamp: number }> = [];
 
   for (const match of analyticsList) {
+    totalRoundsPlayed += toNumber(match.overview?.rounds);
     const weaponEntry = getWeaponEntry(match, weaponId);
     if (!weaponEntry) continue;
 
@@ -115,12 +126,15 @@ export function calculateWeaponStats(
     const totalShots = headshotsUsed + bodyshotsUsed + legshotsUsed;
 
     matchesUsed += 1;
-    wins += match.won_match ? 1 : 0;
+    wins += toNumber(weaponEntry.wins);
     rounds += roundsUsed;
     kills += killsUsed;
     deaths += deathsUsed;
     assists += assistsUsed;
     damageDealt += toNumber(weaponEntry.damage_dealt);
+    damageReceived += toNumber(weaponEntry.damage_received);
+    survivalRounds += toNumber(weaponEntry.survival_rounds);
+    loadoutValueTotal += toNumber(weaponEntry.loadout_value_total);
     headshots += headshotsUsed;
     bodyshots += bodyshotsUsed;
     legshots += legshotsUsed;
@@ -147,15 +161,21 @@ export function calculateWeaponStats(
     deaths,
     assists,
     damageDealt,
+    damageReceived,
+    survivalRounds,
+    loadoutValueTotal,
     headshotPct: pct(headshots, totalShots),
     kd: kills / Math.max(deaths, 1),
     kda: (kills + assists) / Math.max(deaths, 1),
     killsPerRound: kills / Math.max(rounds, 1),
     damagePerRound: damageDealt / Math.max(rounds, 1),
-    winRate: pct(wins, matchesUsed),
+    damageReceivedPerRound: damageReceived / Math.max(rounds, 1),
+    survivalRate: pct(survivalRounds, rounds),
+    averageLoadoutValue: loadoutValueTotal / Math.max(rounds, 1),
+    winRate: pct(wins, rounds),
+    pickRatePerRound: pct(rounds, totalRoundsPlayed),
     sampleReliability: getWeaponModalSampleReliability(rounds, kills),
     shotData: buildShotDistribution(headshots, bodyshots, legshots),
     recentTimeline: buildWeaponTimeline(timeline),
   };
 }
-

@@ -8,6 +8,12 @@ import type {
   WeaponComparisonTone,
   WeaponPersonalComparison,
 } from "./types";
+import {
+  formatNormalizedWeaponMetricValue,
+  getNormalizedWeaponMetricValue,
+  getWeaponMetricValue,
+  type WeaponNormalizationKey,
+} from "./weaponMetricNormalization";
 
 function diffTone(diff: number, threshold: number, higherIsBetter = true): WeaponComparisonTone {
   if (Math.abs(diff) < threshold) return "neutral";
@@ -23,9 +29,8 @@ function signedNumber(value: number, decimals = 1, suffix = "") {
 export function getPersonalWeaponSampleReliability(rounds: number, kills: number) {
   const sample = rounds || kills;
   if (sample <= 0) return "Sin muestra";
-  if (sample <= 10) return "Muestra baja";
-  if (sample <= 50) return "Muestra media";
-  return "Muestra alta";
+  if (sample <= 10) return "Baja muestra";
+  return "Muestra estable";
 }
 
 export function calculatePersonalWeaponStats(
@@ -38,56 +43,95 @@ export function calculatePersonalWeaponStats(
 
   return {
     matchesUsed: stats.matchesUsed,
+    wins: stats.wins,
     rounds: stats.rounds,
     kills: stats.kills,
     deaths: stats.deaths,
     assists: stats.assists,
     damageDealt: stats.damageDealt,
+    damageReceived: stats.damageReceived,
+    survivalRounds: stats.survivalRounds,
+    loadoutValueTotal: stats.loadoutValueTotal,
     headshotPct: stats.headshotPct,
+    winRate: stats.winRate,
+    survivalRate: stats.survivalRate,
     kd: stats.kd,
     killsPerRound: stats.killsPerRound,
     damagePerRound: stats.damagePerRound,
+    damageReceivedPerRound: stats.damageReceivedPerRound,
+    averageLoadoutValue: stats.averageLoadoutValue,
+    pickRatePerRound: stats.pickRatePerRound,
     sampleReliability: getPersonalWeaponSampleReliability(stats.rounds, stats.kills),
+  };
+}
+
+function buildPersonalComparableStats(
+  stats: PersonalWeaponStats | null,
+  globalStats: RegionWeaponStats | undefined,
+): RegionWeaponStats | undefined {
+  if (!stats) return undefined;
+  return {
+    weapon_name: globalStats?.weapon_name,
+    is_armor: globalStats?.is_armor,
+    rounds_equipped: stats.rounds,
+    wins: stats.wins,
+    win_rate: stats.winRate,
+    kills: stats.kills,
+    deaths: stats.deaths,
+    damage_dealt: stats.damageDealt,
+    damage_received: stats.damageReceived,
+    survival_rounds: stats.survivalRounds,
+    survival_rate: stats.survivalRate,
+    loadout_value_total: stats.loadoutValueTotal,
+    average_loadout_value: stats.averageLoadoutValue,
+    headshot_pct: stats.headshotPct,
+    kd_ratio: stats.kd,
+    kills_per_round: stats.killsPerRound,
+    adr: stats.damagePerRound,
+    pick_rate_per_round: stats.pickRatePerRound,
+    damage_received_per_round: stats.damageReceivedPerRound,
   };
 }
 
 function buildMetric(
   key: WeaponComparisonMetric["key"],
   label: string,
-  globalValue: number | undefined,
-  personalValue: number | undefined,
+  metricKey: WeaponNormalizationKey,
+  globalStats: RegionWeaponStats | undefined,
+  personalComparable: RegionWeaponStats | undefined,
+  cohort: RegionWeaponStats[],
   options: {
     format: "number" | "percent";
     decimals?: number;
     threshold: number;
-    suffix?: string;
-    feedbackPositive: string;
-    feedbackImprove: string;
-    feedbackNeutral: string;
+    higherIsBetter?: boolean;
+    disableNormalization?: boolean;
+    disableDiff?: boolean;
   },
 ): WeaponComparisonMetric | null {
-  if (personalValue === undefined || Number.isNaN(personalValue)) return null;
-  if (globalValue === undefined || Number.isNaN(globalValue)) {
-    return {
-      key,
-      label,
-      globalLabel: "Sin referencia",
-      personalLabel:
-        options.format === "percent"
-          ? formatPercent(personalValue, options.decimals ?? 1)
-          : formatNumber(personalValue, options.decimals ?? 1),
-      diffLabel: "Sin referencia global",
-      tone: "neutral",
-      feedback: "Hay datos personales, pero no existe referencia global suficiente para comparar.",
-    };
-  }
+  const personalValue = getWeaponMetricValue(personalComparable, metricKey);
+  if (personalValue === undefined) return null;
+  const globalValue = getWeaponMetricValue(globalStats, metricKey);
+  const formatValue = (value: number | undefined) =>
+    value === undefined
+      ? "Sin referencia"
+      : options.format === "percent"
+        ? formatPercent(value, options.decimals ?? 1)
+        : formatNumber(value, options.decimals ?? 2);
 
-  const diff = personalValue - globalValue;
-  const tone = diffTone(diff, options.threshold);
-  const formatValue = (value: number) =>
-    options.format === "percent"
-      ? formatPercent(value, options.decimals ?? 1)
-      : formatNumber(value, options.decimals ?? 2);
+  const globalNormalizedValue = options.disableNormalization
+    ? undefined
+    : getNormalizedWeaponMetricValue(globalStats, metricKey, cohort);
+  const personalNormalizedValue = options.disableNormalization
+    ? undefined
+    : getNormalizedWeaponMetricValue(personalComparable, metricKey, cohort);
+  const diff =
+    options.disableDiff || globalValue === undefined ? undefined : personalValue - globalValue;
+  const normalizedDiff =
+    globalNormalizedValue === undefined || personalNormalizedValue === undefined
+      ? undefined
+      : personalNormalizedValue - globalNormalizedValue;
+  const tone = diff === undefined ? "neutral" : diffTone(diff, options.threshold, options.higherIsBetter ?? true);
 
   return {
     key,
@@ -95,39 +139,45 @@ function buildMetric(
     globalLabel: formatValue(globalValue),
     personalLabel: formatValue(personalValue),
     diffLabel:
-      options.format === "percent"
-        ? signedNumber(diff, options.decimals ?? 1, " pts")
-        : signedNumber(diff, options.decimals ?? 2, options.suffix ?? ""),
+      options.disableDiff
+        ? "-"
+        : diff === undefined
+        ? "Sin referencia"
+        : options.format === "percent"
+          ? signedNumber(diff, options.decimals ?? 1, " pts")
+          : signedNumber(diff, options.decimals ?? 2),
+    globalNormalizedLabel: formatNormalizedWeaponMetricValue(globalNormalizedValue, options.format),
+    personalNormalizedLabel: formatNormalizedWeaponMetricValue(personalNormalizedValue, options.format),
+    normalizedDiffLabel:
+      normalizedDiff === undefined
+        ? undefined
+        : options.format === "percent"
+          ? signedNumber(normalizedDiff, options.decimals ?? 1, " pts")
+          : signedNumber(normalizedDiff, options.decimals ?? 2),
+    diff,
+    normalizedDiff,
     tone,
-    feedback:
-      tone === "positive"
-        ? options.feedbackPositive
-        : tone === "improve"
-          ? options.feedbackImprove
-          : options.feedbackNeutral,
+    feedback: "",
   };
 }
 
 export function buildWeaponComparisonFeedback(metrics: WeaponComparisonMetric[], sample: string) {
-  if (sample === "Muestra baja") {
-    return "La muestra personal es baja; interpreta estos datos con cautela.";
+  if (sample === "Baja muestra") {
+    return "Baja muestra: la comparación usa ajuste bayesiano para evitar lecturas agresivas.";
   }
-
   const positive = metrics.filter((metric) => metric.tone === "positive").length;
   const improve = metrics.filter((metric) => metric.tone === "improve").length;
-
-  if (positive >= 2 && positive > improve) {
-    return "Tu rendimiento con esta arma está por encima de varias referencias globales.";
-  }
-  if (improve >= 2 && improve > positive) {
-    return "Hay margen de mejora frente a la referencia global, especialmente en las métricas marcadas.";
-  }
-  return "Tu rendimiento con esta arma está alineado con la media global.";
+  if (positive >= 2 && positive > improve) return "Tu rendimiento esta por encima de varias referencias globales.";
+  if (improve >= 2 && improve > positive) return "Hay margen de mejora frente a la referencia global.";
+  return "Tu rendimiento esta alineado con la referencia global.";
 }
 
 export function compareWeaponStats(
   globalStats: RegionWeaponStats | undefined,
   personalStats: PersonalWeaponStats | null,
+  cohort: RegionWeaponStats[] = [],
+  isShield = false,
+  totalRoundsReference?: number,
 ): WeaponPersonalComparison {
   if (!personalStats) {
     return {
@@ -137,78 +187,114 @@ export function compareWeaponStats(
       hasPersonalUsage: false,
       hasGlobalReference: Boolean(globalStats),
       sampleReliability: "Sin muestra",
-      summary: "Aún no tienes uso registrado con esta arma.",
+      summary: "Aun no tienes uso registrado con esta arma.",
       metrics: [],
     };
   }
 
-  const globalRounds = globalStats?.rounds_equipped;
-  const globalKills = globalStats?.kills;
-  const globalDeaths = globalStats?.deaths;
-  const globalDamage = globalStats?.damage_dealt;
-  const globalKillsPerRound =
-    globalRounds && globalRounds > 0 && globalKills !== undefined
-      ? globalKills / globalRounds
-      : undefined;
-  const globalDamagePerRound =
-    globalRounds && globalRounds > 0 && globalDamage !== undefined
-      ? globalDamage / globalRounds
-      : undefined;
-  const globalKd =
-    globalDeaths && globalDeaths > 0 && globalKills !== undefined
-      ? globalKills / globalDeaths
-      : undefined;
+  const personalComparable = buildPersonalComparableStats(personalStats, globalStats);
+  const globalComparable: RegionWeaponStats | undefined =
+    globalStats && totalRoundsReference && totalRoundsReference > 0
+      ? {
+          ...globalStats,
+          pick_rate_per_round: ((globalStats.rounds_equipped ?? 0) * 100) / totalRoundsReference,
+        }
+      : globalStats;
+  const comparableCohort =
+    totalRoundsReference && totalRoundsReference > 0
+      ? cohort.map((entry) => ({
+          ...entry,
+          pick_rate_per_round: ((entry.rounds_equipped ?? 0) * 100) / totalRoundsReference,
+        }))
+      : cohort;
 
-  const metrics = [
-    buildMetric("kills", "Kills", globalKills, personalStats.kills, {
+  const offensiveMetrics = [
+    buildMetric("rounds", "Rondas equipada", "rounds_equipped", globalComparable, personalComparable, comparableCohort, {
+      format: "number",
+      decimals: 0,
+      threshold: 5,
+      disableNormalization: true,
+      disableDiff: true,
+    }),
+    buildMetric("kills", "Kills", "kills", globalComparable, personalComparable, comparableCohort, {
       format: "number",
       decimals: 0,
       threshold: 1,
-      feedbackPositive: "Tienes más kills registradas que la referencia global disponible.",
-      feedbackImprove: "Tu volumen de kills está por debajo de la referencia global.",
-      feedbackNeutral: "Tu volumen de kills está cerca de la referencia global.",
+      disableNormalization: true,
+      disableDiff: true,
     }),
-    buildMetric("headshot", "Headshot", globalStats?.headshot_pct, personalStats.headshotPct, {
-      format: "percent",
-      decimals: 1,
-      threshold: 5,
-      feedbackPositive: "Tu precisión con esta arma está por encima de la media global.",
-      feedbackImprove: "Tienes menor headshot que la media global; prioriza disparos más controlados.",
-      feedbackNeutral: "Tu precisión está alineada con la media global.",
-    }),
-    buildMetric("rounds", "Rondas equipada", globalRounds, personalStats.rounds, {
-      format: "number",
-      decimals: 0,
-      threshold: 5,
-      feedbackPositive: "Usas esta arma más que la referencia disponible.",
-      feedbackImprove: "Usas esta arma menos que la media; la muestra todavía puede ser baja.",
-      feedbackNeutral: "Tu volumen de uso está cerca de la referencia global.",
-    }),
-    buildMetric("damagePerRound", "Daño / ronda", globalDamagePerRound, personalStats.damagePerRound, {
-      format: "number",
-      decimals: 1,
-      threshold: 5,
-      feedbackPositive: "Tu daño por ronda supera la referencia global.",
-      feedbackImprove: "Tu daño por ronda está por debajo de la referencia global.",
-      feedbackNeutral: "Tu daño por ronda está alineado con la referencia global.",
-    }),
-    buildMetric("kd", "KD", globalKd, personalStats.kd, {
-      format: "number",
-      decimals: 2,
-      threshold: 0.1,
-      feedbackPositive: "Tu KD supera la referencia global.",
-      feedbackImprove: "Tu KD está por debajo de la referencia global.",
-      feedbackNeutral: "Tu KD está alineado con la referencia global.",
-    }),
-    buildMetric("killsPerRound", "Kills / ronda", globalKillsPerRound, personalStats.killsPerRound, {
+    buildMetric("killsPerRound", "Kills / ronda", "kills_per_round", globalComparable, personalComparable, comparableCohort, {
       format: "number",
       decimals: 2,
       threshold: 0.05,
-      feedbackPositive: "Generas más impacto por ronda que la referencia global.",
-      feedbackImprove: "Generas menos kills por ronda que la referencia global.",
-      feedbackNeutral: "Tu impacto por ronda está cerca de la referencia global.",
     }),
-  ].filter((metric): metric is WeaponComparisonMetric => Boolean(metric));
+    buildMetric("kd", "KD", "kd_ratio", globalComparable, personalComparable, comparableCohort, {
+      format: "number",
+      decimals: 2,
+      threshold: 0.1,
+    }),
+    buildMetric("damagePerRound", "Daño / ronda", "adr", globalComparable, personalComparable, comparableCohort, {
+      format: "number",
+      decimals: 1,
+      threshold: 5,
+    }),
+    buildMetric("headshot", "Headshot %", "headshot_pct", globalComparable, personalComparable, comparableCohort, {
+      format: "percent",
+      decimals: 1,
+      threshold: 5,
+    }),
+    buildMetric("winRate", "Win rate", "win_rate", globalComparable, personalComparable, comparableCohort, {
+      format: "percent",
+      decimals: 1,
+      threshold: 5,
+    }),
+    buildMetric("pickRatePerRound", "Pick rate %", "pick_rate_per_round", globalComparable, personalComparable, comparableCohort, {
+      format: "percent",
+      decimals: 1,
+      threshold: 3,
+    }),
+  ];
+
+  const shieldMetrics = [
+    buildMetric("rounds", "Rondas equipado", "rounds_equipped", globalComparable, personalComparable, comparableCohort, {
+      format: "number",
+      decimals: 0,
+      threshold: 5,
+      disableNormalization: true,
+      disableDiff: true,
+    }),
+    buildMetric("winRate", "Win rate", "win_rate", globalComparable, personalComparable, comparableCohort, {
+      format: "percent",
+      decimals: 1,
+      threshold: 5,
+    }),
+    buildMetric("deaths", "Deaths", "deaths", globalComparable, personalComparable, comparableCohort, {
+      format: "number",
+      decimals: 0,
+      threshold: 1,
+      higherIsBetter: false,
+    }),
+    buildMetric("survivalRate", "Supervivencia", "survival_rate", globalComparable, personalComparable, comparableCohort, {
+      format: "percent",
+      decimals: 1,
+      threshold: 5,
+    }),
+    buildMetric("damageReceivedPerRound", "Daño recibido / ronda", "damage_received_per_round", globalComparable, personalComparable, comparableCohort, {
+      format: "number",
+      decimals: 1,
+      threshold: 5,
+      higherIsBetter: false,
+    }),
+    buildMetric("averageLoadoutValue", "Loadout value medio", "average_loadout_value", globalComparable, personalComparable, comparableCohort, {
+      format: "number",
+      decimals: 0,
+      threshold: 100,
+    }),
+  ];
+
+  const metrics = (isShield ? shieldMetrics : offensiveMetrics).filter(
+    (metric): metric is WeaponComparisonMetric => Boolean(metric),
+  );
 
   return {
     hasSession: true,
@@ -221,4 +307,3 @@ export function compareWeaponStats(
     metrics,
   };
 }
-

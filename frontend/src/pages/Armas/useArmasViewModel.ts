@@ -4,6 +4,7 @@ import { useArmas, useGear, usePlayerDashboard, useRegions } from "../../api/hoo
 import { useAuth } from "../../context/AuthContext";
 import { normalizeArrayResponse, normalizeLabel } from "../../utils/formatters";
 import type { GearContent } from "../../types/content";
+import type { RegionWeaponStats } from "../../types/globalStats";
 import type { Arma } from "../../types/weapons";
 import type {
   EnrichedWeapon,
@@ -21,6 +22,7 @@ import {
   calculatePersonalWeaponStats,
   compareWeaponStats,
 } from "./weaponPersonalStats";
+import { buildWeaponCompareMetrics } from "./weaponComparisons";
 import {
   buildWeaponStatsResolver,
   getNumericCost,
@@ -39,6 +41,60 @@ type RouteState = {
 
 function getWeaponKey(weapon: Arma) {
   return weapon.uuid ?? weapon.displayName;
+}
+
+function sumField(target: RegionWeaponStats, source: RegionWeaponStats, key: keyof RegionWeaponStats) {
+  const current = Number(target[key] ?? 0);
+  const next = Number(source[key] ?? 0);
+  target[key] = (current + next) as never;
+}
+
+function aggregateRegionWeaponStats(regionsData: Array<{ totalRounds?: number; weaponStats?: Record<string, RegionWeaponStats> }> | undefined) {
+  const byId: Record<string, RegionWeaponStats> = {};
+  let totalRounds = 0;
+  for (const region of regionsData ?? []) {
+    totalRounds += Number(region?.totalRounds ?? 0);
+    const weaponStats = region?.weaponStats ?? {};
+    for (const [weaponId, stats] of Object.entries(weaponStats)) {
+      const acc = byId[weaponId] ?? { weapon_name: stats.weapon_name, is_armor: stats.is_armor };
+      acc.weapon_name = acc.weapon_name ?? stats.weapon_name;
+      acc.is_armor = acc.is_armor ?? stats.is_armor;
+      sumField(acc, stats, "rounds_equipped");
+      sumField(acc, stats, "rounds_purchased");
+      sumField(acc, stats, "wins");
+      sumField(acc, stats, "kills");
+      sumField(acc, stats, "deaths");
+      sumField(acc, stats, "headshots");
+      sumField(acc, stats, "damage_dealt");
+      sumField(acc, stats, "damage_received");
+      sumField(acc, stats, "survival_rounds");
+      sumField(acc, stats, "loadout_value_total");
+      byId[weaponId] = acc;
+    }
+  }
+
+  for (const stats of Object.values(byId)) {
+    const rounds = Number(stats.rounds_equipped ?? 0);
+    const kills = Number(stats.kills ?? 0);
+    const deaths = Number(stats.deaths ?? 0);
+    const wins = Number(stats.wins ?? 0);
+    const damageDealt = Number(stats.damage_dealt ?? 0);
+    const damageReceived = Number(stats.damage_received ?? 0);
+    const survivalRounds = Number(stats.survival_rounds ?? 0);
+    const loadout = Number(stats.loadout_value_total ?? 0);
+
+    stats.kd_ratio = kills / Math.max(deaths, 1);
+    stats.kills_per_round = rounds > 0 ? kills / rounds : 0;
+    stats.adr = rounds > 0 ? damageDealt / rounds : 0;
+    stats.win_rate = rounds > 0 ? (wins * 100) / rounds : 0;
+    stats.survival_rate = rounds > 0 ? (survivalRounds * 100) / rounds : 0;
+    stats.damage_received_per_round = rounds > 0 ? damageReceived / rounds : 0;
+    stats.average_loadout_value = rounds > 0 ? loadout / rounds : 0;
+    stats.headshot_pct = Number(stats.headshot_pct ?? 0);
+    stats.pick_rate_per_round = totalRounds > 0 ? (rounds * 100) / totalRounds : 0;
+  }
+
+  return { weaponStatsById: byId, totalRounds };
 }
 
 export function useArmasViewModel() {
@@ -71,11 +127,13 @@ export function useArmasViewModel() {
   const [activeCost, setActiveCost] = useState("Todos");
   const [statsFilter, setStatsFilter] = useState<WeaponStatsFilter>("all");
   const [sortKey, setSortKey] = useState<WeaponSortKey>("name");
+  const [compareWeapons, setCompareWeapons] = useState<EnrichedWeapon[]>([]);
 
-  const weaponStatsById = useMemo(
-    () => regions?.[0]?.weaponStats ?? {},
+  const aggregatedRegionData = useMemo(
+    () => aggregateRegionWeaponStats(regions as Array<{ totalRounds?: number; weaponStats?: Record<string, RegionWeaponStats> }> | undefined),
     [regions],
   );
+  const weaponStatsById = aggregatedRegionData.weaponStatsById;
   const resolveStats = useMemo(
     () => buildWeaponStatsResolver(weaponStatsById),
     [weaponStatsById],
@@ -185,14 +243,27 @@ export function useArmasViewModel() {
       personalDashboardQuery.data?.analyticsList,
       selectedWeapon.uuid,
     );
-    return compareWeaponStats(selectedWeapon.globalStats, personalStats);
+    return compareWeaponStats(
+      selectedWeapon.globalStats,
+      personalStats,
+      weapons.map((weapon) => weapon.globalStats).filter((stats): stats is RegionWeaponStats => Boolean(stats)),
+      Boolean(selectedWeapon.isShield),
+      aggregatedRegionData.totalRounds,
+    );
   }, [
     auth.isLoggedIn,
     personalDashboardQuery.data?.analyticsList,
     personalDashboardQuery.isError,
     personalDashboardQuery.isLoading,
+    aggregatedRegionData.totalRounds,
     selectedWeapon,
+    weapons,
   ]);
+
+  const compareMetrics = useMemo(() => {
+    if (compareWeapons.length !== 2) return [];
+    return buildWeaponCompareMetrics(compareWeapons[0], compareWeapons[1]);
+  }, [compareWeapons]);
 
   useEffect(() => {
     const routeWeaponName = routeState?.weaponName?.trim() || null;
@@ -233,6 +304,25 @@ export function useArmasViewModel() {
     setSelectedWeapon(active ? null : weapon);
   };
 
+  const toggleCompareWeapon = (weapon: EnrichedWeapon) => {
+    setCompareWeapons((current) => {
+      const key = getWeaponKey(weapon);
+      if (current.some((item) => getWeaponKey(item) === key)) {
+        return current.filter((item) => getWeaponKey(item) !== key);
+      }
+      if (current.some((item) => item.isShield !== weapon.isShield)) return current;
+      if (current.length >= 2) return current;
+      return [...current, weapon];
+    });
+  };
+
+  const removeCompareWeapon = (weapon: EnrichedWeapon) => {
+    const key = getWeaponKey(weapon);
+    setCompareWeapons((current) => current.filter((item) => getWeaponKey(item) !== key));
+  };
+
+  const clearCompareWeapons = () => setCompareWeapons([]);
+
   const resetFilters = () => {
     setSearch("");
     setActiveCategory("Todas");
@@ -253,9 +343,12 @@ export function useArmasViewModel() {
     activeCategory,
     activeCost,
     categories,
+    compareMetrics,
+    compareWeapons,
     error: weaponsErrorValue ?? gearErrorValue,
     filterSummary,
     filteredWeapons,
+    hasSession: auth.isLoggedIn,
     insights,
     isError: weaponsError || gearError,
     isLoading: weaponsLoading || gearLoading,
@@ -273,6 +366,8 @@ export function useArmasViewModel() {
     weaponsByCategory,
     resetFilters,
     clearFilter,
+    clearCompareWeapons,
+    removeCompareWeapon,
     selectWeapon,
     setActiveCategory,
     setActiveCost,
@@ -280,5 +375,6 @@ export function useArmasViewModel() {
     setSelectedWeapon,
     setSortKey,
     setStatsFilter,
+    toggleCompareWeapon,
   };
 }

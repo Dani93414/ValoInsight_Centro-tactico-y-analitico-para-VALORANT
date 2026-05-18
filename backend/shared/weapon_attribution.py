@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from modules.analytics.infrastructure.reference_data import resolve_weapon_name
+from modules.analytics.infrastructure.reference_data import (
+    resolve_melee_weapon_id,
+    resolve_weapon_or_gear_name,
+)
 
 from shared.math_utils import safe_div as _safe_div_raw
 
@@ -28,6 +31,15 @@ def _coerce_event_time_ms(value: Any) -> int:
 def _normalize_weapon_id(value: Any) -> str:
     text = str(value or "").strip()
     return text or "UNKNOWN"
+
+
+def _damage_item_weapon_id(kill: dict[str, Any], fallback_weapon_id: str) -> str:
+    finishing_damage = kill.get("finishingDamage") or {}
+    damage_item = _normalize_weapon_id(finishing_damage.get("damageItem"))
+    damage_type = str(finishing_damage.get("damageType") or "").strip().lower()
+    if damage_type == "melee" and damage_item == "UNKNOWN":
+        return resolve_melee_weapon_id()
+    return damage_item if damage_item != "UNKNOWN" else fallback_weapon_id
 
 
 def _unique_kill_key(kill: dict[str, Any]) -> tuple[Any, Any, Any, tuple[str, ...]]:
@@ -83,7 +95,7 @@ def _ensure_weapon_bucket(
 
     bucket = {
         "weapon_id": normalized_weapon_id,
-        "weapon_name": resolve_weapon_name(normalized_weapon_id),
+        "weapon_name": resolve_weapon_or_gear_name(normalized_weapon_id),
         "rounds": 0,
         "kills": 0,
         "deaths": 0,
@@ -133,10 +145,7 @@ def compute_precise_weapon_stats_core(
             if death_time_ms is not None and kill_time_ms > death_time_ms:
                 continue
 
-            kill_weapon_id = _normalize_weapon_id(
-                ((kill.get("finishingDamage") or {}).get("damageItem"))
-                or current_known_weapon_id
-            )
+            kill_weapon_id = _damage_item_weapon_id(kill, current_known_weapon_id)
             _ensure_weapon_bucket(weapon_stats, kill_weapon_id)["kills"] += 1
             kill_weapon_ids.append(kill_weapon_id)
             current_known_weapon_id = kill_weapon_id
@@ -209,19 +218,19 @@ def merge_precise_weapon_core_stats(
     for weapon_id, entry in _iter_existing_weapon_entries(existing_weapon_stats):
         merged[weapon_id] = {**entry}
         merged[weapon_id]["weapon_id"] = entry.get("weapon_id") or weapon_id
-        merged[weapon_id]["weapon_name"] = entry.get("weapon_name") or resolve_weapon_name(weapon_id)
+        merged[weapon_id]["weapon_name"] = entry.get("weapon_name") or resolve_weapon_or_gear_name(weapon_id)
 
     for weapon_id, bucket in (precise_core_stats or {}).items():
         if weapon_id not in merged:
             merged[weapon_id] = {
                 "weapon_id": weapon_id,
-                "weapon_name": bucket.get("weapon_name") or resolve_weapon_name(weapon_id),
+                "weapon_name": bucket.get("weapon_name") or resolve_weapon_or_gear_name(weapon_id),
             }
 
     for weapon_id, entry in merged.items():
         bucket = (precise_core_stats or {}).get(weapon_id) or {}
         entry["weapon_id"] = entry.get("weapon_id") or weapon_id
-        entry["weapon_name"] = entry.get("weapon_name") or resolve_weapon_name(weapon_id)
+        entry["weapon_name"] = entry.get("weapon_name") or resolve_weapon_or_gear_name(weapon_id)
         entry["rounds"] = int(bucket.get("rounds", 0) or 0)
         entry["kills"] = int(bucket.get("kills", 0) or 0)
         entry["deaths"] = int(bucket.get("deaths", 0) or 0)

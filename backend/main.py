@@ -64,7 +64,7 @@ app.add_middleware(
 _CACHE_RULES: list[tuple[str, str]] = [
     ("/content/", "public, max-age=86400"),       # 24 h for static content
     ("/leaderboards/", "public, max-age=3600"),    # 1 h for leaderboards
-    ("/regions/", "public, max-age=3600"),          # 1 h for region stats
+    ("/regions/", "no-store"),                      # rebuilt analytics must show immediately
     ("/matches/", "public, max-age=600"),           # 10 min for match list
     ("/players/", "private, no-store"),             # dynamic player metrics
     ("/users/", "private, no-store"),               # private user activity

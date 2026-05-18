@@ -16,7 +16,12 @@ from backend.infrastructure.mongo_client import (
     matches_collection,
     regions_collection,
 )
-from shared.stat_formulas import finalize_core_stats
+try:
+    from modules.analytics.infrastructure.reference_data import resolve_gear_name
+    from shared.stat_formulas import finalize_core_stats
+except ModuleNotFoundError:
+    from backend.modules.analytics.infrastructure.reference_data import resolve_gear_name
+    from backend.shared.stat_formulas import finalize_core_stats
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +47,11 @@ _SUM_FIELDS = (
 
 _BUCKET_FIELDS = ("rounds", "wins", "kills", "deaths", "damage_dealt", "spent")
 
-_WEAPON_FIELDS = ("rounds", "kills", "deaths", "headshots", "bodyshots", "legshots", "damage_dealt")
+_WEAPON_FIELDS = (
+    "rounds", "rounds_purchased", "wins", "kills", "deaths", "headshots",
+    "bodyshots", "legshots", "damage_dealt", "damage_received",
+    "survival_rounds", "loadout_value_total",
+)
 
 
 def _safe_div(num, den):
@@ -171,17 +180,21 @@ def rebuild_regions(*, force: bool = False):
                     mp["sides"][side_name][field] += val
 
         # ── Economy (buy buckets) ──
-        for bucket_name in ("eco", "low_buy", "full_buy"):
-            bucket = (overview.get("buy_buckets") or {}).get(bucket_name) or {}
-            for field in _BUCKET_FIELDS:
-                rd["economy"][bucket_name][field] += int(bucket.get(field, 0) or 0)
+            for bucket_name in ("eco", "low_buy", "full_buy"):
+                bucket = (overview.get("buy_buckets") or {}).get(bucket_name) or {}
+                for field in _BUCKET_FIELDS:
+                    rd["economy"][bucket_name][field] += int(bucket.get(field, 0) or 0)
 
         # ── Weapon stats (equipped weapon) ──
-        for weapon_id, ws in (overview.get("weapon_stats") or {}).items():
-            weq = rd["weapons"][weapon_id]
-            weq["weapon_name"] = ws.get("weapon_name") or "Unknown"
-            for field in _WEAPON_FIELDS:
-                weq["totals"][field] += int(ws.get(field, 0) or 0)
+            for weapon_id, ws in (overview.get("weapon_stats") or {}).items():
+                weq = rd["weapons"][weapon_id]
+                weq["weapon_name"] = ws.get("weapon_name") or "Unknown"
+                weq["is_armor"] = bool(ws.get("is_armor"))
+                for field in _WEAPON_FIELDS:
+                    weq["totals"][field] += int(ws.get(field, 0) or 0)
+
+            if not _has_embedded_armor_stats(overview):
+                _accumulate_raw_armor_stats(rd, match_obj, player)
 
     logger.info("Processed %d analytics documents.", doc_count)
 
@@ -260,12 +273,22 @@ def rebuild_regions(*, force: bool = False):
             total_shots_w = whs + wt.get("bodyshots", 0) + wt.get("legshots", 0)
             weapon_doc[weapon_id] = {
                 "weapon_name": weq["weapon_name"],
+                "is_armor": bool(weq.get("is_armor")),
                 "rounds_equipped": wt.get("rounds", 0),
+                "rounds_purchased": wt.get("rounds_purchased", 0),
+                "wins": wt.get("wins", 0),
+                "win_rate": _safe_div(wt.get("wins", 0) * 100.0, wt.get("rounds", 0)),
                 "kills": wt.get("kills", 0),
                 "deaths": wt.get("deaths", 0),
                 "headshots": whs,
                 "headshot_pct": _safe_div(whs * 100.0, total_shots_w),
                 "damage_dealt": wt.get("damage_dealt", 0),
+                "damage_received": wt.get("damage_received", 0),
+                "survival_rounds": wt.get("survival_rounds", 0),
+                "survival_rate": _safe_div(wt.get("survival_rounds", 0) * 100.0, wt.get("rounds", 0)),
+                "damage_received_per_round": _safe_div(wt.get("damage_received", 0), wt.get("rounds", 0)),
+                "loadout_value_total": wt.get("loadout_value_total", 0),
+                "average_loadout_value": _safe_div(wt.get("loadout_value_total", 0), wt.get("rounds", 0)),
             }
 
         # ── Economy ──
@@ -401,6 +424,93 @@ def update_region_from_match(match_obj):
         update,
         upsert=True,
     )
+
+
+def _valid_equipment_id(value):
+    text = str(value or "").strip()
+    if not text or text in {"UNKNOWN", "None", "none", "null", "string"}:
+        return None
+    return text
+
+
+def _player_stats_map(round_obj):
+    return {
+        pstat.get("puuid"): pstat
+        for pstat in round_obj.get("playerStats", []) or []
+        if isinstance(pstat, dict) and pstat.get("puuid")
+    }
+
+
+def _collect_unique_round_kills(round_obj):
+    seen = set()
+    kills = []
+    for pstat in round_obj.get("playerStats", []) or []:
+        if not isinstance(pstat, dict):
+            continue
+        for kill in pstat.get("kills", []) or []:
+            if not isinstance(kill, dict):
+                continue
+            key = (
+                kill.get("timeSinceRoundStartMillis"),
+                kill.get("killer"),
+                kill.get("victim"),
+                tuple(sorted(kill.get("assistants", []) or [])),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            kills.append(kill)
+    return kills
+
+
+def _player_damage_received(round_obj, puuid):
+    total = 0
+    for pstat in round_obj.get("playerStats", []) or []:
+        if not isinstance(pstat, dict):
+            continue
+        for damage in pstat.get("damage", []) or []:
+            if isinstance(damage, dict) and damage.get("receiver") == puuid:
+                total += int(damage.get("damage", 0) or 0)
+    return total
+
+
+def _has_embedded_armor_stats(overview):
+    weapon_stats = overview.get("weapon_stats") or {}
+    if isinstance(weapon_stats, dict):
+        return any(bool(item.get("is_armor")) for item in weapon_stats.values() if isinstance(item, dict))
+    if isinstance(weapon_stats, list):
+        return any(bool(item.get("is_armor")) for item in weapon_stats if isinstance(item, dict))
+    return False
+
+
+def _accumulate_raw_armor_stats(region_data, match_obj, player):
+    puuid = player.get("puuid")
+    team_id = player.get("teamId")
+    if not puuid:
+        return
+
+    for round_obj in match_obj.get("roundResults", []) or []:
+        pstats = _player_stats_map(round_obj)
+        round_pstat = pstats.get(puuid)
+        if not round_pstat:
+            continue
+        economy = round_pstat.get("economy") or {}
+        armor_id = _valid_equipment_id(economy.get("armor"))
+        if not armor_id:
+            continue
+
+        kills = _collect_unique_round_kills(round_obj)
+        died = any(kill.get("victim") == puuid for kill in kills)
+        armor_stats = region_data["weapons"][armor_id]
+        armor_stats["weapon_name"] = resolve_gear_name(armor_id)
+        armor_stats["is_armor"] = True
+        armor_stats["totals"]["rounds"] += 1
+        armor_stats["totals"]["rounds_purchased"] += 1
+        armor_stats["totals"]["wins"] += 1 if round_obj.get("winningTeam") == team_id else 0
+        armor_stats["totals"]["deaths"] += 1 if died else 0
+        armor_stats["totals"]["survival_rounds"] += 0 if died else 1
+        armor_stats["totals"]["damage_received"] += _player_damage_received(round_obj, puuid)
+        armor_stats["totals"]["loadout_value_total"] += int(economy.get("loadoutValue", 0) or 0)
 
 
 def update_regions():

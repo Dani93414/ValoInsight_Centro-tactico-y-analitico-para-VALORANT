@@ -62,7 +62,7 @@ export type PersonalAgentStats = {
 };
 
 export type AgentComparisonMetric = {
-  key: keyof RegionAgentStats;
+  key: keyof RegionAgentStats | "wins" | "losses" | "kills" | "deaths" | "assists";
   label: string;
   globalLabel: string;
   personalLabel: string;
