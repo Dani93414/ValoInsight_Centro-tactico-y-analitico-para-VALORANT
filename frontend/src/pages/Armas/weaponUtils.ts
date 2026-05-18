@@ -35,6 +35,17 @@ const VALUE_TRANSLATIONS: Record<string, string> = {
   Melee: "Cuerpo a cuerpo",
 };
 
+const FEATURE_TRANSLATIONS: Array<{ includes: string; label: string }> = [
+  { includes: "silencer", label: "Silenciador: reduce traza sonora y visual de disparo." },
+  { includes: "suppressor", label: "Silenciador: reduce traza sonora y visual de disparo." },
+  { includes: "zoom", label: "Zoom: mejora precisión al apuntar con mira." },
+  { includes: "burst", label: "Ráfaga: dispara varias balas por activación." },
+  { includes: "alt fire", label: "Disparo alternativo: añade un modo secundario de uso." },
+  { includes: "alternate fire", label: "Disparo alternativo: añade un modo secundario de uso." },
+  { includes: "wall", label: "Penetración: puede impactar a través de superficies." },
+  { includes: "air burst", label: "Explosión aérea: detona en el aire o por tiempo." },
+];
+
 export function normalizeWeaponCategory(category?: string | null) {
   const clean = category?.trim() ?? "";
   if (!clean || /^[-\u2013\u2014]+$/u.test(clean)) return "CUERPO A CUERPO";
@@ -74,11 +85,18 @@ export function getNumericCost(weapon: Arma) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+export function isMeleeWeapon(weapon: Arma) {
+  return normalizeWeaponCategory(weapon.category) === "CUERPO A CUERPO";
+}
+
 export function formatWeaponValue(value: unknown): string | number {
   if (typeof value === "string") {
     const cleanValue = value.includes("::")
       ? (value.split("::").pop() ?? value)
       : value;
+    const normalizedValue = cleanValue.trim().toLowerCase();
+    const featureMatch = FEATURE_TRANSLATIONS.find((item) => normalizedValue.includes(item.includes));
+    if (featureMatch) return featureMatch.label;
     return VALUE_TRANSLATIONS[cleanValue] ?? cleanValue;
   }
   if (typeof value === "number") return value;
@@ -88,9 +106,8 @@ export function formatWeaponValue(value: unknown): string | number {
 export function getWeaponSampleReliability(stats?: RegionWeaponStats) {
   const sample = stats?.rounds_equipped ?? stats?.kills ?? 0;
   if (sample <= 0) return "Sin muestra";
-  if (sample <= 10) return "Muestra baja";
-  if (sample <= 50) return "Muestra media";
-  return "Muestra alta";
+  if (sample <= 10) return "Baja muestra";
+  return "Muestra estable";
 }
 
 export function getWeaponProfileTags(weapon: Arma) {
@@ -157,9 +174,25 @@ export function buildWeaponStatsResolver(
     if (stats.weapon_name) byName.set(normalizeLabel(stats.weapon_name), stats);
   });
 
-  return (weapon: Arma) =>
-    weaponStatsById[weapon.uuid ?? ""] ??
-    byName.get(normalizeLabel(weapon.displayName));
+  return (weapon: Arma) => {
+    const byUuid = weaponStatsById[weapon.uuid ?? ""];
+    if (byUuid) return byUuid;
+    const byDisplayName = byName.get(normalizeLabel(weapon.displayName));
+    if (byDisplayName) return byDisplayName;
+    if (weapon.isShield) {
+      const shieldAliases =
+        normalizeLabel(weapon.displayName).includes("heavy")
+          ? ["heavy shields", "heavy shield", "escudos pesados", "escudo pesado"]
+          : normalizeLabel(weapon.displayName).includes("light")
+            ? ["light shields", "light shield", "escudos ligeros", "escudo ligero"]
+            : [];
+      for (const alias of shieldAliases) {
+        const match = byName.get(normalizeLabel(alias));
+        if (match) return match;
+      }
+    }
+    return undefined;
+  };
 }
 
 export function matchesWeaponStatsFilter(

@@ -96,7 +96,6 @@ export function WeaponsGlobalRanking({ ranking }: Props) {
                     {formatPercent(weapon.headshotPct)} HS ·{" "}
                     {formatNumber(weapon.rounds)} rondas
                   </small>
-                  {mode === "headshot" && <em>Muestra suficiente</em>}
                   <div className="weapons-ranking-bar" aria-hidden="true">
                     <i style={{ width: `${(metricValue / maxMetric) * 100}%` }} />
                   </div>
@@ -109,4 +108,3 @@ export function WeaponsGlobalRanking({ ranking }: Props) {
     </section>
   );
 }
-

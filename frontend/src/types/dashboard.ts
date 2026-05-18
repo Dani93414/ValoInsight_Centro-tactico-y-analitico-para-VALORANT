@@ -56,7 +56,7 @@ export type AnalyticsMatch = {
     headshots?: number;
     bodyshots?: number;
     legshots?: number;
-    weapon_stats?: Array<Record<string, unknown>>;
+    weapon_stats?: Array<Record<string, unknown>> | Record<string, Record<string, unknown>>;
     first_kills?: number;
     first_deaths?: number;
     opening_duel_wins?: number;

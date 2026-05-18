@@ -18,7 +18,7 @@ def _latest_content_doc() -> Dict[str, Any]:
     doc = content_collection.find_one(
         {"type": "valorant_content"},
         sort=[("_id", -1)],
-        projection={"_id": 0, "agents": 1, "maps": 1, "weapons": 1},
+        projection={"_id": 0, "agents": 1, "maps": 1, "weapons": 1, "gear": 1},
     )
     return doc or {}
 
@@ -41,11 +41,18 @@ def weapons_by_uuid() -> Dict[str, Dict[str, Any]]:
     return {str(item.get("uuid")): item for item in raw if isinstance(item, dict) and item.get("uuid")}
 
 
+@lru_cache(maxsize=1)
+def gear_by_uuid() -> Dict[str, Dict[str, Any]]:
+    raw = _latest_content_doc().get("gear", []) or []
+    return {str(item.get("uuid")): item for item in raw if isinstance(item, dict) and item.get("uuid")}
+
+
 def clear_reference_cache() -> None:
     _latest_content_doc.cache_clear()
     agents_by_uuid.cache_clear()
     maps_by_uuid.cache_clear()
     weapons_by_uuid.cache_clear()
+    gear_by_uuid.cache_clear()
 
 
 def resolve_agent_name(agent_id: str) -> str:
@@ -67,3 +74,24 @@ def resolve_map_name(map_id: str) -> str:
 def resolve_weapon_name(weapon_id: str) -> str:
     item = weapons_by_uuid().get(str(weapon_id))
     return item.get("displayName", UNKNOWN_NAME) if item else UNKNOWN_NAME
+
+
+def resolve_gear_name(gear_id: str) -> str:
+    item = gear_by_uuid().get(str(gear_id))
+    return item.get("displayName", UNKNOWN_NAME) if item else UNKNOWN_NAME
+
+
+def resolve_weapon_or_gear_name(item_id: str) -> str:
+    weapon_name = resolve_weapon_name(item_id)
+    if weapon_name != UNKNOWN_NAME:
+        return weapon_name
+    return resolve_gear_name(item_id)
+
+
+def resolve_melee_weapon_id() -> str:
+    for weapon_id, item in weapons_by_uuid().items():
+        category = str(item.get("category") or "").lower()
+        name = str(item.get("displayName") or "").lower()
+        if "melee" in category or "knife" in name or "cuchillo" in name:
+            return weapon_id
+    return "MELEE"

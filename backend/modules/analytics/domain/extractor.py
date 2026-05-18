@@ -14,6 +14,7 @@ from modules.analytics.domain.constants import (
 from modules.analytics.infrastructure.reference_data import (
     resolve_agent_name,
     resolve_agent_role,
+    resolve_gear_name,
     resolve_map_name,
     resolve_weapon_name,
 )
@@ -111,6 +112,7 @@ def new_scope_stats() -> dict:
         "econ_spent": 0,
         "loadout_value_total": 0,
         "weapon_stats": {},
+        "armor_stats": {},
         "buy_buckets": {
             "eco": {"rounds": 0, "wins": 0, "kills": 0, "deaths": 0, "damage_dealt": 0, "spent": 0},
             "low_buy": {"rounds": 0, "wins": 0, "kills": 0, "deaths": 0, "damage_dealt": 0, "spent": 0},
@@ -176,6 +178,22 @@ def _new_weapon_scope(weapon_id: str, weapon_name: Optional[str] = None) -> dict
         "multi_3k": 0,
         "multi_4k": 0,
         "multi_5k": 0,
+        "econ_spent": 0,
+        "loadout_value_total": 0,
+    }
+
+
+def _new_armor_scope(armor_id: str, armor_name: Optional[str] = None) -> dict:
+    return {
+        "weapon_id": armor_id,
+        "weapon_name": armor_name or "Unknown",
+        "is_armor": True,
+        "rounds": 0,
+        "rounds_purchased": 0,
+        "wins": 0,
+        "deaths": 0,
+        "damage_received": 0,
+        "survival_rounds": 0,
         "econ_spent": 0,
         "loadout_value_total": 0,
     }
@@ -593,6 +611,16 @@ def _upsert_weapon_stats(scope: dict, weapon_id: str) -> dict:
     return scope["weapon_stats"][weapon_id]
 
 
+def _upsert_armor_stats(scope: dict, armor_id: str) -> dict:
+    armor_id = str(armor_id or "UNKNOWN")
+    if armor_id not in scope["armor_stats"]:
+        scope["armor_stats"][armor_id] = _new_armor_scope(
+            armor_id=armor_id,
+            armor_name=resolve_gear_name(armor_id),
+        )
+    return scope["armor_stats"][armor_id]
+
+
 def _update_weapon_scope(weapon_scope: dict, round_payload: dict) -> None:
     for key in (
         "rounds",
@@ -652,6 +680,20 @@ def _update_weapon_scope(weapon_scope: dict, round_payload: dict) -> None:
         "loadout_value_total",
     ):
         weapon_scope[key] += round_payload.get(key, 0)
+
+
+def _update_armor_scope(armor_scope: dict, round_payload: dict) -> None:
+    for key in (
+        "rounds",
+        "wins",
+        "deaths",
+        "damage_received",
+        "survival_rounds",
+        "econ_spent",
+        "loadout_value_total",
+    ):
+        armor_scope[key] += round_payload.get(key, 0)
+    armor_scope["rounds_purchased"] += 1
 
 
 def _update_scope(scope: dict, weapon_id: str, round_payload: dict, spent: int) -> None:
@@ -727,6 +769,13 @@ def _update_scope(scope: dict, weapon_id: str, round_payload: dict, spent: int) 
     _update_weapon_scope(weapon_scope, round_payload)
 
 
+def _update_armor_stats(scope: dict, armor_id: str, round_payload: dict) -> None:
+    if not armor_id or armor_id in {"UNKNOWN", "string", "None", "null"}:
+        return
+    armor_scope = _upsert_armor_stats(scope, armor_id)
+    _update_armor_scope(armor_scope, round_payload)
+
+
 def _finalize_stats_block(stats: dict) -> dict:
     finalize_core_stats(stats)
 
@@ -739,6 +788,13 @@ def _finalize_stats_block(stats: dict) -> dict:
 
     for weapon_id, weapon_stats in stats.get("weapon_stats", {}).items():
         finalize_core_stats(weapon_stats)
+
+    for armor_id, armor_stats in stats.get("armor_stats", {}).items():
+        rounds = armor_stats.get("rounds", 0)
+        armor_stats["win_rate"] = safe_div(armor_stats.get("wins", 0) * 100.0, rounds)
+        armor_stats["survival_rate"] = safe_div(armor_stats.get("survival_rounds", 0) * 100.0, rounds)
+        armor_stats["damage_received_per_round"] = safe_div(armor_stats.get("damage_received", 0), rounds)
+        armor_stats["average_loadout_value"] = safe_div(armor_stats.get("loadout_value_total", 0), rounds)
 
     return stats
 
@@ -915,6 +971,7 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             spent = int(economy.get("spent", 0) or 0)
             loadout_value = int(economy.get("loadoutValue", 0) or 0)
             equipped_weapon_id = str(economy.get("weapon") or "UNKNOWN")
+            equipped_armor_id = str(economy.get("armor") or "UNKNOWN")
 
             first_kill = _find_first_kill(all_kills)
             first_kills = 0
@@ -1102,20 +1159,24 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             }
 
             _update_scope(overview, equipped_weapon_id, round_payload, spent)
+            _update_armor_stats(overview, equipped_armor_id, round_payload)
 
             if round_side in {SIDE_ATTACK, SIDE_DEFENSE}:
                 side_round_results[round_side].append(round_obj)
                 _update_scope(sides[round_side], equipped_weapon_id, round_payload, spent)
+                _update_armor_stats(sides[round_side], equipped_armor_id, round_payload)
 
         overview["weapon_stats"] = merge_precise_weapon_core_stats(
             overview.get("weapon_stats"),
             compute_precise_weapon_stats_core(round_results, puuid),
         )
+        overview["weapon_stats"].update(overview.get("armor_stats") or {})
         for side_name in (SIDE_ATTACK, SIDE_DEFENSE):
             sides[side_name]["weapon_stats"] = merge_precise_weapon_core_stats(
                 sides[side_name].get("weapon_stats"),
                 compute_precise_weapon_stats_core(side_round_results[side_name], puuid),
             )
+            sides[side_name]["weapon_stats"].update(sides[side_name].get("armor_stats") or {})
 
         _finalize_stats_block(overview)
         if sides[SIDE_ATTACK].get("rounds", 0) > 0:

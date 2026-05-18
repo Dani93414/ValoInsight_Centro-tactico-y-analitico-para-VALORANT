@@ -106,12 +106,26 @@ export type RegionMapStats = {
 
 export type RegionWeaponStats = {
   weapon_name?: string;
+  is_armor?: boolean;
   rounds_equipped?: number;
+  rounds_purchased?: number;
+  wins?: number;
+  win_rate?: number;
   kills?: number;
   deaths?: number;
   headshots?: number;
   headshot_pct?: number;
   damage_dealt?: number;
+  damage_received?: number;
+  survival_rounds?: number;
+  survival_rate?: number;
+  damage_received_per_round?: number;
+  loadout_value_total?: number;
+  average_loadout_value?: number;
+  kd_ratio?: number;
+  kills_per_round?: number;
+  adr?: number;
+  pick_rate_per_round?: number;
 };
 
 export type RegionEconomyStats = {

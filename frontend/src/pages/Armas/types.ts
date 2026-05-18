@@ -60,26 +60,52 @@ export type WeaponRankingItem = {
 
 export type PersonalWeaponStats = {
   matchesUsed: number;
+  wins: number;
   rounds: number;
   kills: number;
   deaths: number;
   assists: number;
   damageDealt: number;
+  damageReceived: number;
+  survivalRounds: number;
+  loadoutValueTotal: number;
   headshotPct: number;
+  winRate: number;
+  survivalRate: number;
   kd: number;
   killsPerRound: number;
   damagePerRound: number;
+  damageReceivedPerRound: number;
+  averageLoadoutValue: number;
+  pickRatePerRound: number;
   sampleReliability: string;
 };
 
 export type WeaponComparisonTone = "positive" | "neutral" | "improve";
 
 export type WeaponComparisonMetric = {
-  key: "kills" | "headshot" | "rounds" | "damagePerRound" | "kd" | "killsPerRound";
+  key:
+    | "rounds"
+    | "kills"
+    | "killsPerRound"
+    | "kd"
+    | "damagePerRound"
+    | "headshot"
+    | "winRate"
+    | "deaths"
+    | "survivalRate"
+    | "damageReceivedPerRound"
+    | "averageLoadoutValue"
+    | "pickRatePerRound";
   label: string;
   globalLabel: string;
   personalLabel: string;
   diffLabel: string;
+  globalNormalizedLabel?: string;
+  personalNormalizedLabel?: string;
+  normalizedDiffLabel?: string;
+  diff?: number;
+  normalizedDiff?: number;
   tone: WeaponComparisonTone;
   feedback: string;
 };
@@ -93,4 +119,13 @@ export type WeaponPersonalComparison = {
   sampleReliability: string;
   summary: string;
   metrics: WeaponComparisonMetric[];
+};
+
+export type WeaponCompareMetric = {
+  key: string;
+  label: string;
+  firstLabel: string;
+  secondLabel: string;
+  firstValue?: number;
+  secondValue?: number;
 };
