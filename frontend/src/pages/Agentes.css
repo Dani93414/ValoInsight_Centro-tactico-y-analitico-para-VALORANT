@@ -192,10 +192,10 @@ body {
 }
 
 .agent-card:focus-visible,
+.agent-compare-action:focus-visible,
 .role-filter-btn:focus-visible,
 .agents-search:focus-visible,
 .agents-select:focus-visible,
-.agent-collapsible-toggle:focus-visible,
 .agent-detail-close:focus-visible,
 .agents-clear-filters:focus-visible,
 .agents-empty-action:focus-visible,
@@ -1240,19 +1240,6 @@ body {
   object-fit: contain;
 }
 
-.agent-collapsible-chevron {
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(45deg);
-  transition: transform var(--transition-fast);
-}
-
-.agent-collapsible.is-open .agent-collapsible-chevron {
-  transform: rotate(225deg);
-}
-
 .agent-role-info {
   display: flex;
   gap: 0.9rem;
@@ -1413,72 +1400,6 @@ body {
 /* =====================================================
    COLLAPSIBLES / STATS / ABILITIES
    ===================================================== */
-
-.agent-collapsible {
-  margin-top: 0.8rem;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  background: rgba(15, 17, 21, 0.56);
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    box-shadow var(--transition-medium);
-}
-
-.agent-collapsible.is-open {
-  border-color: rgba(255, 70, 85, 0.26);
-  background: rgba(16, 19, 24, 0.82);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.22);
-}
-
-.agent-collapsible-toggle {
-  appearance: none;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.9rem;
-  width: 100%;
-  min-height: 58px;
-  padding: 0.85rem 1rem;
-  border: 0;
-  background: rgba(255, 255, 255, 0.035);
-  color: var(--text-primary);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.agent-collapsible-toggle:hover {
-  background: rgba(255, 70, 85, 0.09);
-}
-
-.agent-collapsible-toggle > span {
-  font-size: 0.88rem;
-  font-weight: 900;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.agent-collapsible-toggle > strong {
-  justify-self: end;
-  min-width: 0;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 800;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-collapsible-panel {
-  padding: 1rem;
-  border-top: 1px solid var(--border-color);
-  animation: fadeUp 0.22s ease both;
-}
 
 .agent-stat-bars {
   display: grid;
@@ -1732,7 +1653,7 @@ body {
   border: 3px solid rgba(255, 255, 255, 0.13);
   border-top-color: var(--valorant-red);
   border-radius: 50%;
-  animation: loading-spin 0.85s linear infinite;
+  animation: spin 0.85s linear infinite;
 }
 
 .agents-loading-modal {
@@ -1936,22 +1857,6 @@ body {
   .agent-detail-heading {
     flex-direction: column;
     padding-right: 3rem;
-  }
-
-  .agent-collapsible-toggle {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .agent-collapsible-toggle > strong {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-self: start;
-    white-space: normal;
-  }
-
-  .agent-collapsible-chevron {
-    grid-column: 2;
-    grid-row: 1;
   }
 
   .agents-comparison-row {

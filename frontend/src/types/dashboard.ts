@@ -41,6 +41,10 @@ export type AnalyticsMatch = {
   game_start_millis?: number;
   agent_id?: string;
   agent_name?: string;
+  team_agents?: Array<{
+    agent_id?: string | null;
+    agent_name?: string | null;
+  }>;
   role?: string;
   competitive_tier?: number;
   overview?: {
@@ -122,6 +126,7 @@ export type AnalyticsMatch = {
     multi_3k?: number;
     multi_4k?: number;
     multi_5k?: number;
+    round_ceremonies?: Record<string, number>;
     damage_delta?: number;
     damage_delta_per_round?: number;
     kd_ratio?: number;

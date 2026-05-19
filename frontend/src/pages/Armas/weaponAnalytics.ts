@@ -92,7 +92,10 @@ export function buildInsights(weapons: EnrichedWeapon[]): WeaponInsightItem[] {
         (a.globalStats?.headshot_pct ?? 0),
     )[0];
   const mostEquipped = weapons
-    .filter((weapon) => (weapon.globalStats?.rounds_equipped ?? 0) > 0)
+    .filter(
+      (weapon) =>
+        !weapon.isShield && (weapon.globalStats?.rounds_equipped ?? 0) > 0,
+    )
     .sort(
       (a, b) =>
         (b.globalStats?.rounds_equipped ?? 0) -

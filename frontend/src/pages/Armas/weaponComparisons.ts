@@ -33,7 +33,7 @@ const metrics: MetricConfig[] = [
   { key: "kd_ratio", label: "KD", format: "number", weaponsOnly: true },
   { key: "adr", label: "Daño / ronda", format: "number", weaponsOnly: true },
   { key: "headshot_pct", label: "Headshot %", format: "percent", weaponsOnly: true },
-  { key: "win_rate", label: "Win rate", format: "percent" },
+  { key: "win_rate", label: "WR", format: "percent" },
   { key: "survival_rate", label: "Supervivencia", format: "percent", shieldsOnly: true },
   { key: "damage_received_per_round", label: "Daño recibido / ronda", format: "number", shieldsOnly: true },
   { key: "fireRate", label: "Cadencia", format: "number", weaponsOnly: true },

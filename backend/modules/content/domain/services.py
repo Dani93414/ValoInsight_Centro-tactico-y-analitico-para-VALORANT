@@ -87,6 +87,44 @@ _TDM_KEYWORDS = ("District", "Kasbah", "Piazza", "Drift", "Glitch")
 _NON_CORE_KEYWORDS = _TRAINING_KEYWORDS + (_SKIRMISH_KEYWORD,) + _TDM_KEYWORDS
 
 
+def _number_or_none(value):
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_callouts(raw_callouts):
+    result = []
+    for callout in raw_callouts or []:
+        if not isinstance(callout, dict):
+            continue
+        location = callout.get("location") or {}
+        if not isinstance(location, dict):
+            location = {}
+        x = _number_or_none(
+            location.get("x")
+            if location.get("x") is not None
+            else location.get("X")
+        )
+        y = _number_or_none(
+            location.get("y")
+            if location.get("y") is not None
+            else location.get("Y")
+        )
+        result.append({
+            "regionName": callout.get("regionName"),
+            "superRegionName": callout.get("superRegionName"),
+            "location": {
+                "x": x,
+                "y": y,
+            } if x is not None and y is not None else None,
+        })
+    return result
+
+
 def classify_maps(raw_maps: list[dict]) -> dict[str, list[dict]]:
     core, skirmish, tdm, training = [], [], [], []
 
@@ -95,11 +133,18 @@ def classify_maps(raw_maps: list[dict]) -> dict[str, list[dict]]:
         uuid = mp.get("uuid") or mp.get("mapUrl", "").rsplit("/", 1)[-1]
         mapa_data = {
             "uuid": uuid,
+            "name": mp.get("name"),
+            "mapUrl": mp.get("mapUrl"),
+            "assetPath": mp.get("assetPath"),
             "displayName": mp.get("displayName", "—"),
             "coordinates": mp.get("coordinates", "—"),
             "narrativeDescription": mp.get("narrativeDescription"),
             "tacticalDescription": mp.get("tacticalDescription", "—"),
-            "callouts": mp.get("callouts") or [],
+            "callouts": _normalize_callouts(mp.get("callouts") or []),
+            "xMultiplier": _number_or_none(mp.get("xMultiplier")),
+            "xScalarToAdd": _number_or_none(mp.get("xScalarToAdd")),
+            "yMultiplier": _number_or_none(mp.get("yMultiplier")),
+            "yScalarToAdd": _number_or_none(mp.get("yScalarToAdd")),
             "displayIcon": local_content_image("maps", uuid, "displayIcon"),
             "listViewIcon": local_content_image("maps", uuid, "listViewIcon"),
             "listViewIconTall": local_content_image("maps", uuid, "listViewIconTall"),

@@ -49,7 +49,12 @@ export function WeaponCompareSelector({
         </div>
         <div className="weapon-compare-selector__actions">
           {compareWeapons.length > 0 && (
-            <button type="button" onClick={onClear} aria-label="Limpiar seleccion de comparacion">
+            <button
+              type="button"
+              className="weapon-compare-selector__clear"
+              onClick={onClear}
+              aria-label="Limpiar seleccion de comparacion"
+            >
               Limpiar
             </button>
           )}

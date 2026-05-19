@@ -80,7 +80,7 @@ export function getWeaponMetricValue(
 function getSampleSize(stats: RegionWeaponStats | undefined, key: WeaponNormalizationKey) {
   if (!stats) return undefined;
   if (key === "headshot_pct") {
-    const shots = (stats.headshots ?? 0) + 0;
+    const shots = (stats.headshots ?? 0) + (stats.bodyshots ?? 0) + (stats.legshots ?? 0);
     return shots > 0 ? shots : stats.rounds_equipped;
   }
   return stats.rounds_equipped ?? stats.kills;

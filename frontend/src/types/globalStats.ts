@@ -92,16 +92,34 @@ export type RegionAgentStats = {
 export type RegionMapStats = {
   map_name?: string;
   matches?: number;
+  wins?: number;
+  win_rate?: number;
   total_rounds?: number;
+  rounds_with_kast?: number;
+  survival_rounds?: number;
+  clutch_opportunities?: number;
+  clutches_won?: number;
+  kast_pct?: number;
+  survival_rate?: number;
+  clutch_win_rate?: number;
   avg_rounds_per_match?: number;
   averages?: Pick<
     RegionAverages,
-    "kd_ratio" | "acs" | "adr" | "headshot_pct"
+    | "kd_ratio"
+    | "acs"
+    | "adr"
+    | "headshot_pct"
+    | "kast_pct"
+    | "survival_rate"
+    | "clutch_win_rate"
+    | "kills_per_round"
+    | "deaths_per_round"
   >;
   sides?: {
     attack?: RegionSideStats;
     defense?: RegionSideStats;
   };
+  round_ceremonies?: Record<string, number>;
 };
 
 export type RegionWeaponStats = {
@@ -114,6 +132,8 @@ export type RegionWeaponStats = {
   kills?: number;
   deaths?: number;
   headshots?: number;
+  bodyshots?: number;
+  legshots?: number;
   headshot_pct?: number;
   damage_dealt?: number;
   damage_received?: number;
@@ -213,4 +233,48 @@ export type GlobalAgentStatsFilters = {
   map?: string;
   act?: string;
   role?: string;
+};
+
+export type RegionMapCompositionStats = {
+  key: string;
+  agents: string[];
+  matches?: number;
+  wins?: number;
+  rounds_won?: number;
+  rounds_lost?: number;
+  win_rate?: number;
+};
+
+export type GlobalMapStatsPayload = {
+  filters?: {
+    region?: string | null;
+    rank?: string | null;
+    map?: string | null;
+    act?: string | null;
+    agent?: string | null;
+  };
+  options?: {
+    maps?: GlobalAgentStatsOption[];
+    ranks?: GlobalAgentStatsOption[];
+    acts?: GlobalAgentStatsOption[];
+    agents?: GlobalAgentStatsOption[];
+  };
+  sampleSize?: {
+    matches?: number;
+    players?: number;
+    maps?: number;
+  };
+  warnings?: string[];
+  mapStats?: Record<string, RegionMapStats>;
+  agentStatsByMap?: Record<string, Record<string, RegionAgentStats>>;
+  weaponStatsByMap?: Record<string, Record<string, RegionWeaponStats>>;
+  compositionsByMap?: Record<string, RegionMapCompositionStats[]>;
+};
+
+export type GlobalMapStatsFilters = {
+  region?: string;
+  rank?: string;
+  map?: string;
+  act?: string;
+  agent?: string;
 };

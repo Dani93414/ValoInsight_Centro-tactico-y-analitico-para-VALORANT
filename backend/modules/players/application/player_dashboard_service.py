@@ -713,7 +713,7 @@ def _was_player_alive_at_round_event(
 def _compute_round_overview_from_round_results(
     match_obj: dict[str, Any],
     puuid: str,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     round_results = match_obj.get("roundResults") or []
     if not isinstance(round_results, list) or not round_results:
         return {}
@@ -765,12 +765,21 @@ def _compute_round_overview_from_round_results(
     multi_3k = 0
     multi_4k = 0
     multi_5k = 0
+    round_ceremonies: dict[str, int] = {}
 
     for round_obj in round_results:
         if not isinstance(round_obj, dict):
             continue
 
         rounds += 1
+        own_team_won_round = bool(
+            player_team_id
+            and str(round_obj.get("winningTeam") or "").lower()
+            == str(player_team_id).lower()
+        )
+        ceremony = str(round_obj.get("roundCeremony") or "").strip()
+        if own_team_won_round and ceremony:
+            round_ceremonies[ceremony] = round_ceremonies.get(ceremony, 0) + 1
         unique_kills = _collect_unique_round_kills(round_obj)
         first_death_time_ms = _first_death_time_in_round(unique_kills, puuid)
         kills_round = sum(1 for kill in unique_kills if kill.get("killer") == puuid)
@@ -925,6 +934,7 @@ def _compute_round_overview_from_round_results(
         "multi_3k": multi_3k,
         "multi_4k": multi_4k,
         "multi_5k": multi_5k,
+        "round_ceremonies": round_ceremonies,
     }
 
 
@@ -1517,6 +1527,7 @@ def _build_light_analytics_list(
                 "game_start_millis": doc.get("game_start_millis"),
                 "agent_id": doc.get("agent_id"),
                 "agent_name": doc.get("agent_name"),
+                "team_agents": doc.get("team_agents"),
                 "role": doc.get("role"),
                 "competitive_tier": doc.get("competitive_tier"),
                 "overview": {
@@ -1629,6 +1640,7 @@ def _build_light_analytics_list(
                     "multi_3k": overview.get("multi_3k"),
                     "multi_4k": overview.get("multi_4k"),
                     "multi_5k": overview.get("multi_5k"),
+                    "round_ceremonies": overview.get("round_ceremonies"),
                     "damage_delta": overview.get("damage_delta"),
                     "damage_delta_per_round": overview.get("damage_delta_per_round"),
                     "kd_ratio": overview.get("kd_ratio"),
@@ -2674,6 +2686,19 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
                     puuid,
                 ),
             )
+            player_team_id = str(player.get("teamId") or "").lower()
+            team_agents: list[dict[str, Any]] = []
+            if player_team_id:
+                for teammate in match_obj.get("players", []) or []:
+                    if str(teammate.get("teamId") or "").lower() != player_team_id:
+                        continue
+                    character_id = str(teammate.get("characterId") or "").strip()
+                    if not character_id:
+                        continue
+                    team_agents.append({
+                        "agent_id": character_id,
+                        "agent_name": teammate.get("characterName") or teammate.get("agentName"),
+                    })
 
             docs.append({
                 "match_id": str(match_info.get("matchId") or ""),
@@ -2693,6 +2718,7 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
                 "map_name": analytics.get("map_name"),
                 "agent_id": str(player.get("characterId") or "UNKNOWN"),
                 "agent_name": analytics.get("agent_name"),
+                "team_agents": team_agents,
                 "role": analytics.get("role"),
                 "competitive_tier": player.get("competitiveTier"),
                 "account_level": player.get("accountLevel"),

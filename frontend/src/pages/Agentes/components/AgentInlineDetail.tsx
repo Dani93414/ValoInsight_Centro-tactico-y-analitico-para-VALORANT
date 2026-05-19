@@ -44,16 +44,18 @@ const globalStatsConfig: GlobalStatConfig[] = [
 
 function getDiffTone(metric: AgentComparisonMetric) {
   if (typeof metric.diff === "number") {
-    if (metric.diff > 0) return "positive";
-    if (metric.diff < 0) return "negative";
+    const higherIsBetter = metric.higherIsBetter ?? true;
+    const isPositive = higherIsBetter ? metric.diff >= 0 : metric.diff <= 0;
+    return isPositive ? "positive" : "negative";
   }
   return "neutral";
 }
 
 function getNormalizedDiffTone(metric: AgentComparisonMetric) {
   if (typeof metric.normalizedDiff === "number") {
-    if (metric.normalizedDiff > 0) return "positive";
-    if (metric.normalizedDiff < 0) return "negative";
+    const higherIsBetter = metric.higherIsBetter ?? true;
+    const isPositive = higherIsBetter ? metric.normalizedDiff >= 0 : metric.normalizedDiff <= 0;
+    return isPositive ? "positive" : "negative";
   }
   return "neutral";
 }
@@ -227,9 +229,9 @@ export function AgentInlineDetail({
                   <span role="columnheader">Global</span>
                   <span role="columnheader">Tú</span>
                   <span role="columnheader">Diferencia</span>
-                  <span role="columnheader">Global norm.</span>
-                  <span role="columnheader">Tú norm.</span>
-                  <span role="columnheader">Diferencia norm.</span>
+                  <span role="columnheader" title="Valor ajustado por muestra para suavizar comparativas con pocos datos">Global norm.</span>
+                  <span role="columnheader" title="Tu valor ajustado por muestra para suavizar comparativas con pocos datos">Tú norm.</span>
+                  <span role="columnheader" title="Diferencia entre valores normalizados">Diferencia norm.</span>
                 </div>
                 {agent.comparisonMetrics.map((metric) => (
                   <div key={metric.key} className="agents-comparison-row" role="row">

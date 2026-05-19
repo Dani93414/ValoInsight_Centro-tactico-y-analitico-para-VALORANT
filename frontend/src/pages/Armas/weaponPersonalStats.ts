@@ -15,8 +15,7 @@ import {
   type WeaponNormalizationKey,
 } from "./weaponMetricNormalization";
 
-function diffTone(diff: number, threshold: number, higherIsBetter = true): WeaponComparisonTone {
-  if (Math.abs(diff) < threshold) return "neutral";
+function diffTone(diff: number, higherIsBetter = true): WeaponComparisonTone {
   const isPositive = higherIsBetter ? diff > 0 : diff < 0;
   return isPositive ? "positive" : "improve";
 }
@@ -131,7 +130,8 @@ function buildMetric(
     globalNormalizedValue === undefined || personalNormalizedValue === undefined
       ? undefined
       : personalNormalizedValue - globalNormalizedValue;
-  const tone = diff === undefined ? "neutral" : diffTone(diff, options.threshold, options.higherIsBetter ?? true);
+  const tone = diff === undefined ? "neutral" : diffTone(diff, options.higherIsBetter ?? true);
+  const higherIsBetter = options.higherIsBetter ?? true;
 
   return {
     key,
@@ -157,6 +157,7 @@ function buildMetric(
     diff,
     normalizedDiff,
     tone,
+    higherIsBetter,
     feedback: "",
   };
 }
@@ -252,6 +253,7 @@ export function compareWeaponStats(
       format: "percent",
       decimals: 1,
       threshold: 3,
+      disableNormalization: true,
     }),
   ];
 
@@ -263,7 +265,7 @@ export function compareWeaponStats(
       disableNormalization: true,
       disableDiff: true,
     }),
-    buildMetric("winRate", "Win rate", "win_rate", globalComparable, personalComparable, comparableCohort, {
+    buildMetric("winRate", "WR", "win_rate", globalComparable, personalComparable, comparableCohort, {
       format: "percent",
       decimals: 1,
       threshold: 5,

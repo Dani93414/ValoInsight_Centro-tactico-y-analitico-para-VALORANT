@@ -62,7 +62,13 @@ export type PersonalAgentStats = {
 };
 
 export type AgentComparisonMetric = {
-  key: keyof RegionAgentStats | "wins" | "losses" | "kills" | "deaths" | "assists";
+  key:
+    | keyof RegionAgentStats
+    | "wins_per_match"
+    | "losses_per_match"
+    | "kills_per_round"
+    | "deaths_per_round"
+    | "assists_per_round";
   label: string;
   globalLabel: string;
   personalLabel: string;
@@ -74,11 +80,16 @@ export type AgentComparisonMetric = {
   personalNormalizedLabel?: string;
   globalNormalizedValue?: number;
   personalNormalizedValue?: number;
+  higherIsBetter?: boolean;
 };
 
 export type AgentFilterSummary = {
   total: number;
   shown: number;
+  activeFilters: Array<{
+    key: "region" | "search" | "role" | "map" | "rank" | "act" | "sort";
+    label: string;
+  }>;
   activeLabels: string[];
 };
 
