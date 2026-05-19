@@ -14,16 +14,18 @@ type Props = {
 
 function getDiffTone(metric: WeaponComparisonMetric) {
   if (typeof metric.diff === "number") {
-    if (metric.diff > 0) return "positive";
-    if (metric.diff < 0) return "negative";
+    if (metric.tone === "positive") return "positive";
+    if (metric.tone === "improve") return "negative";
   }
   return "neutral";
 }
 
 function getNormalizedDiffTone(metric: WeaponComparisonMetric) {
   if (typeof metric.normalizedDiff === "number") {
-    if (metric.normalizedDiff > 0) return "positive";
-    if (metric.normalizedDiff < 0) return "negative";
+    const isPositive = metric.higherIsBetter
+      ? metric.normalizedDiff >= 0
+      : metric.normalizedDiff <= 0;
+    return isPositive ? "positive" : "negative";
   }
   return "neutral";
 }
@@ -44,7 +46,7 @@ function GlobalStatsPanel({ weapon }: { weapon: EnrichedWeapon }) {
   const entries = isShield
     ? [
         ["Rondas equipado", formatNumber(stats?.rounds_equipped, 0)],
-        ["Win rate", formatPercent(winRate)],
+        ["WR", formatPercent(winRate)],
         ["Deaths", formatNumber(stats?.deaths, 0)],
         ["Supervivencia", formatPercent(stats?.survival_rate)],
         ["Daño recibido / ronda", formatNumber(stats?.damage_received_per_round, 1)],
@@ -92,19 +94,15 @@ function ComparisonPanel({ comparison }: { comparison: WeaponPersonalComparison 
 
   return (
     <>
-      <div className="weapon-comparison-summary">
-        {comparison.sampleReliability === "Baja muestra" && <span className="weapon-sample-badge">Baja muestra</span>}
-        <p>{comparison.summary}</p>
-      </div>
       <div className="weapon-personal-comparison-table" role="table" aria-label="Comparativa global vs tu rendimiento">
         <div className="weapon-personal-comparison-row weapon-personal-comparison-row--head" role="row">
           <span role="columnheader">Metrica</span>
           <span role="columnheader">Global</span>
           <span role="columnheader">Tu</span>
           <span role="columnheader">Diferencia</span>
-          <span role="columnheader">Global norm.</span>
-          <span role="columnheader">Tu norm.</span>
-          <span role="columnheader">Diferencia norm.</span>
+          <span role="columnheader" title="Valor ajustado por muestra para suavizar comparativas con pocos datos">Global norm.</span>
+          <span role="columnheader" title="Tu valor ajustado por muestra para suavizar comparativas con pocos datos">Tu norm.</span>
+          <span role="columnheader" title="Diferencia entre valores normalizados">Diferencia norm.</span>
         </div>
         {comparison.metrics.map((metric) => (
           <div key={metric.key} className="weapon-personal-comparison-row" role="row">
@@ -178,15 +176,15 @@ export function WeaponInlineDetail({ weapon, hasSession, personalComparison, onC
       isShield
         ? [
             { label: "Rondas", value: formatNumber(stats?.rounds_equipped, 0) },
-            { label: "Win Rate", value: formatPercent(winRate) },
-            { label: "Supervivencia", value: formatPercent(stats?.survival_rate) },
+            { label: "WR", value: `${formatPercent(winRate)} WR` },
+            { label: "Supervivencia", value: `${formatPercent(stats?.survival_rate)} Supervivencia` },
             { label: "Daño rec.", value: formatNumber(stats?.damage_received_per_round, 1) },
           ]
         : [
             { label: "Kills", value: formatNumber(stats?.kills, 0) },
             { label: "Rondas", value: formatNumber(stats?.rounds_equipped, 0) },
             { label: "K/R", value: formatNumber(killsPerRound, 2) },
-            { label: "HS", value: formatPercent(stats?.headshot_pct) },
+            { label: "HS", value: `${formatPercent(stats?.headshot_pct)} HS` },
           ],
     [isShield, killsPerRound, stats, winRate],
   );

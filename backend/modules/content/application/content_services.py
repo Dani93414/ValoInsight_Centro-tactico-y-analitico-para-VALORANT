@@ -80,6 +80,7 @@ CONTENT_FIELDS_AGENTS = (
 CONTENT_FIELDS_MAPS = (
     "maps.uuid",
     "maps.mapUrl",
+    "maps.assetPath",
     "maps.displayName",
     "maps.displayIcon",
     "maps.name",

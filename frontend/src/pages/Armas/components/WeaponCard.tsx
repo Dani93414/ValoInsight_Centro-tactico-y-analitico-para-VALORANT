@@ -32,7 +32,20 @@ export function WeaponCard({
   const isMelee = isMeleeWeapon(weapon);
   const hasStats = kills > 0 || rounds > 0;
   const hasLowSample = weapon.sampleReliability === "Baja muestra";
-  const headshotWidth = Math.max(0, Math.min(headshot ?? 0, 100));
+  const secondaryLabel = isShield
+    ? "Uso global"
+    : isMelee
+    ? weapon.normalizedCategory
+    : rounds > 0
+      ? `${formatNumber(rounds)} rondas`
+      : "Sin rondas";
+  const secondaryValue = isShield
+    ? `${formatPercent(weapon.globalStats?.win_rate)} WR`
+    : isMelee
+      ? formatWeaponCost(weapon.cost)
+      : hasStats
+        ? `${formatPercent(headshot)} HS`
+        : "-";
 
   return (
     <article
@@ -79,32 +92,18 @@ export function WeaponCard({
             <span>{formatWeaponCost(weapon.cost)}</span>
             <strong>
               {isShield
-                  ? formatPercent(weapon.globalStats?.win_rate)
+                  ? rounds > 0
+                    ? `${formatNumber(rounds)} rondas`
+                    : "Sin rondas"
                   : hasStats
                     ? `${formatNumber(kills)} kills`
                     : "-"}
             </strong>
           </div>
           <div className="weapon-card-meta-row">
-            <span>{rounds > 0 ? `${formatNumber(rounds)} rondas` : "Sin rondas"}</span>
-            <strong>
-              {isShield
-                  ? formatPercent(weapon.globalStats?.survival_rate)
-                  : isMelee && hasStats
-                    ? `${formatNumber(rounds)} rondas`
-                    : hasStats
-                    ? formatPercent(headshot)
-                    : "-"}
-            </strong>
+            <span>{secondaryLabel}</span>
+            <strong>{secondaryValue}</strong>
           </div>
-          {!isMelee && !isShield && (
-            <div
-              className="weapon-headshot-bar"
-              aria-label={hasStats ? `Headshot ${formatPercent(headshot)}` : "Sin headshot"}
-            >
-              <i style={{ width: `${hasStats ? headshotWidth : 0}%` }} />
-            </div>
-          )}
           {hasLowSample && <span className="weapon-sample-badge">Baja muestra</span>}
         </div>
       </button>

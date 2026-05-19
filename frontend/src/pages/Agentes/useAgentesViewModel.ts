@@ -49,21 +49,27 @@ type RouteState = {
 } | null;
 
 type ComparisonMetricConfig = {
-  key: keyof RegionAgentStats | "wins" | "losses" | "kills" | "deaths" | "assists";
+  key:
+    | keyof RegionAgentStats
+    | "wins_per_match"
+    | "losses_per_match"
+    | "kills_per_round"
+    | "deaths_per_round"
+    | "assists_per_round";
   normalizationKey?: NormalizationMetricKey;
-  personalKey?: keyof PersonalAgentStats;
   label: string;
   format: "number" | "percent";
+  higherIsBetter?: boolean;
 };
 
 const comparisonMetricConfigs: ComparisonMetricConfig[] = [
-  { key: "win_rate", personalKey: "winRate", label: "Win Rate", format: "percent" },
-  { key: "wins", personalKey: "wins", normalizationKey: "wins_per_match", label: "Wins", format: "number" },
-  { key: "losses", personalKey: "losses", normalizationKey: "losses_per_match", label: "Losses", format: "number" },
-  { key: "pick_rate", personalKey: "usagePct", label: "Pick Rate", format: "percent" },
-  { key: "kills", personalKey: "kills", normalizationKey: "kills_per_round", label: "Kills", format: "number" },
-  { key: "deaths", personalKey: "deaths", normalizationKey: "deaths_per_round", label: "Deaths", format: "number" },
-  { key: "assists", personalKey: "assists", normalizationKey: "assists_per_round", label: "Assists", format: "number" },
+  { key: "win_rate", label: "Win Rate", format: "percent" },
+  { key: "wins_per_match", label: "Wins / partida", format: "number" },
+  { key: "losses_per_match", label: "Losses / partida", format: "number", higherIsBetter: false },
+  { key: "pick_rate", label: "Pick Rate", format: "percent" },
+  { key: "kills_per_round", label: "Kills / ronda", format: "number" },
+  { key: "deaths_per_round", label: "Muertes / ronda", format: "number", higherIsBetter: false },
+  { key: "assists_per_round", label: "Assists / ronda", format: "number" },
   { key: "avg_kd", label: "KD medio", format: "number" },
   { key: "avg_kda", label: "KDA medio", format: "number" },
   { key: "avg_acs", label: "ACS medio", format: "number" },
@@ -150,8 +156,14 @@ function optionLabel(options: AgentSelectOption[], value: string) {
 
 function getPersonalMetricValue(personalStats: PersonalAgentStats | null | undefined, config: ComparisonMetricConfig) {
   if (!personalStats) return undefined;
-  const personalKey = config.personalKey ?? config.key;
-  const value = personalStats[personalKey as keyof PersonalAgentStats];
+  if (config.key === "win_rate") return personalStats.winRate;
+  if (config.key === "pick_rate") return personalStats.usagePct;
+  if (config.key === "wins_per_match") return safeDivide(personalStats.wins, personalStats.picks);
+  if (config.key === "losses_per_match") return safeDivide(personalStats.losses, personalStats.picks);
+  if (config.key === "kills_per_round") return safeDivide(personalStats.kills, personalStats.rounds ?? 0);
+  if (config.key === "deaths_per_round") return safeDivide(personalStats.deaths, personalStats.rounds ?? 0);
+  if (config.key === "assists_per_round") return safeDivide(personalStats.assists, personalStats.rounds ?? 0);
+  const value = personalStats[config.key as keyof PersonalAgentStats];
   return typeof value === "number" ? value : undefined;
 }
 
@@ -159,16 +171,36 @@ function getGlobalMetricValue(
   globalStats: RegionAgentStats | undefined,
   key: ComparisonMetricConfig["key"],
 ) {
-  if (key === "wins") return globalStats?.wins;
-  if (key === "losses") {
-    const picks = globalStats?.picks;
+  if (key === "wins_per_match") {
+    const matches = globalStats?.matches ?? globalStats?.picks;
     const wins = globalStats?.wins;
-    if (typeof picks !== "number" || typeof wins !== "number") return undefined;
-    return Math.max(0, picks - wins);
+    if (typeof matches !== "number" || matches <= 0 || typeof wins !== "number") return undefined;
+    return wins / matches;
   }
-  if (key === "kills") return globalStats?.totals?.kills;
-  if (key === "deaths") return globalStats?.totals?.deaths;
-  if (key === "assists") return globalStats?.totals?.assists;
+  if (key === "losses_per_match") {
+    const matches = globalStats?.matches ?? globalStats?.picks;
+    const wins = globalStats?.wins;
+    if (typeof matches !== "number" || matches <= 0 || typeof wins !== "number") return undefined;
+    return Math.max(0, matches - wins) / matches;
+  }
+  if (key === "kills_per_round") {
+    const rounds = globalStats?.rounds ?? globalStats?.totals?.rounds;
+    const kills = globalStats?.totals?.kills;
+    if (typeof rounds !== "number" || rounds <= 0 || typeof kills !== "number") return undefined;
+    return kills / rounds;
+  }
+  if (key === "deaths_per_round") {
+    const rounds = globalStats?.rounds ?? globalStats?.totals?.rounds;
+    const deaths = globalStats?.totals?.deaths;
+    if (typeof rounds !== "number" || rounds <= 0 || typeof deaths !== "number") return undefined;
+    return deaths / rounds;
+  }
+  if (key === "assists_per_round") {
+    const rounds = globalStats?.rounds ?? globalStats?.totals?.rounds;
+    const assists = globalStats?.totals?.assists;
+    if (typeof rounds !== "number" || rounds <= 0 || typeof assists !== "number") return undefined;
+    return assists / rounds;
+  }
   const value = globalStats?.[key as keyof RegionAgentStats];
   return typeof value === "number" ? value : undefined;
 }
@@ -251,6 +283,7 @@ function buildComparisonMetrics(
         ...(personalNormalizedValue !== undefined ? { personalNormalizedValue } : {}),
         ...(normalizedDiff !== undefined ? { normalizedDiff } : {}),
         normalizedDiffLabel,
+        higherIsBetter: config.higherIsBetter ?? true,
       };
     })
     .filter((metric): metric is AgentComparisonMetric => metric !== null);
@@ -277,17 +310,24 @@ function buildFilterSummary(
     role: "Orden por rol",
     score: "Orden por score",
   };
-  const activeLabels = [
-    selectedRegion ? `Región: ${selectedRegion.toUpperCase()}` : null,
-    search.trim() ? `Búsqueda: ${search.trim()}` : null,
-    activeRole !== "all" ? `Rol: ${activeRole}` : null,
-    mapFilter !== "all" ? `Mapa: ${mapFilterLabel}` : null,
-    rankFilter !== "all" ? `Rango: ${rankFilterLabel}` : null,
-    actFilter !== "all" ? `Acto: ${actFilterLabel}` : null,
-    sortKey !== "name" ? sortLabels[sortKey] : null,
-  ].filter((label): label is string => Boolean(label));
+  const activeFilters: AgentFilterSummary["activeFilters"] = [
+    selectedRegion ? { key: "region", label: `Región: ${selectedRegion.toUpperCase()}` } : null,
+    search.trim() ? { key: "search", label: `Búsqueda: ${search.trim()}` } : null,
+    activeRole !== "all" ? { key: "role", label: `Rol: ${activeRole}` } : null,
+    mapFilter !== "all" ? { key: "map", label: `Mapa: ${mapFilterLabel}` } : null,
+    rankFilter !== "all" ? { key: "rank", label: `Rango: ${rankFilterLabel}` } : null,
+    actFilter !== "all" ? { key: "act", label: `Acto: ${actFilterLabel}` } : null,
+    sortKey !== "name" ? { key: "sort", label: sortLabels[sortKey] } : null,
+  ].filter((filter): filter is AgentFilterSummary["activeFilters"][number] =>
+    Boolean(filter),
+  );
 
-  return { total: agents.length, shown: filteredAgents.length, activeLabels };
+  return {
+    total: agents.length,
+    shown: filteredAgents.length,
+    activeFilters,
+    activeLabels: activeFilters.map((filter) => filter.label),
+  };
 }
 
 export function useAgentesViewModel() {

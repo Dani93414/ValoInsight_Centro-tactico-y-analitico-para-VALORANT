@@ -107,6 +107,7 @@ export type WeaponComparisonMetric = {
   diff?: number;
   normalizedDiff?: number;
   tone: WeaponComparisonTone;
+  higherIsBetter: boolean;
   feedback: string;
 };
 

@@ -65,6 +65,8 @@ function aggregateRegionWeaponStats(regionsData: Array<{ totalRounds?: number; w
       sumField(acc, stats, "kills");
       sumField(acc, stats, "deaths");
       sumField(acc, stats, "headshots");
+      sumField(acc, stats, "bodyshots");
+      sumField(acc, stats, "legshots");
       sumField(acc, stats, "damage_dealt");
       sumField(acc, stats, "damage_received");
       sumField(acc, stats, "survival_rounds");
@@ -78,6 +80,10 @@ function aggregateRegionWeaponStats(regionsData: Array<{ totalRounds?: number; w
     const kills = Number(stats.kills ?? 0);
     const deaths = Number(stats.deaths ?? 0);
     const wins = Number(stats.wins ?? 0);
+    const headshots = Number(stats.headshots ?? 0);
+    const bodyshots = Number(stats.bodyshots ?? 0);
+    const legshots = Number(stats.legshots ?? 0);
+    const totalShots = headshots + bodyshots + legshots;
     const damageDealt = Number(stats.damage_dealt ?? 0);
     const damageReceived = Number(stats.damage_received ?? 0);
     const survivalRounds = Number(stats.survival_rounds ?? 0);
@@ -90,7 +96,7 @@ function aggregateRegionWeaponStats(regionsData: Array<{ totalRounds?: number; w
     stats.survival_rate = rounds > 0 ? (survivalRounds * 100) / rounds : 0;
     stats.damage_received_per_round = rounds > 0 ? damageReceived / rounds : 0;
     stats.average_loadout_value = rounds > 0 ? loadout / rounds : 0;
-    stats.headshot_pct = Number(stats.headshot_pct ?? 0);
+    stats.headshot_pct = totalShots > 0 ? (headshots * 100) / totalShots : 0;
     stats.pick_rate_per_round = totalRounds > 0 ? (rounds * 100) / totalRounds : 0;
   }
 

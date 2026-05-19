@@ -29,7 +29,7 @@ export {
   useRankDistribution,
 } from "./useContentQueries";
 
-export { useGlobalAgentStats, useRegions } from "./useGlobalStatsQueries";
+export { useGlobalAgentStats, useGlobalMapStats, useRegions } from "./useGlobalStatsQueries";
 
 export {
   usePlayerDashboard,

@@ -50,9 +50,9 @@ export function AgentCompareDrawer({ agents, metrics, onClear, onRemove }: Props
         <div className="agent-compare-row agent-compare-row--head" role="row">
           <span role="columnheader">Métrica</span>
           <span role="columnheader">{first.displayName} real</span>
-          <span role="columnheader">{first.displayName} norm.</span>
+          <span role="columnheader" title="Valor ajustado por muestra para suavizar comparativas con pocos datos">{first.displayName} norm.</span>
           <span role="columnheader">{second.displayName} real</span>
-          <span role="columnheader">{second.displayName} norm.</span>
+          <span role="columnheader" title="Valor ajustado por muestra para suavizar comparativas con pocos datos">{second.displayName} norm.</span>
         </div>
         {metrics.map((metric) => (
           <div key={metric.key} className="agent-compare-row" role="row">

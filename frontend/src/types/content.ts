@@ -25,6 +25,8 @@ export type MapCallout = {
 };
 
 export type MapContent = NamedContentItem & {
+  name?: string | null;
+  mapUrl?: string | null;
   coordinates?: string | null;
   narrativeDescription?: string | null;
   tacticalDescription?: string | null;
@@ -34,6 +36,11 @@ export type MapContent = NamedContentItem & {
   listViewIconTall?: ContentImage;
   stylizedBackgroundImage?: ContentImage;
   premierBackgroundImage?: ContentImage;
+  xMultiplier?: number | null;
+  xScalarToAdd?: number | null;
+  yMultiplier?: number | null;
+  yScalarToAdd?: number | null;
+  assetPath?: string | null;
 };
 
 export type MapGroups = {

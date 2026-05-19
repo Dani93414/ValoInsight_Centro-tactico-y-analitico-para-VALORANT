@@ -1,5 +1,4 @@
 import { X } from "lucide-react";
-import { formatNumber } from "../../../utils/formatters";
 import { formatWeaponCost } from "../weaponUtils";
 import type { EnrichedWeapon, WeaponCompareMetric } from "../types";
 
@@ -63,28 +62,19 @@ export function WeaponCompareDrawer({ weapons, metrics, onClear, onRemove }: Pro
               <span role="cell">{metric.label}</span>
               <strong role="cell">
                 {metric.firstLabel}
-                <i style={{ width: `${Math.min(100, ((metric.firstValue ?? 0) / max) * 100)}%` }} aria-hidden="true" />
+                <span className="weapon-compare-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.min(100, ((metric.firstValue ?? 0) / max) * 100)}%` }} />
+                </span>
               </strong>
               <strong role="cell">
                 {metric.secondLabel}
-                <i style={{ width: `${Math.min(100, ((metric.secondValue ?? 0) / max) * 100)}%` }} aria-hidden="true" />
+                <span className="weapon-compare-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.min(100, ((metric.secondValue ?? 0) / max) * 100)}%` }} />
+                </span>
               </strong>
             </div>
           );
         })}
-      </div>
-
-      <div className="weapon-compare-summary">
-        {weapons.map((weapon) => (
-          <article key={`${getWeaponKey(weapon)}-summary`}>
-            {weapon.displayIcon && <img src={weapon.displayIcon} alt={weapon.displayName} />}
-            <div>
-              <strong>{weapon.displayName}</strong>
-              <span>{weapon.normalizedCategory}</span>
-              <small>{formatNumber(weapon.globalStats?.rounds_equipped, 0)} rondas registradas</small>
-            </div>
-          </article>
-        ))}
       </div>
     </aside>
   );
