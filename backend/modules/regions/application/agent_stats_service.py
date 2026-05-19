@@ -187,6 +187,15 @@ def _normalize_weapon_stats(weapon_stats: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _team_rounds(team: dict[str, Any]) -> int:
+    return int(team.get("roundsWon") or team.get("numPoints") or 0)
+
+
+def _match_rounds_from_teams(teams: list[dict[str, Any]]) -> int:
+    rounds = sum(_team_rounds(team) for team in teams if isinstance(team, dict))
+    return rounds if rounds > 0 else 0
+
+
 def _coerce_pct(raw: Any) -> float | None:
     try:
         value = float(raw)
@@ -516,6 +525,7 @@ def get_global_map_stats(
         "matchInfo.mapId": 1,
         "matchInfo.seasonId": 1,
         "teams": 1,
+        "roundResults.roundCeremony": 1,
         "players.teamId": 1,
         "players.characterId": 1,
         "players.competitiveTier": 1,
@@ -525,7 +535,12 @@ def get_global_map_stats(
 
     maps = defaultdict(lambda: {
         "map_name": "Unknown",
-        "matches": 0,
+        "match_ids": set(),
+        "player_matches": 0,
+        "player_wins": 0,
+        "map_rounds": 0,
+        "team_round_wins": 0,
+        "team_round_losses": 0,
         "wins": 0,
         "totals": Counter(),
         "round_ceremonies": Counter(),
@@ -557,6 +572,8 @@ def get_global_map_stats(
         current_map_id = str(match_info.get("mapId") or "").strip() or "UNKNOWN"
         map_name = map_names.get(current_map_id, current_map_id)
         match_has_filtered_player = False
+        filtered_player_teams: set[str] = set()
+        teams_raw = [team for team in (match.get("teams") or []) if isinstance(team, dict)]
 
         for player in match.get("players", []) or []:
             if not _player_matches_map_filters(player, rank=rank_tier, agent_id=agent_norm):
@@ -565,13 +582,18 @@ def get_global_map_stats(
             overview = analytics.get("overview") or {}
             bucket = maps[current_map_id]
             bucket["map_name"] = analytics.get("map_name") or map_name or bucket["map_name"]
-            bucket["matches"] += 1
-            bucket["wins"] += 1 if analytics.get("won_match") else 0
+            bucket["player_matches"] += 1
+            bucket["player_wins"] += 1 if analytics.get("won_match") else 0
+            bucket["wins"] = bucket["player_wins"]
+            team_id = str(player.get("teamId") or "").lower()
+            if team_id:
+                filtered_player_teams.add(team_id)
             for field in _SUM_FIELDS:
                 bucket["totals"][field] += int(overview.get(field, 0) or 0)
             _add_legacy_rate_fallbacks(bucket["totals"], overview)
-            for ceremony, value in (overview.get("round_ceremonies") or {}).items():
-                bucket["round_ceremonies"][str(ceremony)] += int(value or 0)
+            if rank_tier is not None or agent_norm:
+                for ceremony, value in (overview.get("round_ceremonies") or {}).items():
+                    bucket["round_ceremonies"][str(ceremony)] += int(value or 0)
 
             for side_name in ("attack", "defense"):
                 side = (analytics.get("sides") or {}).get(side_name) or {}
@@ -612,6 +634,34 @@ def get_global_map_stats(
 
         if match_has_filtered_player and match_id:
             match_ids.add(match_id)
+            bucket = maps[current_map_id]
+            bucket["match_ids"].add(match_id)
+            match_rounds = _match_rounds_from_teams(teams_raw)
+            bucket["map_rounds"] += match_rounds
+
+            if rank_tier is None and not agent_norm:
+                for round_obj in match.get("roundResults", []) or []:
+                    if not isinstance(round_obj, dict):
+                        continue
+                    ceremony = str(round_obj.get("roundCeremony") or "").strip()
+                    if ceremony:
+                        bucket["round_ceremonies"][ceremony] += 1
+
+            team_results_once = {
+                str(team.get("teamId") or "").lower(): team
+                for team in teams_raw
+                if isinstance(team, dict)
+            }
+            for team_id in filtered_player_teams:
+                team_result = team_results_once.get(team_id) or {}
+                rounds_won = _team_rounds(team_result)
+                rounds_lost = 0
+                for other_team_id, other_team in team_results_once.items():
+                    if other_team_id != team_id:
+                        rounds_lost = _team_rounds(other_team)
+                        break
+                bucket["team_round_wins"] += rounds_won
+                bucket["team_round_losses"] += rounds_lost
 
         team_results = {
             str(team.get("teamId") or "").lower(): team
@@ -668,15 +718,25 @@ def get_global_map_stats(
             }
         map_stats[current_map_id] = {
             "map_name": bucket["map_name"],
-            "matches": int(bucket["matches"]),
-            "wins": int(bucket["wins"]),
-            "total_rounds": int(totals.get("rounds", 0) or 0),
+            "matches": len(bucket["match_ids"]),
+            "player_matches": int(bucket["player_matches"]),
+            "wins": int(bucket["player_wins"]),
+            "map_rounds": int(bucket["map_rounds"]),
+            "player_rounds": int(totals.get("rounds", 0) or 0),
+            "team_round_wins": int(bucket["team_round_wins"]),
+            "team_round_losses": int(bucket["team_round_losses"]),
+            "total_rounds": int(bucket["map_rounds"]),
             "rounds_with_kast": int(totals.get("rounds_with_kast", 0) or 0),
             "survival_rounds": int(totals.get("survival_rounds", 0) or 0),
             "clutch_opportunities": int(totals.get("clutch_opportunities", 0) or 0),
             "clutches_won": int(totals.get("clutches_won", 0) or 0),
-            "avg_rounds_per_match": _safe_div(float(totals.get("rounds", 0) or 0), int(bucket["matches"])),
-            "win_rate": _safe_div(int(bucket["wins"]) * 100.0, int(bucket["matches"])),
+            "avg_rounds_per_match": _safe_div(float(bucket["map_rounds"]), len(bucket["match_ids"])),
+            "win_rate": _safe_div(int(bucket["player_wins"]) * 100.0, int(bucket["player_matches"])),
+            "player_win_rate": _safe_div(int(bucket["player_wins"]) * 100.0, int(bucket["player_matches"])),
+            "team_round_win_rate": _safe_div(
+                int(bucket["team_round_wins"]) * 100.0,
+                int(bucket["team_round_wins"]) + int(bucket["team_round_losses"]),
+            ),
             "kast_pct": derived.get("kast_pct", 0.0),
             "survival_rate": derived["survival_rate"],
             "clutch_win_rate": derived["clutch_win_rate"],

@@ -92,9 +92,16 @@ export type RegionAgentStats = {
 export type RegionMapStats = {
   map_name?: string;
   matches?: number;
+  player_matches?: number;
   wins?: number;
   win_rate?: number;
+  player_win_rate?: number;
   total_rounds?: number;
+  map_rounds?: number;
+  player_rounds?: number;
+  team_round_wins?: number;
+  team_round_losses?: number;
+  team_round_win_rate?: number;
   rounds_with_kast?: number;
   survival_rounds?: number;
   clutch_opportunities?: number;

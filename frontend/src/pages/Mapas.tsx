@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAgentes, useGlobalMapStats, useMapas, usePlayerDashboard, useRegions } from "../api/hooks";
 import { useAuth } from "../context/AuthContext";
-import type { AnalyticsMatch } from "../types/dashboard";
 import type { MapContent } from "../types/content";
 import type {
   GlobalAgentStatsOption,
-  RegionAgentStats,
-  RegionMapCompositionStats,
   RegionMapStats,
-  RegionWeaponStats,
 } from "../types/globalStats";
 import {
   formatCompactNumber,
@@ -28,6 +24,13 @@ import {
   type ComputedMapStats,
   type MapModeGroupKey,
 } from "./Mapas/mapUtils";
+import {
+  buildBestCompositionsForMap,
+  buildBestCompositionsFromGlobal,
+  buildBestWeaponsForMap,
+  buildBestWeaponsFromGlobal,
+  getBestAgents,
+} from "./Mapas/mapRankings";
 import {
   ContentEmpty,
   ContentError,
@@ -83,45 +86,6 @@ type ComparisonMetric = {
   higherIsBetter: boolean;
 };
 
-type WeaponMapRow = {
-  key: string;
-  name: string;
-  kills: number;
-  rounds: number;
-  wins: number;
-  hsPct?: number;
-  killsPerRound?: number;
-  winRate?: number;
-  score?: number;
-  sampleConfidence?: number;
-};
-
-type CompositionMapRow = {
-  key: string;
-  agents: string[];
-  matches: number;
-  wins: number;
-  roundsWon: number;
-  roundsLost: number;
-  winRate?: number;
-  score?: number;
-  sampleConfidence?: number;
-};
-
-type AgentMapRow = {
-  agentId: string;
-  name: string;
-  matches: number;
-  rounds: number;
-  winRate: number;
-  pickRate?: number;
-  kd?: number;
-  adr?: number;
-  acs?: number;
-  score: number;
-  sampleConfidence: number;
-};
-
 type MapPanelKey =
   | "comparison"
   | "callouts"
@@ -168,144 +132,12 @@ function asCoordinateValue(value: unknown) {
   return typeof value === "number" || typeof value === "string" ? value : undefined;
 }
 
-function clamp(value: number, min = 0, max = 1) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function normalized(value: number | undefined, baseline: number, spread: number) {
-  if (!isAvailableNumber(value) || spread <= 0) return 0.5;
-  return clamp(0.5 + ((value as number) - baseline) / spread);
-}
-
 function formatMaybePercent(value?: number) {
   return isAvailableNumber(value) ? formatPercent(value, 1) : "Sin datos";
 }
 
 function formatMaybeNumber(value?: number, digits = 0) {
   return isAvailableNumber(value) ? formatNumber(value, digits) : "Sin datos";
-}
-
-function sumRegionMapStats(
-  regions: Array<{ totalRounds?: number; mapStats?: Record<string, RegionMapStats> }> | undefined,
-  selectedRegion: string,
-) {
-  type AggregatedRegionMapStats = RegionMapStats & {
-    roundsWon?: number;
-    kastRateWeight?: number;
-    kastRateWeightedSum?: number;
-    survivalRateWeight?: number;
-    survivalRateWeightedSum?: number;
-    clutchRateWeight?: number;
-    clutchRateWeightedSum?: number;
-  };
-  const byId: Record<string, AggregatedRegionMapStats> = {};
-  let totalMatches = 0;
-  let totalRounds = 0;
-  for (const region of regions ?? []) {
-    const regionName = String((region as { region?: string }).region ?? "").toLowerCase();
-    if (selectedRegion && selectedRegion !== regionName) continue;
-    totalRounds += Number(region.totalRounds ?? 0);
-    for (const [mapId, stats] of Object.entries(region.mapStats ?? {})) {
-      const acc = byId[mapId] ?? {
-        map_name: stats.map_name,
-        matches: 0,
-        total_rounds: 0,
-        sides: { attack: {}, defense: {} },
-        averages: {},
-      };
-      const rounds = Number(stats.total_rounds ?? 0);
-      const attack = stats.sides?.attack;
-      const defense = stats.sides?.defense;
-      acc.map_name = acc.map_name ?? stats.map_name;
-      acc.matches = Number(acc.matches ?? 0) + Number(stats.matches ?? 0);
-      acc.total_rounds = Number(acc.total_rounds ?? 0) + rounds;
-      acc.roundsWon = Number(acc.roundsWon ?? 0) + Number(attack?.wins ?? 0) + Number(defense?.wins ?? 0);
-      acc.rounds_with_kast = Number(acc.rounds_with_kast ?? 0) + Number(stats.rounds_with_kast ?? 0);
-      acc.survival_rounds = Number(acc.survival_rounds ?? 0) + Number(stats.survival_rounds ?? 0);
-      acc.clutch_opportunities = Number(acc.clutch_opportunities ?? 0) + Number(stats.clutch_opportunities ?? 0);
-      acc.clutches_won = Number(acc.clutches_won ?? 0) + Number(stats.clutches_won ?? 0);
-      const kastRate = stats.kast_pct ?? stats.averages?.kast_pct;
-      if (isAvailableNumber(kastRate) && rounds > 0) {
-        acc.kastRateWeight = Number(acc.kastRateWeight ?? 0) + rounds;
-        acc.kastRateWeightedSum = Number(acc.kastRateWeightedSum ?? 0) + (kastRate as number) * rounds;
-      }
-      const survivalRate = stats.survival_rate ?? stats.averages?.survival_rate;
-      if (isAvailableNumber(survivalRate) && rounds > 0) {
-        acc.survivalRateWeight = Number(acc.survivalRateWeight ?? 0) + rounds;
-        acc.survivalRateWeightedSum = Number(acc.survivalRateWeightedSum ?? 0) + (survivalRate as number) * rounds;
-      }
-      const clutchRate = stats.clutch_win_rate ?? stats.averages?.clutch_win_rate;
-      const clutchWeight = Number(stats.clutch_opportunities ?? 0) || Number(stats.matches ?? 0);
-      if (isAvailableNumber(clutchRate) && clutchWeight > 0) {
-        acc.clutchRateWeight = Number(acc.clutchRateWeight ?? 0) + clutchWeight;
-        acc.clutchRateWeightedSum = Number(acc.clutchRateWeightedSum ?? 0) + (clutchRate as number) * clutchWeight;
-      }
-      for (const sideName of ["attack", "defense"] as const) {
-        const target = acc.sides?.[sideName] ?? {};
-        const source = stats.sides?.[sideName] ?? {};
-        target.rounds = Number(target.rounds ?? 0) + Number(source.rounds ?? 0);
-        target.wins = Number(target.wins ?? 0) + Number(source.wins ?? 0);
-        target.kills = Number(target.kills ?? 0) + Number(source.kills ?? 0);
-        target.deaths = Number(target.deaths ?? 0) + Number(source.deaths ?? 0);
-        target.win_rate = target.rounds ? ((target.wins ?? 0) * 100) / target.rounds : undefined;
-        acc.sides = { ...acc.sides, [sideName]: target };
-      }
-      byId[mapId] = acc;
-    }
-  }
-
-  Object.values(byId).forEach((stats) => {
-    const rounds = Number(stats.total_rounds ?? 0);
-    const kills = Number(stats.sides?.attack?.kills ?? 0) + Number(stats.sides?.defense?.kills ?? 0);
-    const deaths = Number(stats.sides?.attack?.deaths ?? 0) + Number(stats.sides?.defense?.deaths ?? 0);
-    const adr = stats.averages?.adr;
-    const acs = stats.averages?.acs;
-    const roundsWithKast = Number(stats.rounds_with_kast ?? 0);
-    const survivalRounds = Number(stats.survival_rounds ?? 0);
-    const clutchOpportunities = Number(stats.clutch_opportunities ?? 0);
-    const clutchesWon = Number(stats.clutches_won ?? 0);
-    const kastPct = rounds > 0 && roundsWithKast > 0
-      ? (roundsWithKast * 100) / rounds
-      : stats.kastRateWeight
-        ? Number(stats.kastRateWeightedSum ?? 0) / stats.kastRateWeight
-        : stats.kast_pct;
-    const survivalRate = rounds > 0 && survivalRounds > 0
-      ? (survivalRounds * 100) / rounds
-      : stats.survivalRateWeight
-        ? Number(stats.survivalRateWeightedSum ?? 0) / stats.survivalRateWeight
-        : stats.survival_rate;
-    const clutchWinRate = clutchOpportunities > 0
-      ? (clutchesWon * 100) / clutchOpportunities
-      : stats.clutchRateWeight
-        ? Number(stats.clutchRateWeightedSum ?? 0) / stats.clutchRateWeight
-        : stats.clutch_win_rate;
-    stats.kast_pct = kastPct;
-    stats.survival_rate = survivalRate;
-    stats.clutch_win_rate = clutchWinRate;
-    stats.averages = {
-      ...stats.averages,
-      kd_ratio: deaths > 0 ? kills / deaths : stats.averages?.kd_ratio,
-      adr,
-      acs,
-      kast_pct: kastPct,
-      survival_rate: survivalRate,
-      clutch_win_rate: clutchWinRate,
-    };
-    stats.avg_rounds_per_match = stats.matches ? rounds / Math.max(stats.matches * 10, 1) : 0;
-    totalMatches += Number(stats.matches ?? 0);
-  });
-
-  const mapWinRates = Object.values(byId)
-    .map((stats) => {
-      const rounds = Number(stats.total_rounds ?? 0);
-      return rounds > 0 ? (Number(stats.roundsWon ?? 0) * 100) / rounds : undefined;
-    })
-    .filter((value): value is number => isAvailableNumber(value));
-  const priorWinRate = mapWinRates.length
-    ? mapWinRates.reduce((total, value) => total + value, 0) / mapWinRates.length
-    : 50;
-
-  return { mapStatsById: byId, totalMatches, totalRounds, priorWinRate };
 }
 
 function buildRegionOptions(regions: Array<{ region?: string }> | undefined): SelectOption[] {
@@ -323,18 +155,20 @@ function buildComparisonMetrics(
   personalStats: ComputedMapStats | null | undefined,
 ): ComparisonMetric[] {
   const configs = [
-    { key: "rounds", label: "Rondas", format: "number" as const, noDiff: true, noNormalize: true },
+    { key: "rounds", label: "Rondas mapa", format: "number" as const, noDiff: true, noNormalize: true },
+    { key: "playerRounds", label: "Player-rounds", format: "number" as const, noDiff: true, noNormalize: true },
     { key: "roundDiff", label: "Diferencial rondas", format: "number" as const, sampleKey: "rounds" },
-    { key: "winRate", label: "Winrate", format: "percent" as const, sampleKey: "matches" },
+    { key: "winRate", label: "Winrate jugadores", format: "percent" as const, sampleKey: "playerMatches" },
+    { key: "teamRoundWinRate", label: "WR rondas equipo", format: "percent" as const, sampleKey: "rounds" },
     { key: "attackWinRate", label: "Attack WR", format: "percent" as const, sampleKey: "rounds" },
     { key: "defenseWinRate", label: "Defense WR", format: "percent" as const, sampleKey: "rounds" },
-    { key: "killsPerRound", label: "Kills / ronda", format: "number" as const, sampleKey: "rounds" },
-    { key: "deathsPerRound", label: "Muertes / ronda", format: "number" as const, lowerIsBetter: true },
-    { key: "adr", label: "ADR", format: "number" as const, sampleKey: "rounds" },
-    { key: "kd", label: "K/D", format: "number" as const, sampleKey: "rounds" },
-    { key: "acs", label: "ACS", format: "number" as const, sampleKey: "rounds" },
-    { key: "kastPct", label: "KAST", format: "percent" as const, sampleKey: "rounds" },
-    { key: "survivalRate", label: "Supervivencia", format: "percent" as const, sampleKey: "rounds" },
+    { key: "killsPerRound", label: "Kills / player-round", format: "number" as const, sampleKey: "playerRounds" },
+    { key: "deathsPerRound", label: "Muertes / player-round", format: "number" as const, lowerIsBetter: true, sampleKey: "playerRounds" },
+    { key: "adr", label: "ADR", format: "number" as const, sampleKey: "playerRounds" },
+    { key: "kd", label: "K/D", format: "number" as const, sampleKey: "playerRounds" },
+    { key: "acs", label: "ACS", format: "number" as const, sampleKey: "playerRounds" },
+    { key: "kastPct", label: "KAST", format: "percent" as const, sampleKey: "playerRounds" },
+    { key: "survivalRate", label: "Supervivencia", format: "percent" as const, sampleKey: "playerRounds" },
     { key: "clutchRate", label: "Clutch rate", format: "percent" as const, sampleKey: "clutchOpportunities" },
   ];
 
@@ -398,248 +232,6 @@ function getMetricTone(metric: ComparisonMetric, field: "diff" | "normalizedDiff
   return positive ? "positive" : "negative";
 }
 
-function matchBelongsToMap(match: AnalyticsMatch, map: MapContent | null | undefined) {
-  if (!map) return false;
-  const mapName = normalizeText(map.displayName);
-  const matchMapName = normalizeText(match.map_name);
-  return Boolean((map.uuid && match.map_id === map.uuid) ||
-    (matchMapName && (matchMapName.includes(mapName) || mapName.includes(matchMapName))));
-}
-
-function matchPassesFilters(match: AnalyticsMatch, filters: { act?: string; rank?: string; agent?: string }) {
-  if (filters.act && filters.act !== ALL && match.season_id !== filters.act) return false;
-  if (filters.rank && filters.rank !== ALL && String(match.competitive_tier ?? "") !== filters.rank) return false;
-  if (filters.agent && filters.agent !== ALL && match.agent_id !== filters.agent) return false;
-  return true;
-}
-
-function buildBestWeaponsForMap(
-  analyticsList: AnalyticsMatch[] | undefined,
-  map: MapContent | null,
-  filters: { act?: string; rank?: string; agent?: string },
-): WeaponMapRow[] {
-  if (!analyticsList || !map) return [];
-  const rows = new Map<string, WeaponMapRow & { headshots: number; bodyshots: number; legshots: number }>();
-  analyticsList.forEach((match) => {
-    if (!matchBelongsToMap(match, map) || !matchPassesFilters(match, filters)) return;
-    const weaponStats = match.overview?.weapon_stats;
-    const entries = Array.isArray(weaponStats)
-      ? weaponStats.map((value, index) => [String((value as { weaponId?: string }).weaponId ?? index), value] as const)
-      : Object.entries(weaponStats ?? {});
-    entries.forEach(([weaponId, raw]) => {
-      const item = raw as Record<string, unknown>;
-      if (item.is_armor) return;
-      const row = rows.get(weaponId) ?? {
-        key: weaponId,
-        name: String(item.weapon_name ?? item.weaponName ?? weaponId),
-        kills: 0,
-        rounds: 0,
-        wins: 0,
-        headshots: 0,
-        bodyshots: 0,
-        legshots: 0,
-      };
-      row.kills += Number(item.kills ?? 0);
-      row.rounds += Number(item.rounds ?? item.rounds_equipped ?? 0);
-      row.wins += Number(item.wins ?? 0);
-      row.headshots += Number(item.headshots ?? 0);
-      row.bodyshots += Number(item.bodyshots ?? 0);
-      row.legshots += Number(item.legshots ?? 0);
-      rows.set(weaponId, row);
-    });
-  });
-  const rawRows = Array.from(rows.values());
-  const priorWr = rawRows.length
-    ? rawRows.reduce((sum, row) => sum + (row.rounds > 0 ? (row.wins * 100) / row.rounds : 50), 0) / rawRows.length
-    : 50;
-  const maxRounds = Math.max(...rawRows.map((row) => row.rounds), 1);
-  return rawRows
-    .map((row) => {
-      const shots = row.headshots + row.bodyshots + row.legshots;
-      const killsPerRound = row.rounds > 0 ? row.kills / row.rounds : undefined;
-      const winRate = row.rounds > 0 ? (row.wins * 100) / row.rounds : undefined;
-      const adjustedWinRate = bayesianAdjustedRate(winRate, row.rounds, priorWr, 70) ?? priorWr;
-      const combatScore = (
-        normalized(killsPerRound, 0.7, 1.4) * 0.65 +
-        normalized(shots > 0 ? (row.headshots * 100) / shots : undefined, 22, 40) * 0.35
-      ) * 100;
-      const useRate = clamp(row.rounds / maxRounds) * 100;
-      const sampleConfidence = clamp(row.rounds / 80);
-      // Weapon score blends round WR shrinkage, combat output, use rate and sample confidence.
-      const score = adjustedWinRate * 0.35 + combatScore * 0.35 + useRate * 0.2 + sampleConfidence * 100 * 0.1;
-      return {
-        ...row,
-        killsPerRound,
-        hsPct: shots > 0 ? (row.headshots * 100) / shots : undefined,
-        winRate,
-        score,
-        sampleConfidence,
-      };
-    })
-    .filter((row) => row.kills > 0 || row.rounds > 0)
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.rounds - a.rounds)
-    .slice(0, 5);
-}
-
-function buildBestWeaponsFromGlobal(weaponStats: Record<string, RegionWeaponStats> | undefined): WeaponMapRow[] {
-  const rows = Object.entries(weaponStats ?? {})
-    .filter(([, stats]) => !stats.is_armor)
-    .map(([weaponId, stats]) => {
-      const killsPerRound = stats.kills_per_round ??
-        (stats.rounds_equipped ? Number(stats.kills ?? 0) / Math.max(stats.rounds_equipped, 1) : undefined);
-      return {
-        key: weaponId,
-        name: stats.weapon_name ?? weaponId,
-        kills: Number(stats.kills ?? 0),
-        rounds: Number(stats.rounds_equipped ?? 0),
-        wins: Number(stats.wins ?? 0),
-        hsPct: stats.headshot_pct,
-        killsPerRound,
-        winRate: stats.win_rate,
-      };
-    })
-    .filter((row) => row.kills > 0 || row.rounds > 0);
-  const priorWr = rows.length
-    ? rows.reduce((sum, row) => sum + (row.winRate ?? 50), 0) / rows.length
-    : 50;
-  const maxRounds = Math.max(...rows.map((row) => row.rounds), 1);
-  return rows
-    .map((row) => {
-      const adjustedWinRate = bayesianAdjustedRate(row.winRate, row.rounds, priorWr, 70) ?? priorWr;
-      const combatScore = (
-        normalized(row.killsPerRound, 0.7, 1.4) * 0.65 +
-        normalized(row.hsPct, 22, 40) * 0.35
-      ) * 100;
-      const useRate = clamp(row.rounds / maxRounds) * 100;
-      const sampleConfidence = clamp(row.rounds / 80);
-      return {
-        ...row,
-        score: adjustedWinRate * 0.35 + combatScore * 0.35 + useRate * 0.2 + sampleConfidence * 100 * 0.1,
-        sampleConfidence,
-      };
-    })
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.rounds - a.rounds)
-    .slice(0, 5);
-}
-
-function buildBestCompositionsForMap(
-  analyticsList: AnalyticsMatch[] | undefined,
-  map: MapContent | null,
-  filters: { act?: string; rank?: string; agent?: string },
-  agentNameById: Map<string, string>,
-): CompositionMapRow[] {
-  if (!analyticsList || !map) return [];
-  const rows = new Map<string, CompositionMapRow>();
-  analyticsList.forEach((match) => {
-    if (!matchBelongsToMap(match, map) || !matchPassesFilters(match, filters)) return;
-    const agentsById = new Map<string, string>();
-    (match.team_agents ?? []).forEach((agent) => {
-      const id = String(agent.agent_id ?? "").trim();
-      if (!id || id === "UNKNOWN") return;
-      agentsById.set(id, String(agent.agent_name || id));
-    });
-    if (agentsById.size !== 5) return;
-    const key = Array.from(agentsById.keys()).sort().join("|");
-    const row = rows.get(key) ?? {
-      key,
-      agents: Array.from(agentsById.entries())
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([id, name]) => agentNameById.get(id) ?? name),
-      matches: 0,
-      wins: 0,
-      roundsWon: 0,
-      roundsLost: 0,
-    };
-    row.matches += 1;
-    row.wins += match.won_match ? 1 : 0;
-    row.roundsWon += Number(match.overview?.wins ?? 0);
-    row.roundsLost += Number(match.overview?.losses ?? 0);
-    rows.set(key, row);
-  });
-  const rawRows = Array.from(rows.values());
-  const prior = rawRows.length
-    ? rawRows.reduce((sum, row) => sum + (row.matches > 0 ? (row.wins * 100) / row.matches : 0), 0) / rawRows.length
-    : 50;
-  const maxMatches = Math.max(...rawRows.map((row) => row.matches), 1);
-  return rawRows
-    .map((row) => {
-      const winRate = row.matches > 0 ? (row.wins * 100) / row.matches : undefined;
-      const adjustedWinRate = bayesianAdjustedRate(winRate, row.matches, prior, 15) ?? prior;
-      const playRate = clamp(row.matches / maxMatches) * 100;
-      const sampleConfidence = clamp(row.matches / 15);
-      return {
-        ...row,
-        winRate,
-        // Composition score favors adjusted WR, then repeated usage and sample confidence.
-        score: adjustedWinRate * 0.65 + playRate * 0.2 + sampleConfidence * 100 * 0.15,
-        sampleConfidence,
-      };
-    })
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.matches - a.matches)
-    .slice(0, 5);
-}
-
-function buildBestCompositionsFromGlobal(rows: RegionMapCompositionStats[] | undefined): CompositionMapRow[] {
-  const source = rows ?? [];
-  const prior = source.length
-    ? source.reduce((sum, row) => sum + Number(row.win_rate ?? 0), 0) / source.length
-    : 50;
-  const maxMatches = Math.max(...source.map((row) => Number(row.matches ?? 0)), 1);
-  return source
-    .map((row) => {
-      const matches = Number(row.matches ?? 0);
-      const adjustedWinRate = bayesianAdjustedRate(row.win_rate, matches, prior, 15) ?? prior;
-      const playRate = clamp(matches / maxMatches) * 100;
-      const sampleConfidence = clamp(matches / 15);
-      return {
-        key: row.key,
-        agents: row.agents,
-        matches,
-        wins: Number(row.wins ?? 0),
-        roundsWon: Number(row.rounds_won ?? 0),
-        roundsLost: Number(row.rounds_lost ?? 0),
-        winRate: row.win_rate,
-        score: adjustedWinRate * 0.65 + playRate * 0.2 + sampleConfidence * 100 * 0.15,
-        sampleConfidence,
-      };
-    })
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.matches - a.matches)
-    .slice(0, 5);
-}
-
-function getBestAgents(agentStats: Record<string, RegionAgentStats> | undefined): AgentMapRow[] {
-  const rows = Object.entries(agentStats ?? {}).map(([agentId, stats]) => {
-    const raw = stats.win_rate ?? 0;
-    const matches = stats.matches ?? stats.picks ?? 0;
-    const rounds = stats.rounds ?? stats.totals?.rounds ?? 0;
-    const adjustedWinRate = bayesianAdjustedRate(raw, matches, 50, 15) ?? raw;
-    const normalizedPerformance = (
-      normalized(stats.avg_kd, 1, 1.4) * 0.35 +
-      normalized(stats.avg_adr, 140, 120) * 0.35 +
-      normalized(stats.avg_acs, 210, 180) * 0.2 +
-      normalized(stats.avg_kda, 1.4, 1.6) * 0.1
-    ) * 100;
-    const normalizedPickRate = normalized(stats.pick_rate, 10, 25) * 100;
-    const sampleConfidence = clamp(Math.max(matches / 15, rounds / 250));
-    // Agent score shrinks WR and balances performance, pick rate and reliability.
-    const score = adjustedWinRate * 0.45 + normalizedPerformance * 0.35 + normalizedPickRate * 0.15 + sampleConfidence * 100 * 0.05;
-    return {
-      agentId,
-      name: stats.agent_name ?? "Unknown",
-      matches,
-      rounds,
-      winRate: raw,
-      pickRate: stats.pick_rate,
-      kd: stats.avg_kd,
-      adr: stats.avg_adr,
-      acs: stats.avg_acs,
-      score,
-      sampleConfidence,
-    };
-  });
-  return rows.sort((a, b) => b.score - a.score || b.matches - a.matches).slice(0, 5);
-}
-
 function buildRoundCeremonySharesFromGlobal(stats: RegionMapStats | undefined) {
   const ceremonyLabels: Record<string, string> = {
     CeremonyAce: "Ace",
@@ -665,7 +257,7 @@ function buildRoundCeremonySharesFromGlobal(stats: RegionMapStats | undefined) {
 }
 
 function CalloutMap({ map }: { map: MapEntry }) {
-  const imageCandidates = [map.displayIcon, map.listViewIcon, map.splash].filter(Boolean) as string[];
+  const imageCandidates = [map.displayIcon].filter(Boolean) as string[];
   const [imageIndex, setImageIndex] = useState(0);
   const image = imageCandidates[imageIndex];
   const transformAvailable = [map.xMultiplier, map.xScalarToAdd, map.yMultiplier, map.yScalarToAdd].every((value) => toFiniteNumber(value) !== undefined);
@@ -731,9 +323,6 @@ function CalloutMap({ map }: { map: MapEntry }) {
         {(!transformAvailable || positionedCallouts.length === 0) && (map.callouts?.length ?? 0) > 0 && (
           <div className="mapas-map-notice">Sin coordenadas transformables para pintar callouts reales.</div>
         )}
-        {image !== map.displayIcon && positionedCallouts.length > 0 && (
-          <div className="mapas-map-notice">Imagen alternativa: las coordenadas se han calculado con los datos oficiales del minimapa.</div>
-        )}
         {positionedCallouts.length === 0 && (map.callouts?.length ?? 0) === 0 && (
           <div className="mapas-map-notice">Sin callouts posicionables para este mapa.</div>
         )}
@@ -744,20 +333,24 @@ function CalloutMap({ map }: { map: MapEntry }) {
 
 function StatGrid({ stats, totalMatches }: { stats: ComputedMapStats | null | undefined; totalMatches: number }) {
   const playRate = stats?.matches && totalMatches > 0 ? (stats.matches * 100) / totalMatches : undefined;
-  const assistsPerRound = stats?.rounds ? stats.assists / stats.rounds : undefined;
+  const performanceRounds = stats?.playerRounds || stats?.rounds || 0;
+  const assistsPerRound = performanceRounds ? stats!.assists / performanceRounds : undefined;
   const kda = stats?.deaths ? (stats.kills + stats.assists) / stats.deaths : undefined;
   const items = [
     ["Partidas", formatMaybeNumber(stats?.matches)],
-    ["Rondas", formatMaybeNumber(stats?.rounds)],
-    ["Rondas ganadas", formatMaybeNumber(stats?.roundsWon)],
-    ["Rondas perdidas", formatMaybeNumber(stats?.roundsLost)],
+    ["Player-partidas", formatMaybeNumber(stats?.playerMatches)],
+    ["Rondas mapa", formatMaybeNumber(stats?.rounds)],
+    ["Player-rounds", formatMaybeNumber(stats?.playerRounds)],
+    ["Rondas equipo ganadas", formatMaybeNumber(stats?.roundsWon)],
+    ["Rondas equipo perdidas", formatMaybeNumber(stats?.roundsLost)],
     ["Diferencial", isAvailableNumber(stats?.roundDiff) ? `${(stats?.roundDiff ?? 0) > 0 ? "+" : ""}${formatNumber(stats?.roundDiff ?? 0, 0)}` : "Sin datos"],
-    ["Winrate", formatMaybePercent(stats?.winRate)],
+    ["Winrate jugadores", formatMaybePercent(stats?.winRate)],
+    ["WR rondas equipo", formatMaybePercent(stats?.teamRoundWinRate)],
     ["Attack WR", formatMaybePercent(stats?.attackWinRate)],
     ["Defense WR", formatMaybePercent(stats?.defenseWinRate)],
-    ["Kills / ronda", formatMaybeNumber(stats?.killsPerRound, 2)],
-    ["Muertes / ronda", formatMaybeNumber(stats?.deathsPerRound, 2)],
-    ["Asist. / ronda", formatMaybeNumber(assistsPerRound, 2)],
+    ["Kills / player-round", formatMaybeNumber(stats?.killsPerRound, 2)],
+    ["Muertes / player-round", formatMaybeNumber(stats?.deathsPerRound, 2)],
+    ["Asist. / player-round", formatMaybeNumber(assistsPerRound, 2)],
     ["ADR", formatMaybeNumber(stats?.adr, 1)],
     ["K/D", formatMaybeNumber(stats?.kd, 2)],
     ["KDA", formatMaybeNumber(kda, 2)],
@@ -910,17 +503,22 @@ export default function Mapas() {
     return () => cancelAnimationFrame(frame);
   }, [personalDashboardQuery.data?.player?.region, regionOptions, selectedRegion]);
 
-  const fallbackAggregated = useMemo(
-    () => sumRegionMapStats(regions as Array<{ region?: string; totalRounds?: number; mapStats?: Record<string, RegionMapStats> }> | undefined, selectedRegion),
-    [regions, selectedRegion],
+  const globalMapStatsById = useMemo(
+    () => globalMapStatsQuery.data?.mapStats ?? {},
+    [globalMapStatsQuery.data?.mapStats],
   );
-  const globalMapStatsById = globalMapStatsQuery.data?.mapStats ?? fallbackAggregated.mapStatsById;
-  const globalMapStatsValues = Object.values(globalMapStatsById);
-  const globalPriorWinRate = globalMapStatsValues.length
-    ? globalMapStatsValues.reduce((sum, stats) => sum + Number(stats.win_rate ?? 0), 0) / globalMapStatsValues.length
-    : fallbackAggregated.priorWinRate;
-  const globalTotalMatches = globalMapStatsQuery.data?.sampleSize?.matches ?? fallbackAggregated.totalMatches;
-  const globalTotalRounds = globalMapStatsValues.reduce((sum, stats) => sum + Number(stats.total_rounds ?? 0), 0) || fallbackAggregated.totalRounds;
+  const globalMapStatsValues = useMemo(() => Object.values(globalMapStatsById), [globalMapStatsById]);
+  const globalPriorWinRate = useMemo(
+    () => globalMapStatsValues.length
+      ? globalMapStatsValues.reduce((sum, stats) => sum + Number(stats.player_win_rate ?? stats.win_rate ?? 0), 0) / globalMapStatsValues.length
+      : 50,
+    [globalMapStatsValues],
+  );
+  const globalTotalMatches = globalMapStatsQuery.data?.sampleSize?.matches ?? 0;
+  const globalTotalRounds = useMemo(
+    () => globalMapStatsValues.reduce((sum, stats) => sum + Number(stats.map_rounds ?? stats.total_rounds ?? 0), 0),
+    [globalMapStatsValues],
+  );
 
   const maps = useMemo<MapEntry[]>(() => {
     const data = query.data ?? {};
@@ -1069,8 +667,8 @@ export default function Mapas() {
 
   const kpis = [
     ["Mapas", formatNumber(filtered.length, 0)],
-    ["Muestra global", formatCompactNumber(globalTotalMatches)],
-    ["Rondas comp.", formatCompactNumber(globalTotalRounds)],
+    ["Partidas globales", formatCompactNumber(globalTotalMatches)],
+    ["Rondas mapa", formatCompactNumber(globalTotalRounds)],
     ["Region", selectedRegion ? selectedRegion.toUpperCase() : "Todas"],
   ];
 
