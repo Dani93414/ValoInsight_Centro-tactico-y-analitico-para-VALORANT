@@ -111,9 +111,11 @@ export function bayesianAdjustedRate(
 
 export type ComputedMapStats = {
   matches: number;
+  playerMatches: number;
   wins: number;
   losses: number;
   rounds: number;
+  playerRounds: number;
   roundsWon: number;
   roundsLost: number;
   roundDiff: number;
@@ -134,6 +136,7 @@ export type ComputedMapStats = {
   plants: number;
   defuses: number;
   winRate?: number;
+  teamRoundWinRate?: number;
   attackWinRate?: number;
   defenseWinRate?: number;
   killsPerRound?: number;
@@ -151,9 +154,11 @@ export type ComputedMapStats = {
 function emptyComputedMapStats(): ComputedMapStats {
   return {
     matches: 0,
+    playerMatches: 0,
     wins: 0,
     losses: 0,
     rounds: 0,
+    playerRounds: 0,
     roundsWon: 0,
     roundsLost: 0,
     roundDiff: 0,
@@ -178,21 +183,23 @@ function emptyComputedMapStats(): ComputedMapStats {
 
 function finalizeComputedStats(stats: ComputedMapStats, priorRate?: number): ComputedMapStats {
   const shots = stats.headshots + stats.bodyshots + stats.legshots;
-  stats.losses = Math.max(0, stats.matches - stats.wins);
+  const performanceRounds = stats.playerRounds || stats.rounds;
+  const winRateSample = stats.playerMatches || stats.matches;
+  stats.losses = Math.max(0, winRateSample - stats.wins);
   stats.roundsLost = Math.max(0, stats.rounds - stats.roundsWon);
   stats.roundDiff = stats.roundsWon - stats.roundsLost;
-  stats.winRate = stats.matches > 0 ? safeDivide(stats.wins * 100, stats.matches) : undefined;
-  stats.killsPerRound = stats.rounds > 0 ? safeDivide(stats.kills, stats.rounds) : undefined;
-  stats.deathsPerRound = stats.rounds > 0 ? safeDivide(stats.deaths, stats.rounds) : undefined;
-  stats.adr = stats.rounds > 0 ? safeDivide(stats.damageDealt, stats.rounds) : undefined;
-  stats.acs = stats.rounds > 0 ? safeDivide(stats.score, stats.rounds) : undefined;
+  stats.winRate = winRateSample > 0 ? safeDivide(stats.wins * 100, winRateSample) : stats.winRate;
+  stats.killsPerRound = performanceRounds > 0 ? safeDivide(stats.kills, performanceRounds) : undefined;
+  stats.deathsPerRound = performanceRounds > 0 ? safeDivide(stats.deaths, performanceRounds) : undefined;
+  stats.adr = performanceRounds > 0 ? safeDivide(stats.damageDealt, performanceRounds) : undefined;
+  stats.acs = performanceRounds > 0 ? safeDivide(stats.score, performanceRounds) : undefined;
   stats.kd = stats.deaths > 0 ? stats.kills / stats.deaths : stats.kills > 0 ? stats.kills : undefined;
   stats.headshotPct = shots > 0 ? safeDivide(stats.headshots * 100, shots) : undefined;
-  stats.survivalRate = stats.survivalRounds > 0 && stats.rounds > 0
-    ? safeDivide(stats.survivalRounds * 100, stats.rounds)
+  stats.survivalRate = stats.survivalRounds > 0 && performanceRounds > 0
+    ? safeDivide(stats.survivalRounds * 100, performanceRounds)
     : stats.survivalRate;
-  stats.kastPct = stats.roundsWithKast > 0 && stats.rounds > 0
-    ? safeDivide(stats.roundsWithKast * 100, stats.rounds)
+  stats.kastPct = stats.roundsWithKast > 0 && performanceRounds > 0
+    ? safeDivide(stats.roundsWithKast * 100, performanceRounds)
     : stats.kastPct;
   stats.clutchRate = stats.clutchOpportunities > 0
     ? safeDivide(stats.clutchesWon * 100, stats.clutchOpportunities)
@@ -208,26 +215,32 @@ export function regionMapStatsToComputed(
   if (!stats) return null;
   const attack = stats.sides?.attack;
   const defense = stats.sides?.defense;
-  const roundsWon = Number(attack?.wins ?? 0) + Number(defense?.wins ?? 0);
-  const rounds = Number(stats.total_rounds ?? 0);
+  const rounds = Number(stats.map_rounds ?? stats.total_rounds ?? 0);
+  const playerRounds = Number(stats.player_rounds ?? stats.total_rounds ?? rounds);
+  const roundsWon = Number(stats.team_round_wins ?? attack?.wins ?? 0);
+  const roundsLost = Number(stats.team_round_losses ?? Math.max(0, rounds - roundsWon));
   const matches = Number(stats.matches ?? 0);
+  const playerMatches = Number(stats.player_matches ?? stats.matches ?? 0);
   return finalizeComputedStats({
     ...emptyComputedMapStats(),
     matches,
+    playerMatches,
     rounds,
+    playerRounds,
     roundsWon,
-    roundsLost: Math.max(0, rounds - roundsWon),
-    roundDiff: roundsWon - Math.max(0, rounds - roundsWon),
+    roundsLost,
+    roundDiff: roundsWon - roundsLost,
     kills: Number(attack?.kills ?? 0) + Number(defense?.kills ?? 0),
     deaths: Number(attack?.deaths ?? 0) + Number(defense?.deaths ?? 0),
     clutchesWon: Number(stats.clutches_won ?? 0),
     clutchOpportunities: Number(stats.clutch_opportunities ?? 0),
     survivalRounds: Number(stats.survival_rounds ?? 0),
     roundsWithKast: Number(stats.rounds_with_kast ?? 0),
-    damageDealt: Number(stats.averages?.adr ?? 0) * rounds,
-    score: Number(stats.averages?.acs ?? 0) * rounds,
-    wins: Number(stats.wins ?? (matches > 0 && rounds > 0 ? Math.round((roundsWon / rounds) * matches) : 0)),
-    winRate: stats.win_rate ?? (rounds > 0 ? safeDivide(roundsWon * 100, rounds) : undefined),
+    damageDealt: Number(stats.averages?.adr ?? 0) * playerRounds,
+    score: Number(stats.averages?.acs ?? 0) * playerRounds,
+    wins: Number(stats.wins ?? 0),
+    winRate: stats.player_win_rate ?? stats.win_rate,
+    teamRoundWinRate: stats.team_round_win_rate,
     attackWinRate: attack?.win_rate,
     defenseWinRate: defense?.win_rate,
     adr: stats.averages?.adr,
@@ -274,8 +287,10 @@ export function calculatePersonalMapStats(
     const wins = Number(overview.wins ?? 0);
 
     stats.matches += 1;
+    stats.playerMatches += 1;
     stats.wins += match.won_match ? 1 : 0;
     stats.rounds += rounds;
+    stats.playerRounds += rounds;
     stats.roundsWon += wins;
     stats.kills += Number(overview.kills ?? match.player_totals_from_match?.kills ?? 0);
     stats.deaths += Number(overview.deaths ?? match.player_totals_from_match?.deaths ?? 0);
