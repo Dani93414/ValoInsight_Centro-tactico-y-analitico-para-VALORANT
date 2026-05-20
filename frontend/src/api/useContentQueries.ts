@@ -59,8 +59,7 @@ export function useMapas() {
   return useQuery({
     queryKey: ["content", "mapas"],
     queryFn: getMapas,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: CONTENT_STALE,
   });
 }
 

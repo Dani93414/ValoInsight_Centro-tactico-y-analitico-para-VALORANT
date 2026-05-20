@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useAgentes, useGlobalMapStats, useMapas, usePlayerDashboard, useRegions } from "../api/hooks";
+import { useActos, useAgentes, useArmas, useGlobalMapStats, useMapas, usePlayerDashboard, useRegions } from "../api/hooks";
 import { useAuth } from "../context/AuthContext";
-import type { MapContent } from "../types/content";
+import type { ActContent, MapContent } from "../types/content";
 import type {
   GlobalAgentStatsOption,
   RegionMapStats,
@@ -114,6 +114,18 @@ function toSelectOptions(options: GlobalAgentStatsOption[] | undefined, fallback
   ];
 }
 
+function stripOptionCount(label: string) {
+  return label.replace(/\s+\(\d+\)$/, "");
+}
+
+function formatActOptionLabel(option: SelectOption, actsById: Map<string, ActContent>) {
+  if (option.value === ALL || option.disabled) return option.label;
+  const act = actsById.get(option.value);
+  const baseName = stripOptionCount(act?.name ?? option.label);
+  const episode = act?.parentName ? stripOptionCount(act.parentName) : "";
+  return episode ? `${baseName} - ${episode}` : option.label;
+}
+
 function getMapStatsKey(map: MapContent) {
   return map.uuid ?? map.displayName;
 }
@@ -135,12 +147,64 @@ function asCoordinateValue(value: unknown) {
   return typeof value === "number" || typeof value === "string" ? value : undefined;
 }
 
+function resolveCalloutPosition(
+  location: Record<string, unknown>,
+  map: MapEntry,
+  naturalSize: { width: number; height: number } | null,
+) {
+  const gameX = map.callouts ? asCoordinateValue(location.x) ?? asCoordinateValue(location.X) ?? asCoordinateValue(location.gameX) ?? asCoordinateValue(location.game_x) : undefined;
+  const gameY = map.callouts ? asCoordinateValue(location.y) ?? asCoordinateValue(location.Y) ?? asCoordinateValue(location.gameY) ?? asCoordinateValue(location.game_y) : undefined;
+
+  const transformed = translateValorantCoordinatesToMapPosition({
+    gameX,
+    gameY,
+    xMultiplier: map.xMultiplier,
+    xScalarToAdd: map.xScalarToAdd,
+    yMultiplier: map.yMultiplier,
+    yScalarToAdd: map.yScalarToAdd,
+  });
+  if (isValidMapPercentPosition(transformed)) return transformed;
+
+  const rawX = toFiniteNumber(gameX);
+  const rawY = toFiniteNumber(gameY);
+  if (rawX === undefined || rawY === undefined) return null;
+
+  // Some stored callouts may already be normalized/percentage/pixel image coordinates.
+  // The overlay always uses CSS percentages so it stays aligned after responsive resizing.
+  if (rawX >= 0 && rawX <= 1 && rawY >= 0 && rawY <= 1) {
+    return { xPercent: rawX * 100, yPercent: rawY * 100 };
+  }
+  if (rawX >= 0 && rawX <= 100 && rawY >= 0 && rawY <= 100) {
+    return { xPercent: rawX, yPercent: rawY };
+  }
+  if (naturalSize && rawX >= 0 && rawX <= naturalSize.width && rawY >= 0 && rawY <= naturalSize.height) {
+    return {
+      xPercent: (rawX * 100) / naturalSize.width,
+      yPercent: (rawY * 100) / naturalSize.height,
+    };
+  }
+  return null;
+}
+
 function formatMaybePercent(value?: number) {
   return isAvailableNumber(value) ? formatPercent(value, 1) : "Sin datos";
 }
 
 function formatMaybeNumber(value?: number, digits = 0) {
   return isAvailableNumber(value) ? formatNumber(value, digits) : "Sin datos";
+}
+
+function ContentThumb({
+  src,
+  alt,
+  className = "",
+}: {
+  src?: string | null;
+  alt: string;
+  className?: string;
+}) {
+  if (!src) return <span className={`mapas-thumb mapas-thumb--empty ${className}`} aria-hidden="true" />;
+  return <img className={`mapas-thumb ${className}`} src={src} alt={alt} onError={hideBrokenImage} />;
 }
 
 function buildRegionOptions(regions: Array<{ region?: string }> | undefined): SelectOption[] {
@@ -156,11 +220,11 @@ function buildRegionOptions(regions: Array<{ region?: string }> | undefined): Se
 function buildComparisonMetrics(
   globalStats: ComputedMapStats | null | undefined,
   personalStats: ComputedMapStats | null | undefined,
+  globalCohort: ComputedMapStats[] = [],
 ): ComparisonMetric[] {
   const configs = [
-    { key: "rounds", label: "Rondas mapa", format: "number" as const, noDiff: true, noNormalize: true },
-    { key: "playerRounds", label: "Player-rounds", format: "number" as const, noDiff: true, noNormalize: true },
-    { key: "roundDiff", label: "Diferencial equipo", format: "number" as const, sampleKey: "rounds" },
+    { key: "rounds", label: "Rondas jugadas", format: "number" as const, noDiff: true, noNormalize: true },
+    { key: "roundDiff", label: "Diferencia de rondas", format: "number" as const, sampleKey: "rounds", noDiff: true, noNormalize: true, globalAsDash: true },
     { key: "winRate", label: "Winrate jugadores", format: "percent" as const, sampleKey: "playerMatches" },
     { key: "teamRoundWinRate", label: "WR rondas equipo", format: "percent" as const, sampleKey: "rounds" },
     { key: "attackWinRate", label: "Attack WR", format: "percent" as const, sampleKey: "rounds" },
@@ -188,21 +252,28 @@ function buildComparisonMetrics(
       const sampleKey = (config.sampleKey ?? "rounds") as keyof ComputedMapStats;
       const globalSample = Number(globalStats?.[sampleKey] ?? 0);
       const personalSample = Number(personalStats?.[sampleKey] ?? 0);
-      const prior = isAvailableNumber(globalValue) ? globalValue : personalValue;
+      const cohortValues = globalCohort
+        .map((stats) => stats[config.key as keyof ComputedMapStats] as number | undefined)
+        .filter((value): value is number => isAvailableNumber(value));
+      const cohortMean = cohortValues.length
+        ? cohortValues.reduce((sum, value) => sum + value, 0) / cohortValues.length
+        : isAvailableNumber(globalValue)
+          ? globalValue
+          : personalValue;
       const priorWeight = config.format === "percent" ? 50 : 80;
       const globalNormalized = config.noNormalize
         ? undefined
-        : bayesianAdjustedRate(globalValue, globalSample, prior, priorWeight);
+        : bayesianAdjustedRate(globalValue, globalSample, cohortMean, priorWeight);
       const personalNormalized = config.noNormalize
         ? undefined
-        : bayesianAdjustedRate(personalValue, personalSample, prior, priorWeight);
+        : bayesianAdjustedRate(personalValue, personalSample, cohortMean, priorWeight);
       const normalizedDiff = isAvailableNumber(globalNormalized) && isAvailableNumber(personalNormalized)
         ? (personalNormalized as number) - (globalNormalized as number)
         : undefined;
       return {
         key: config.key,
         label: config.label,
-        globalLabel: formatValue(globalValue),
+        globalLabel: config.globalAsDash ? "-" : formatValue(globalValue),
         personalLabel: formatValue(personalValue),
         diffLabel: config.noDiff || diff === undefined
           ? "-"
@@ -264,27 +335,124 @@ function buildRoundCeremonySharesFromGlobal(stats: RegionMapStats | undefined) {
     .sort((a, b) => b.percent - a.percent);
 }
 
+type PositionedCallout = {
+  callout: NonNullable<MapEntry["callouts"]>[number];
+  position: { xPercent: number; yPercent: number };
+  placement: "right" | "left" | "above" | "below";
+  offsetY: number;
+};
+
+function layoutCalloutLabels(
+  items: Array<{
+    callout: NonNullable<MapEntry["callouts"]>[number];
+    position: { xPercent: number; yPercent: number };
+  }>,
+): PositionedCallout[] {
+  const labelWidth = 16;
+  const labelHeight = 4.5;
+  const gap = 1.6;
+  const placements: PositionedCallout["placement"][] = ["right", "left", "below", "above"];
+  const boxFor = (
+    position: { xPercent: number; yPercent: number },
+    placement: PositionedCallout["placement"],
+    offsetY: number,
+  ) => {
+    const offsetPct = offsetY / 6;
+    if (placement === "left") {
+      return {
+        left: position.xPercent - gap - labelWidth,
+        right: position.xPercent - gap,
+        top: position.yPercent - labelHeight / 2 + offsetPct,
+        bottom: position.yPercent + labelHeight / 2 + offsetPct,
+      };
+    }
+    if (placement === "above") {
+      return {
+        left: position.xPercent - labelWidth / 2,
+        right: position.xPercent + labelWidth / 2,
+        top: position.yPercent - gap - labelHeight + offsetPct,
+        bottom: position.yPercent - gap + offsetPct,
+      };
+    }
+    if (placement === "below") {
+      return {
+        left: position.xPercent - labelWidth / 2,
+        right: position.xPercent + labelWidth / 2,
+        top: position.yPercent + gap + offsetPct,
+        bottom: position.yPercent + gap + labelHeight + offsetPct,
+      };
+    }
+    return {
+      left: position.xPercent + gap,
+      right: position.xPercent + gap + labelWidth,
+      top: position.yPercent - labelHeight / 2 + offsetPct,
+      bottom: position.yPercent + labelHeight / 2 + offsetPct,
+    };
+  };
+  const overflows = (box: ReturnType<typeof boxFor>) =>
+    box.left < 0 || box.right > 100 || box.top < 0 || box.bottom > 100;
+  const overlaps = (box: ReturnType<typeof boxFor>, other: ReturnType<typeof boxFor>) =>
+    box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top;
+
+  const placed: PositionedCallout[] = [];
+  const sorted = [...items].sort((a, b) => a.position.yPercent - b.position.yPercent || a.position.xPercent - b.position.xPercent);
+
+  sorted.forEach((item) => {
+    const { xPercent, yPercent } = item.position;
+    const basePlacement: PositionedCallout["placement"] =
+      xPercent > 82 ? "left" : yPercent < 5 ? "below" : yPercent > 95 ? "above" : "right";
+    const orderedPlacements = [basePlacement, ...placements.filter((placement) => placement !== basePlacement)];
+    let placement = basePlacement;
+    let offsetY = 0;
+
+    const pick = () => {
+      const offsets = [0, 14, -14, 28, -28, 42, -42];
+      for (const candidatePlacement of orderedPlacements) {
+        for (const candidateOffset of offsets) {
+          const candidateBox = boxFor(item.position, candidatePlacement, candidateOffset);
+          if (overflows(candidateBox)) continue;
+          const hasOverlap = placed.some((other) =>
+            overlaps(candidateBox, boxFor(other.position, other.placement, other.offsetY)),
+          );
+          if (!hasOverlap) return { placement: candidatePlacement, offsetY: candidateOffset };
+        }
+      }
+      for (const candidatePlacement of orderedPlacements) {
+        const candidateBox = boxFor(item.position, candidatePlacement, 0);
+        if (!overflows(candidateBox)) return { placement: candidatePlacement, offsetY: 0 };
+      }
+      return { placement: basePlacement, offsetY: 0 };
+    };
+    const picked = pick();
+    placement = picked.placement;
+    offsetY = picked.offsetY;
+
+    placed.push({
+      ...item,
+      placement,
+      offsetY,
+    });
+  });
+
+  return placed;
+}
+
 function CalloutMap({ map }: { map: MapEntry }) {
   const imageCandidates = [map.displayIcon].filter(Boolean) as string[];
   const [imageIndex, setImageIndex] = useState(0);
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const image = imageCandidates[imageIndex];
   const transformAvailable = [map.xMultiplier, map.xScalarToAdd, map.yMultiplier, map.yScalarToAdd].every((value) => toFiniteNumber(value) !== undefined);
   const positionedCallouts = (map.callouts ?? [])
     .map((callout) => {
       const rawLocation = (callout.location ?? {}) as Record<string, unknown>;
-      const position = translateValorantCoordinatesToMapPosition({
-        gameX: callout.location?.x ?? asCoordinateValue(rawLocation.X) ?? asCoordinateValue(rawLocation.gameX) ?? asCoordinateValue(rawLocation.game_x),
-        gameY: callout.location?.y ?? asCoordinateValue(rawLocation.Y) ?? asCoordinateValue(rawLocation.gameY) ?? asCoordinateValue(rawLocation.game_y),
-        xMultiplier: map.xMultiplier,
-        xScalarToAdd: map.xScalarToAdd,
-        yMultiplier: map.yMultiplier,
-        yScalarToAdd: map.yScalarToAdd,
-      });
+      const position = resolveCalloutPosition(rawLocation, map, naturalSize);
       return { callout, position };
     })
     .filter((item): item is { callout: NonNullable<MapEntry["callouts"]>[number]; position: { xPercent: number; yPercent: number } } =>
       isValidMapPercentPosition(item.position),
     );
+  const laidOutCallouts = layoutCalloutLabels(positionedCallouts);
 
   if (!image) {
     return <div className="mapas-empty-panel">Sin minimapa tactico compatible con coordenadas para este mapa.</div>;
@@ -296,22 +464,31 @@ function CalloutMap({ map }: { map: MapEntry }) {
         <img
           src={image}
           alt={`Mapa tactico de ${map.displayName}`}
+          onLoad={(event) => {
+            const target = event.currentTarget;
+            setNaturalSize({ width: target.naturalWidth, height: target.naturalHeight });
+          }}
           onError={(event) => {
             const nextIndex = imageIndex + 1;
             if (nextIndex < imageCandidates.length) {
               setImageIndex(nextIndex);
+              setNaturalSize(null);
               return;
             }
             hideBrokenImage(event);
           }}
         />
-        {positionedCallouts.map(({ callout, position }) => {
+        {laidOutCallouts.map(({ callout, position, placement, offsetY }) => {
           const label = `${callout.superRegionName ? `${callout.superRegionName}: ` : ""}${callout.regionName ?? "Callout"}`;
           return (
             <span
               key={`${callout.superRegionName ?? ""}-${callout.regionName ?? ""}-${callout.location?.x ?? ""}-${callout.location?.y ?? ""}`}
-              className="mapas-callout-marker"
-              style={{ left: `${position.xPercent}%`, top: `${position.yPercent}%` }}
+              className={`mapas-callout-marker mapas-callout-marker--${placement}`}
+              style={{
+                left: `${position.xPercent}%`,
+                top: `${position.yPercent}%`,
+                ["--callout-offset-y" as string]: `${offsetY}px`,
+              }}
               title={label}
               aria-label={label}
             >
@@ -340,12 +517,11 @@ function StatGrid({ stats, totalMatches }: { stats: ComputedMapStats | null | un
   const kda = stats?.deaths ? (stats.kills + stats.assists) / stats.deaths : undefined;
   const items = [
     ["Partidas", formatMaybeNumber(stats?.matches)],
-    ["Player-partidas", formatMaybeNumber(stats?.playerMatches)],
-    ["Rondas mapa", formatMaybeNumber(stats?.rounds)],
-    ["Player-rounds", formatMaybeNumber(stats?.playerRounds)],
+    ["Participaciones", formatMaybeNumber(stats?.playerMatches)],
+    ["Rondas jugadas", formatMaybeNumber(stats?.rounds)],
     ["Rondas equipo ganadas", formatMaybeNumber(stats?.roundsWon)],
     ["Rondas equipo perdidas", formatMaybeNumber(stats?.roundsLost)],
-    ["Diferencial equipo", isAvailableNumber(stats?.roundDiff) ? `${(stats?.roundDiff ?? 0) > 0 ? "+" : ""}${formatNumber(stats?.roundDiff ?? 0, 0)}` : "Sin datos"],
+    ["Diferencia de rondas", isAvailableNumber(stats?.roundDiff) ? `${(stats?.roundDiff ?? 0) > 0 ? "+" : ""}${formatNumber(stats?.roundDiff ?? 0, 0)}` : "Sin datos"],
     ["Winrate jugadores", formatMaybePercent(stats?.winRate)],
     ["WR rondas equipo", formatMaybePercent(stats?.teamRoundWinRate)],
     ["Attack WR", formatMaybePercent(stats?.attackWinRate)],
@@ -413,13 +589,14 @@ export default function Mapas() {
   const auth = useAuth();
   const query = useMapas();
   const agentsQuery = useAgentes();
-  const { data: regions } = useRegions();
+  const weaponsQuery = useArmas();
+  const actsQuery = useActos();
+  const regionsQuery = useRegions();
+  const { data: regions } = regionsQuery;
   const [search, setSearch] = useState("");
   const [modeFilter, setModeFilter] = useState<string>(COMPETITIVE);
   const [selectedRegion, setSelectedRegion] = useState("");
-  const [rankFilter, setRankFilter] = useState(ALL);
   const [actFilter, setActFilter] = useState(ALL);
-  const [agentFilter, setAgentFilter] = useState(ALL);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [selected, setSelected] = useState<MapEntry | null>(null);
   const [openPanels, setOpenPanels] = useState<Record<MapPanelKey, boolean>>({
@@ -436,74 +613,96 @@ export default function Mapas() {
     auth.user?.puuid,
     { queue_id: COMPETITIVE, page_size: 250 },
   );
+  const playerRegion = personalDashboardQuery.data?.player?.region?.toLowerCase();
+  const isWaitingForPlayerRegion =
+    auth.isLoggedIn &&
+    Boolean(auth.user?.puuid) &&
+    !selectedRegion &&
+    personalDashboardQuery.isLoading;
+  const canLoadGlobalMapStats =
+    !auth.isLoggedIn ||
+    !auth.user?.puuid ||
+    Boolean(selectedRegion) ||
+    personalDashboardQuery.isError ||
+    (personalDashboardQuery.isSuccess && !playerRegion);
   const globalMapStatsQuery = useGlobalMapStats({
     region: selectedRegion,
-    rank: rankFilter,
     act: actFilter,
-    agent: agentFilter,
-  });
+  }, canLoadGlobalMapStats);
 
   const regionOptions = useMemo(() => buildRegionOptions(regions), [regions]);
   const actOptions = useMemo(
     () => toSelectOptions(globalMapStatsQuery.data?.options?.acts, "Sin actos disponibles"),
     [globalMapStatsQuery.data?.options?.acts],
   );
-  const rankOptions = useMemo(
-    () => toSelectOptions(globalMapStatsQuery.data?.options?.ranks, "Sin rangos disponibles"),
-    [globalMapStatsQuery.data?.options?.ranks],
+  const actsById = useMemo(() => {
+    const byId = new Map<string, ActContent>();
+    ((actsQuery.data as ActContent[] | undefined) ?? []).forEach((act) => {
+      if (act.id) byId.set(act.id, act);
+    });
+    return byId;
+  }, [actsQuery.data]);
+  const formattedActOptions = useMemo(
+    () => actOptions.map((option) => ({ ...option, label: formatActOptionLabel(option, actsById) })),
+    [actOptions, actsById],
   );
-  const agentNameById = useMemo(() => {
-    const byId = new Map<string, string>();
+  const agentMetaById = useMemo(() => {
+    const byId = new Map<string, { name: string; image?: string | null }>();
     const raw = agentsQuery.data as Record<string, unknown[]> | undefined;
     Object.values(raw ?? {}).flat().forEach((item) => {
       if (!item || typeof item !== "object") return;
-      const record = item as { uuid?: string | null; displayName?: string | null };
-      if (record.uuid && record.displayName) byId.set(record.uuid, record.displayName);
+      const record = item as { uuid?: string | null; displayName?: string | null; displayIcon?: string | null; displayIconSmall?: string | null };
+      if (record.uuid && record.displayName) {
+        byId.set(record.uuid, {
+          name: record.displayName,
+          image: record.displayIconSmall ?? record.displayIcon,
+        });
+      }
     });
     return byId;
   }, [agentsQuery.data]);
-  const agentOptions = useMemo(
-    () => {
-      const options = toSelectOptions(globalMapStatsQuery.data?.options?.agents, "Sin agentes disponibles");
-      return options.map((option) => ({
-        ...option,
-        label: option.value !== ALL && agentNameById.has(option.value)
-          ? `${agentNameById.get(option.value)}${option.label.match(/\(\d+\)$/)?.[0] ? ` ${option.label.match(/\(\d+\)$/)?.[0]}` : ""}`
-          : option.label,
-      }));
-    },
-    [agentNameById, globalMapStatsQuery.data?.options?.agents],
-  );
-
-  useEffect(() => {
-    if (agentFilter === ALL) return;
-    if (agentOptions.some((option) => option.value === agentFilter && !option.disabled)) return;
-    const frame = requestAnimationFrame(() => setAgentFilter(ALL));
-    return () => cancelAnimationFrame(frame);
-  }, [agentFilter, agentOptions]);
+  const agentNameById = useMemo(() => {
+    const byId = new Map<string, string>();
+    agentMetaById.forEach((meta, id) => byId.set(id, meta.name));
+    return byId;
+  }, [agentMetaById]);
+  const agentMetaByName = useMemo(() => {
+    const byName = new Map<string, { name: string; image?: string | null }>();
+    agentMetaById.forEach((meta) => byName.set(normalizeText(meta.name), meta));
+    return byName;
+  }, [agentMetaById]);
+  const weaponMetaByKey = useMemo(() => {
+    const byKey = new Map<string, { name: string; image?: string | null }>();
+    const byName = new Map<string, { name: string; image?: string | null }>();
+    ((weaponsQuery.data as Array<{ uuid?: string | null; displayName?: string | null; displayIcon?: string | null }> | undefined) ?? []).forEach((weapon) => {
+      const meta = { name: weapon.displayName ?? weapon.uuid ?? "", image: weapon.displayIcon };
+      if (weapon.uuid) byKey.set(weapon.uuid, meta);
+      if (weapon.displayName) byName.set(normalizeText(weapon.displayName), meta);
+    });
+    byName.forEach((meta, name) => byKey.set(name, meta));
+    return byKey;
+  }, [weaponsQuery.data]);
 
   useEffect(() => {
     if (actFilter === ALL) return;
-    if (actOptions.some((option) => option.value === actFilter && !option.disabled)) return;
+    if (formattedActOptions.some((option) => option.value === actFilter && !option.disabled)) return;
     const frame = requestAnimationFrame(() => setActFilter(ALL));
     return () => cancelAnimationFrame(frame);
-  }, [actFilter, actOptions]);
+  }, [actFilter, formattedActOptions]);
 
   useEffect(() => {
-    if (rankFilter === ALL) return;
-    if (rankOptions.some((option) => option.value === rankFilter && !option.disabled)) return;
-    const frame = requestAnimationFrame(() => setRankFilter(ALL));
+    if (regionTouchedRef.current || selectedRegion) return;
+    if (playerRegion) {
+      const preferred = regionOptions.find((option) => option.value === playerRegion)?.value ?? playerRegion;
+      const frame = requestAnimationFrame(() => setSelectedRegion(preferred));
+      return () => cancelAnimationFrame(frame);
+    }
+    if (auth.isLoggedIn && auth.user?.puuid && !personalDashboardQuery.isError) return;
+    const fallback = regionOptions.find((option) => option.value)?.value ?? "";
+    if (!fallback) return;
+    const frame = requestAnimationFrame(() => setSelectedRegion(fallback));
     return () => cancelAnimationFrame(frame);
-  }, [rankFilter, rankOptions]);
-
-  useEffect(() => {
-    if (regionTouchedRef.current || selectedRegion || regionOptions.length <= 1) return;
-    const playerRegion = personalDashboardQuery.data?.player?.region?.toLowerCase();
-    const preferred = regionOptions.find((option) => option.value === playerRegion)?.value;
-    if (!preferred) return;
-    const frame = requestAnimationFrame(() => setSelectedRegion(preferred));
-    return () => cancelAnimationFrame(frame);
-  }, [personalDashboardQuery.data?.player?.region, regionOptions, selectedRegion]);
+  }, [auth.isLoggedIn, auth.user?.puuid, personalDashboardQuery.isError, playerRegion, regionOptions, selectedRegion]);
 
   const globalMapStatsById = useMemo(
     () => globalMapStatsQuery.data?.mapStats ?? {},
@@ -517,10 +716,6 @@ export default function Mapas() {
     [globalMapStatsValues],
   );
   const globalTotalMatches = globalMapStatsQuery.data?.sampleSize?.matches ?? 0;
-  const globalTotalRounds = useMemo(
-    () => globalMapStatsValues.reduce((sum, stats) => sum + Number(stats.map_rounds ?? stats.total_rounds ?? 0), 0),
-    [globalMapStatsValues],
-  );
   const hasGlobalStatsDataset = globalMapStatsQuery.isSuccess && globalMapStatsValues.length > 0;
 
   const maps = useMemo<MapEntry[]>(() => {
@@ -542,6 +737,12 @@ export default function Mapas() {
     );
     return flat.sort((a, b) => a.groupOrder - b.groupOrder || a.displayName.localeCompare(b.displayName));
   }, [globalMapStatsById, globalPriorWinRate, query.data]);
+  const globalMapCohort = useMemo(
+    () => maps
+      .map((map) => map.computedGlobalStats)
+      .filter((stats): stats is ComputedMapStats => Boolean(stats)),
+    [maps],
+  );
 
   const personalStatsByMapKey = useMemo(() => {
     const byKey = new Map<string, ComputedMapStats>();
@@ -549,13 +750,13 @@ export default function Mapas() {
       const stats = calculatePersonalMapStats(
         personalDashboardQuery.data?.analyticsList,
         map,
-        { act: actFilter, rank: rankFilter, agent: agentFilter },
+        { act: actFilter },
         globalPriorWinRate,
       );
       if (stats) byKey.set(getMapStatsKey(map), stats);
     }
     return byKey;
-  }, [actFilter, agentFilter, globalPriorWinRate, maps, personalDashboardQuery.data?.analyticsList, rankFilter]);
+  }, [actFilter, globalPriorWinRate, maps, personalDashboardQuery.data?.analyticsList]);
 
   useEffect(() => {
     if (!selected) return;
@@ -577,22 +778,22 @@ export default function Mapas() {
     () => calculatePersonalMapStats(
       personalDashboardQuery.data?.analyticsList,
       selected,
-      { act: actFilter, rank: rankFilter, agent: agentFilter },
+      { act: actFilter },
       globalPriorWinRate,
     ),
-    [actFilter, agentFilter, globalPriorWinRate, personalDashboardQuery.data?.analyticsList, rankFilter, selected],
+    [actFilter, globalPriorWinRate, personalDashboardQuery.data?.analyticsList, selected],
   );
   const comparisonMetrics = useMemo(
-    () => buildComparisonMetrics(selectedStats, personalStats),
-    [personalStats, selectedStats],
+    () => buildComparisonMetrics(selectedStats, personalStats, globalMapCohort),
+    [globalMapCohort, personalStats, selectedStats],
   );
   const roundTypeShares = useMemo(
     () => {
       const globalShares = buildRoundCeremonySharesFromGlobal(selected?.globalStats);
       if (globalShares.length > 0) return globalShares;
-      return calculateRoundTypeShares(personalDashboardQuery.data?.analyticsList, selected, { act: actFilter, rank: rankFilter, agent: agentFilter });
+      return calculateRoundTypeShares(personalDashboardQuery.data?.analyticsList, selected, { act: actFilter });
     },
-    [actFilter, agentFilter, personalDashboardQuery.data?.analyticsList, rankFilter, selected],
+    [actFilter, personalDashboardQuery.data?.analyticsList, selected],
   );
   const selectedGlobalMapKey = selected
     ? (globalMapStatsById[getMapStatsKey(selected)]
@@ -604,9 +805,8 @@ export default function Mapas() {
     () => getBestAgents(
       (selectedGlobalMapKey ? globalMapStatsQuery.data?.agentStatsByMap?.[selectedGlobalMapKey] : undefined)
         ?? selectedGlobalMapStats?.agent_stats,
-    )
-      .filter((agent) => agentFilter === ALL || agent.agentId === agentFilter),
-    [agentFilter, globalMapStatsQuery.data?.agentStatsByMap, selectedGlobalMapKey, selectedGlobalMapStats?.agent_stats],
+    ),
+    [globalMapStatsQuery.data?.agentStatsByMap, selectedGlobalMapKey, selectedGlobalMapStats?.agent_stats],
   );
   const bestWeapons = useMemo(
     () => {
@@ -615,9 +815,9 @@ export default function Mapas() {
           ?? selectedGlobalMapStats?.weapon_stats,
       );
       if (globalRows.length > 0) return globalRows;
-      return buildBestWeaponsForMap(personalDashboardQuery.data?.analyticsList, selected, { act: actFilter, rank: rankFilter, agent: agentFilter });
+      return buildBestWeaponsForMap(personalDashboardQuery.data?.analyticsList, selected, { act: actFilter });
     },
-    [actFilter, agentFilter, globalMapStatsQuery.data?.weaponStatsByMap, personalDashboardQuery.data?.analyticsList, rankFilter, selected, selectedGlobalMapKey, selectedGlobalMapStats?.weapon_stats],
+    [actFilter, globalMapStatsQuery.data?.weaponStatsByMap, personalDashboardQuery.data?.analyticsList, selected, selectedGlobalMapKey, selectedGlobalMapStats?.weapon_stats],
   );
   const bestCompositions = useMemo(
     () => {
@@ -629,11 +829,11 @@ export default function Mapas() {
       return buildBestCompositionsForMap(
       personalDashboardQuery.data?.analyticsList,
       selected,
-      { act: actFilter, rank: rankFilter, agent: agentFilter },
+      { act: actFilter },
       agentNameById,
       );
     },
-    [actFilter, agentFilter, agentNameById, globalMapStatsQuery.data?.compositionsByMap, personalDashboardQuery.data?.analyticsList, rankFilter, selected, selectedGlobalMapKey, selectedGlobalMapStats?.composition_stats],
+    [actFilter, agentNameById, globalMapStatsQuery.data?.compositionsByMap, personalDashboardQuery.data?.analyticsList, selected, selectedGlobalMapKey, selectedGlobalMapStats?.composition_stats],
   );
 
   const filtered = useMemo(() => {
@@ -678,16 +878,30 @@ export default function Mapas() {
     return () => cancelAnimationFrame(frame);
   }, [availableModeOptions, modeFilter]);
 
-  const kpis = [
-    ["Mapas", formatNumber(filtered.length, 0)],
-    ["Partidas globales", formatCompactNumber(globalTotalMatches)],
-    ["Rondas mapa", formatCompactNumber(globalTotalRounds)],
-    ["Region", selectedRegion ? selectedRegion.toUpperCase() : "Todas"],
-  ];
-
   const selectedSites = inferSiteCount(selected);
   const activeModeLabel = optionLabel(MODE_OPTIONS, modeFilter);
-  const showPersonalComparison = auth.isLoggedIn;
+  const activeFilterItems = [
+    search.trim() ? `Busqueda: ${search.trim()}` : null,
+    modeFilter !== COMPETITIVE ? `Modo: ${activeModeLabel}` : null,
+    selectedRegion ? `Region: ${selectedRegion.toUpperCase()}` : null,
+    actFilter !== ALL ? `Acto: ${optionLabel(formattedActOptions, actFilter)}` : null,
+    sortKey !== "name" ? `Orden: ${optionLabel(SORT_OPTIONS, sortKey)}` : null,
+  ].filter((item): item is string => Boolean(item));
+  const resetFilters = () => {
+    setSearch("");
+    setModeFilter(COMPETITIVE);
+    setActFilter(ALL);
+    setSortKey("name");
+    regionTouchedRef.current = false;
+    setSelectedRegion(playerRegion ?? regionOptions.find((option) => option.value)?.value ?? "");
+  };
+  const showPersonalComparison = auth.isLoggedIn && Boolean(personalStats?.matches);
+  const showStatsLoading =
+    isWaitingForPlayerRegion ||
+    regionsQuery.isLoading ||
+    globalMapStatsQuery.isLoading ||
+    globalMapStatsQuery.isFetching;
+  const showSelectedStatsLoading = Boolean(selected) && showStatsLoading;
   const togglePanel = (key: MapPanelKey) => {
     setOpenPanels((current) => ({ ...current, [key]: !current[key] }));
   };
@@ -714,19 +928,25 @@ export default function Mapas() {
 
       {!query.isError && maps.length > 0 && (
         <>
-          <div className="mapas-kpi-row">
-            {kpis.map(([label, value]) => (
-              <div className="mapas-kpi" key={label}>
-                <span>{label}</span>
-                <strong>{value}</strong>
+          <section className="mapas-filter-panel" aria-label="Filtros de mapas">
+            <div className="mapas-filter-panel__header">
+              <div>
+                <span>Filtros</span>
+                <strong>{filtered.length} mapas encontrados</strong>
               </div>
-            ))}
-          </div>
+              <button
+                className="mapas-filter-reset"
+                type="button"
+                onClick={resetFilters}
+                disabled={activeFilterItems.length === 0}
+              >
+                Limpiar
+              </button>
+            </div>
 
-          <div className="content-toolbar content-toolbar--skins mapas-toolbar">
-            <label className="content-select-label content-select-label--premium content-filter-field--search">
-              Buscar
-              <span className="mapas-search-line">
+            <div className="mapas-filter-grid">
+              <label className="content-select-label content-select-label--premium mapas-filter-field mapas-filter-field--search">
+                Buscar
                 <input
                   className="content-search content-search--premium"
                   type="search"
@@ -734,53 +954,65 @@ export default function Mapas() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
-                <span className="content-result-count">{filtered.length} mapas</span>
-              </span>
-            </label>
-            <label className="content-select-label content-select-label--premium">
-              Modo
-              <select className="content-select content-select--premium" value={modeFilter} onChange={(event) => setModeFilter(event.target.value)}>
-                {availableModeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="content-select-label content-select-label--premium">
-              Region
-              <select
-                className="content-select content-select--premium"
-                value={selectedRegion}
-                onChange={(event) => {
-                  regionTouchedRef.current = true;
-                  setSelectedRegion(event.target.value);
-                }}
-              >
-                {regionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="content-select-label content-select-label--premium">
-              Acto
-              <select className="content-select content-select--premium" value={actFilter} onChange={(event) => setActFilter(event.target.value)}>
-                {actOptions.map((option) => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="content-select-label content-select-label--premium">
-              Rango
-              <select className="content-select content-select--premium" value={rankFilter} onChange={(event) => setRankFilter(event.target.value)}>
-                {rankOptions.map((option) => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="content-select-label content-select-label--premium">
-              Agente
-              <select className="content-select content-select--premium" value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)}>
-                {agentOptions.map((option) => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="content-select-label content-select-label--premium">
-              Orden
-              <select className="content-select content-select--premium" value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
-                {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-          </div>
+              </label>
+              <label className="content-select-label content-select-label--premium mapas-filter-field">
+                Modo
+                <select className="content-select content-select--premium" value={modeFilter} onChange={(event) => setModeFilter(event.target.value)}>
+                  {availableModeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+              <label className="content-select-label content-select-label--premium mapas-filter-field">
+                Region
+                <select
+                  className="content-select content-select--premium"
+                  value={selectedRegion}
+                  onChange={(event) => {
+                    regionTouchedRef.current = true;
+                    setSelectedRegion(event.target.value);
+                  }}
+                >
+                  {selectedRegion && !regionOptions.some((option) => option.value === selectedRegion) && (
+                    <option value={selectedRegion}>{selectedRegion.toUpperCase()}</option>
+                  )}
+                  {regionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+              <label className="content-select-label content-select-label--premium mapas-filter-field">
+                Acto
+                <select className="content-select content-select--premium" value={actFilter} onChange={(event) => setActFilter(event.target.value)}>
+                  {formattedActOptions.map((option) => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
+                </select>
+              </label>
+              <label className="content-select-label content-select-label--premium mapas-filter-field">
+                Orden
+                <select className="content-select content-select--premium" value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
+                  {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <div className="mapas-active-filters" aria-live="polite">
+              {activeFilterItems.length > 0 ? (
+                activeFilterItems.map((item) => <span key={item}>{item}</span>)
+              ) : (
+                <span>Sin filtros adicionales</span>
+              )}
+            </div>
+          </section>
+
+          {showStatsLoading && (
+            <div className="mapas-inline-loading" role="status" aria-live="polite">
+              <div className="loading-spinner" />
+              <span>Cargando estadísticas globales</span>
+            </div>
+          )}
+
+          {globalMapStatsQuery.isError && (
+            <ContentError
+              message="No se pudieron cargar las estadísticas globales. Los mapas siguen disponibles."
+              onRetry={() => globalMapStatsQuery.refetch()}
+            />
+          )}
 
           {selected && (
             <article className="content-detail mapas-detail" id="mapas-detail">
@@ -820,7 +1052,12 @@ export default function Mapas() {
                 openPanels={openPanels}
                 togglePanel={togglePanel}
               >
-                {!showPersonalComparison ? (
+                {showSelectedStatsLoading ? (
+                  <div className="mapas-inline-loading" role="status" aria-live="polite">
+                    <div className="loading-spinner" />
+                    <span>Cargando estadisticas del mapa</span>
+                  </div>
+                ) : !showPersonalComparison ? (
                   <StatGrid stats={selectedStats} totalMatches={globalTotalMatches} />
                 ) : (
                   <>
@@ -843,10 +1080,10 @@ export default function Mapas() {
                         <span role="cell">{metric.label}</span>
                         <strong role="cell">{metric.globalLabel}</strong>
                         <strong role="cell">{metric.personalLabel}</strong>
-                        <em role="cell" className={`metric-diff metric-diff-${getMetricTone(metric, "diff")}`}>{metric.diffLabel}</em>
+                        <em role="cell" className={metric.diffLabel === "-" ? "metric-diff metric-diff-plain" : `metric-diff metric-diff-${getMetricTone(metric, "diff")}`}>{metric.diffLabel}</em>
                         <strong role="cell">{metric.globalNormalizedLabel ?? "-"}</strong>
                         <strong role="cell">{metric.personalNormalizedLabel ?? "-"}</strong>
-                        <em role="cell" className={`metric-diff metric-diff-${getMetricTone(metric, "normalizedDiff")}`}>{metric.normalizedDiffLabel ?? "-"}</em>
+                        <em role="cell" className={(metric.normalizedDiffLabel ?? "-") === "-" ? "metric-diff metric-diff-plain" : `metric-diff metric-diff-${getMetricTone(metric, "normalizedDiff")}`}>{metric.normalizedDiffLabel ?? "-"}</em>
                       </div>
                     ))}
                   </div>
@@ -861,7 +1098,12 @@ export default function Mapas() {
 
               <DetailAccordion panelKey="roundTypes" title="Tipos de rondas ganadas" openPanels={openPanels} togglePanel={togglePanel}>
                 <p className="mapas-panel-helper">Porcentajes calculados solo con roundCeremony sobre rondas ganadas del mapa.</p>
-                {roundTypeShares.length === 0 ? (
+                {showSelectedStatsLoading ? (
+                  <div className="mapas-inline-loading" role="status" aria-live="polite">
+                    <div className="loading-spinner" />
+                    <span>Cargando estadisticas del mapa</span>
+                  </div>
+                ) : roundTypeShares.length === 0 ? (
                   <div className="mapas-empty-panel">Sin datos de ceremonias de ronda.</div>
                 ) : (
                   <div className="mapas-mini-list">
@@ -877,13 +1119,21 @@ export default function Mapas() {
               </DetailAccordion>
 
               <DetailAccordion panelKey="agents" title="Mejores agentes" openPanels={openPanels} togglePanel={togglePanel}>
-                {bestAgents.length === 0 ? (
+                {showSelectedStatsLoading ? (
+                  <div className="mapas-inline-loading" role="status" aria-live="polite">
+                    <div className="loading-spinner" />
+                    <span>Cargando estadisticas del mapa</span>
+                  </div>
+                ) : bestAgents.length === 0 ? (
                   <div className="mapas-empty-panel">Sin datos de agentes para este mapa con los filtros actuales.</div>
                 ) : (
                   <div className="mapas-mini-list">
                     {bestAgents.map((agent) => (
                       <div className="mapas-mini-row" key={agent.agentId}>
-                        <span>{agent.name}</span>
+                        <span className="mapas-mini-identity">
+                          <ContentThumb src={agentMetaById.get(agent.agentId)?.image} alt="" />
+                          <span>{agent.name}</span>
+                        </span>
                         <strong>{formatPercent(agent.score, 1)} score</strong>
                         <small>{formatPercent(agent.winRate, 1)} WR - {formatNumber(agent.matches, 0)} partidas - {formatNumber(agent.rounds, 0)} rondas - pick {formatMaybePercent(agent.pickRate)} - {agent.sampleConfidence < 0.6 ? "baja muestra" : "muestra estable"}</small>
                       </div>
@@ -893,13 +1143,21 @@ export default function Mapas() {
               </DetailAccordion>
 
               <DetailAccordion panelKey="weapons" title="Mejores armas" openPanels={openPanels} togglePanel={togglePanel}>
-                {bestWeapons.length === 0 ? (
+                {showSelectedStatsLoading ? (
+                  <div className="mapas-inline-loading" role="status" aria-live="polite">
+                    <div className="loading-spinner" />
+                    <span>Cargando estadisticas del mapa</span>
+                  </div>
+                ) : bestWeapons.length === 0 ? (
                   <div className="mapas-empty-panel">Sin datos personales de armas por mapa. El agregado global aun no separa armas por mapa.</div>
                 ) : (
                   <div className="mapas-mini-list">
                     {bestWeapons.map((weapon) => (
                       <div className="mapas-mini-row" key={weapon.key}>
-                        <span>{weapon.name}</span>
+                        <span className="mapas-mini-identity">
+                          <ContentThumb src={(weaponMetaByKey.get(weapon.key) ?? weaponMetaByKey.get(normalizeText(weapon.name)))?.image} alt="" className="mapas-thumb--weapon" />
+                          <span>{weapon.name}</span>
+                        </span>
                         <strong>{formatMaybeNumber(weapon.score, 1)} score</strong>
                         <small>{formatMaybePercent(weapon.winRate)} WR - {formatNumber(weapon.kills, 0)} kills - {formatNumber(weapon.rounds, 0)} rondas - {formatNumber(weapon.killsPerRound, 2)} K/R - HS {formatMaybePercent(weapon.hsPct)} - {(weapon.sampleConfidence ?? 0) < 0.6 ? "baja muestra" : "muestra estable"}</small>
                       </div>
@@ -909,7 +1167,12 @@ export default function Mapas() {
               </DetailAccordion>
 
               <DetailAccordion panelKey="compositions" title="Mejores composiciones" openPanels={openPanels} togglePanel={togglePanel}>
-                {bestCompositions.length === 0 ? (
+                {showSelectedStatsLoading ? (
+                  <div className="mapas-inline-loading" role="status" aria-live="polite">
+                    <div className="loading-spinner" />
+                    <span>Cargando estadisticas del mapa</span>
+                  </div>
+                ) : bestCompositions.length === 0 ? (
                   <div className="mapas-empty-panel">
                     Sin composiciones exactas de 5 agentes para este mapa con los filtros actuales.
                   </div>
@@ -917,7 +1180,14 @@ export default function Mapas() {
                   <div className="mapas-mini-list">
                     {bestCompositions.map((composition) => (
                       <div className="mapas-mini-row" key={composition.key}>
-                        <span>{composition.agents.join(" / ")}</span>
+                        <span className="mapas-composition-identity">
+                          {(composition.key ? composition.key.split("|") : []).slice(0, 5).map((agentId, index) => {
+                            const fallbackName = composition.agents[index] ?? agentId;
+                            const meta = agentMetaById.get(agentId) ?? agentMetaByName.get(normalizeText(fallbackName));
+                            return <ContentThumb key={`${composition.key}-${agentId}-${index}`} src={meta?.image} alt={meta?.name ?? fallbackName} />;
+                          })}
+                          <span>{composition.agents.join(" / ")}</span>
+                        </span>
                         <strong>{formatMaybeNumber(composition.score, 1)} score</strong>
                         <small>
                           {formatMaybePercent(composition.winRate)} WR - {formatNumber(composition.matches, 0)} partidas - {formatNumber(composition.roundsWon, 0)}-{formatNumber(composition.roundsLost, 0)} rondas - {(composition.sampleConfidence ?? 0) < 0.6 ? "baja muestra" : "muestra estable"}

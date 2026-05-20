@@ -8,13 +8,13 @@ from time import monotonic
 from typing import Any
 
 try:
-    from infrastructure.mongo_client import content_collection, matches_collection
+    from infrastructure.mongo_client import content_collection, matches_collection, regions_collection
     from shared.stat_formulas import finalize_core_stats
 except ModuleNotFoundError:
     backend_root = Path(__file__).resolve().parents[3]
     if str(backend_root) not in sys.path:
         sys.path.append(str(backend_root))
-    from backend.infrastructure.mongo_client import content_collection, matches_collection
+    from backend.infrastructure.mongo_client import content_collection, matches_collection, regions_collection
     from backend.shared.stat_formulas import finalize_core_stats
 
 
@@ -66,6 +66,10 @@ _RANK_NAMES = {
 _OPTIONS_CACHE_TTL_SECONDS = 600.0
 _options_cache: dict[str, tuple[float, dict[str, list[dict[str, Any]]]]] = {}
 _options_cache_lock = Lock()
+_MAP_STATS_CACHE_TTL_SECONDS = 600.0
+_map_options_cache: dict[str, tuple[float, dict[str, list[dict[str, Any]]]]] = {}
+_map_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_map_stats_cache_lock = Lock()
 
 
 def _safe_div(num: float, den: float) -> float:
@@ -391,6 +395,240 @@ def _build_map_options_for_filters(
     return {"maps": maps, "acts": acts, "ranks": ranks, "agents": agents}
 
 
+def _build_map_options_for_filters_cached(
+    *,
+    region: str | None,
+    map_id: str | None,
+    act_id: str | None,
+    rank: int | None,
+    agent_id: str | None,
+) -> dict[str, list[dict[str, Any]]]:
+    cache_key = "|".join([
+        region or "",
+        map_id or "",
+        act_id or "",
+        str(rank or ""),
+        agent_id or "",
+    ])
+    now = monotonic()
+    with _map_stats_cache_lock:
+        cached = _map_options_cache.get(cache_key)
+        if cached and cached[0] > now:
+            return cached[1]
+
+    options = _build_map_options_for_filters(
+        region=region,
+        map_id=map_id,
+        act_id=act_id,
+        rank=rank,
+        agent_id=agent_id,
+    )
+    with _map_stats_cache_lock:
+        _map_options_cache[cache_key] = (now + _MAP_STATS_CACHE_TTL_SECONDS, options)
+    return options
+
+
+def _normalize_round_ceremonies(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, int] = {}
+    for key, value in raw.items():
+        if isinstance(value, dict):
+            amount = value.get("wins", value.get("rounds", 0))
+        else:
+            amount = value
+        try:
+            result[str(key)] = int(amount or 0)
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def _project_region_map_stats(map_stats: dict[str, Any]) -> dict[str, Any]:
+    """Keep legacy region map aggregates compatible with /regions/map-stats."""
+    projected = dict(map_stats)
+    projected["round_ceremonies"] = _normalize_round_ceremonies(projected.get("round_ceremonies"))
+    agent_stats = projected.get("agent_stats") if isinstance(projected.get("agent_stats"), dict) else {}
+    player_matches = sum(
+        int((row or {}).get("matches") or (row or {}).get("matches_played") or (row or {}).get("picks") or 0)
+        for row in agent_stats.values()
+        if isinstance(row, dict)
+    )
+    player_wins = sum(
+        int((row or {}).get("wins") or 0)
+        for row in agent_stats.values()
+        if isinstance(row, dict)
+    )
+    if not projected.get("player_matches") and player_matches:
+        projected["player_matches"] = player_matches
+    if not projected.get("wins") and player_wins:
+        projected["wins"] = player_wins
+    if not projected.get("player_win_rate"):
+        projected["player_win_rate"] = _safe_div(
+            float(projected.get("wins") or 0) * 100.0,
+            int(projected.get("player_matches") or 0),
+        )
+    if not projected.get("map_rounds"):
+        projected["map_rounds"] = projected.get("total_rounds") or projected.get("rounds_played") or 0
+    projected["agent_stats"] = agent_stats
+    projected["weapon_stats"] = projected.get("weapon_stats") or {}
+    composition_stats = projected.get("composition_stats") or {}
+    if isinstance(composition_stats, dict):
+        composition_stats = list(composition_stats.values())
+    projected["composition_stats"] = composition_stats if isinstance(composition_stats, list) else []
+    return projected
+
+
+def _merge_precomputed_map_stats(region_docs: list[dict[str, Any]]) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    for doc in region_docs:
+        for map_id, raw_stats in (doc.get("mapStats") or {}).items():
+            stats = _project_region_map_stats(raw_stats if isinstance(raw_stats, dict) else {})
+            target = merged.setdefault(str(map_id), {
+                "map_name": stats.get("map_name") or str(map_id),
+                "matches": 0,
+                "player_matches": 0,
+                "wins": 0,
+                "map_rounds": 0,
+                "player_rounds": 0,
+                "team_round_wins": 0,
+                "team_round_losses": 0,
+                "rounds_with_kast": 0,
+                "assists": 0,
+                "survival_rounds": 0,
+                "clutch_opportunities": 0,
+                "clutches_won": 0,
+                "round_ceremonies": Counter(),
+                "sides": {"attack": Counter(), "defense": Counter()},
+                "totals": Counter(),
+            })
+            for field in (
+                "matches", "player_matches", "wins", "map_rounds", "player_rounds",
+                "team_round_wins", "team_round_losses", "rounds_with_kast", "assists",
+                "survival_rounds", "clutch_opportunities", "clutches_won",
+            ):
+                target[field] += int(stats.get(field) or stats.get("matches_played" if field == "matches" else field) or 0)
+            target["round_ceremonies"].update(_normalize_round_ceremonies(stats.get("round_ceremonies")))
+            for side_name in ("attack", "defense"):
+                side = stats.get("sides", {}).get(side_name, {}) if isinstance(stats.get("sides"), dict) else {}
+                side_counter = target["sides"][side_name]
+                side_counter["rounds"] += int(side.get("rounds", stats.get(f"{side_name}_rounds", 0)) or 0)
+                side_counter["wins"] += int(side.get("wins", stats.get(f"{side_name}_wins", 0)) or 0)
+                side_counter["kills"] += int(side.get("kills", 0) or 0)
+                side_counter["deaths"] += int(side.get("deaths", 0) or 0)
+                side_counter["damage_dealt"] += int(float(side.get("adr", 0) or 0) * int(side.get("rounds", 0) or 0))
+            averages = stats.get("averages") or {}
+            player_rounds = int(stats.get("player_rounds") or 0)
+            target["totals"]["kills"] += int(stats.get("kills") or float(averages.get("kills_per_round", 0) or 0) * player_rounds)
+            target["totals"]["deaths"] += int(stats.get("deaths") or float(averages.get("deaths_per_round", 0) or 0) * player_rounds)
+            target["totals"]["assists"] += int(stats.get("assists") or float(averages.get("assists_per_round", 0) or 0) * player_rounds)
+            target["totals"]["damage_dealt"] += int(stats.get("damage_dealt") or float(averages.get("adr", 0) or 0) * player_rounds)
+            target["totals"]["score"] += int(float(averages.get("acs", 0) or 0) * player_rounds)
+            target["totals"]["rounds"] += player_rounds
+            target["totals"]["rounds_with_kast"] += int(stats.get("rounds_with_kast") or 0)
+            target["totals"]["survival_rounds"] += int(stats.get("survival_rounds") or 0)
+            target["totals"]["clutch_opportunities"] += int(stats.get("clutch_opportunities") or 0)
+            target["totals"]["clutches_won"] += int(stats.get("clutches_won") or 0)
+
+    result: dict[str, Any] = {}
+    for map_id, bucket in merged.items():
+        totals = dict(bucket["totals"])
+        derived = _finalize_with_legacy_rates(totals)
+        sides = {}
+        for side_name, side_counter in bucket["sides"].items():
+            rounds = int(side_counter.get("rounds", 0) or 0)
+            wins = int(side_counter.get("wins", 0) or 0)
+            sides[side_name] = {
+                "rounds": rounds,
+                "wins": wins,
+                "win_rate": _safe_div(wins * 100.0, rounds),
+                "kills": int(side_counter.get("kills", 0) or 0),
+                "deaths": int(side_counter.get("deaths", 0) or 0),
+                "adr": _safe_div(float(side_counter.get("damage_dealt", 0) or 0), rounds),
+                "kills_per_round": _safe_div(float(side_counter.get("kills", 0) or 0), rounds),
+            }
+        result[map_id] = {
+            "map_name": bucket["map_name"],
+            "matches": int(bucket["matches"]),
+            "player_matches": int(bucket["player_matches"]),
+            "wins": int(bucket["wins"]),
+            "map_rounds": int(bucket["map_rounds"]),
+            "player_rounds": int(bucket["player_rounds"]),
+            "team_round_wins": int(bucket["team_round_wins"]),
+            "team_round_losses": int(bucket["team_round_losses"]),
+            "total_rounds": int(bucket["map_rounds"]),
+            "rounds_with_kast": int(bucket["rounds_with_kast"]),
+            "assists": int(bucket["assists"]),
+            "survival_rounds": int(bucket["survival_rounds"]),
+            "clutch_opportunities": int(bucket["clutch_opportunities"]),
+            "clutches_won": int(bucket["clutches_won"]),
+            "win_rate": _safe_div(int(bucket["wins"]) * 100.0, int(bucket["player_matches"])),
+            "player_win_rate": _safe_div(int(bucket["wins"]) * 100.0, int(bucket["player_matches"])),
+            "team_round_win_rate": _safe_div(
+                int(bucket["team_round_wins"]) * 100.0,
+                int(bucket["team_round_wins"]) + int(bucket["team_round_losses"]),
+            ),
+            "kast_pct": derived.get("kast_pct", 0.0),
+            "survival_rate": derived["survival_rate"],
+            "clutch_win_rate": derived["clutch_win_rate"],
+            "averages": {
+                "kd_ratio": derived["kd_ratio"],
+                "acs": derived["acs"],
+                "adr": derived["adr"],
+                "headshot_pct": derived["headshot_pct"],
+                "kast_pct": derived.get("kast_pct", 0.0),
+                "survival_rate": derived["survival_rate"],
+                "clutch_win_rate": derived["clutch_win_rate"],
+                "kills_per_round": derived["kills_per_round"],
+                "deaths_per_round": derived["deaths_per_round"],
+                "assists_per_round": derived["assists_per_round"],
+            },
+            "sides": sides,
+            "round_ceremonies": dict(bucket["round_ceremonies"]),
+        }
+    return result
+
+
+def _precomputed_map_stats_payload(region: str | None) -> dict[str, Any] | None:
+    query = {"region": region} if region else {}
+    docs = list(regions_collection.find(query, {"_id": 0, "region": 1, "mapStats": 1, "updatedAt": 1}))
+    if not docs:
+        return None
+    if region and len(docs) == 1:
+        map_stats = {
+            str(map_id): _project_region_map_stats(stats if isinstance(stats, dict) else {})
+            for map_id, stats in (docs[0].get("mapStats") or {}).items()
+        }
+    else:
+        map_stats = _merge_precomputed_map_stats(docs)
+    agent_stats_by_map = {
+        map_id: stats.get("agent_stats", {})
+        for map_id, stats in map_stats.items()
+        if isinstance(stats.get("agent_stats"), dict)
+    }
+    weapon_stats_by_map = {
+        map_id: stats.get("weapon_stats", {})
+        for map_id, stats in map_stats.items()
+        if isinstance(stats.get("weapon_stats"), dict)
+    }
+    compositions_by_map = {
+        map_id: stats.get("composition_stats", [])
+        for map_id, stats in map_stats.items()
+        if isinstance(stats.get("composition_stats"), list)
+    }
+    return {
+        "mapStats": map_stats,
+        "agentStatsByMap": agent_stats_by_map,
+        "weaponStatsByMap": weapon_stats_by_map,
+        "compositionsByMap": compositions_by_map,
+        "sampleSize": {
+            "matches": sum(int(stats.get("matches") or stats.get("matches_played") or 0) for stats in map_stats.values()),
+            "players": sum(int(stats.get("player_matches") or 0) for stats in map_stats.values()),
+            "maps": len(map_stats),
+        },
+    }
+
+
 def get_global_agent_stats(
     *,
     region: str | None = None,
@@ -517,6 +755,39 @@ def get_global_map_stats(
     act_norm = _normalize_filter(act_id)
     agent_norm = _normalize_filter(agent_id)
     rank_tier = _coerce_rank(rank)
+    cache_key = "|".join([
+        region_norm or "",
+        str(rank_tier or ""),
+        map_norm or "",
+        act_norm or "",
+        agent_norm or "",
+    ])
+    now = monotonic()
+    with _map_stats_cache_lock:
+        cached = _map_stats_cache.get(cache_key)
+        if cached and cached[0] > now:
+            return cached[1]
+
+    can_use_precomputed = rank_tier is None and map_norm is None and act_norm is None and agent_norm is None
+    if can_use_precomputed:
+        precomputed = _precomputed_map_stats_payload(region_norm)
+        if precomputed:
+            payload = {
+                "filters": {
+                    "region": region_norm,
+                    "rank": None,
+                    "map": None,
+                    "act": None,
+                    "agent": None,
+                },
+                "options": _build_options_cached(region_norm),
+                "warnings": [],
+                "statsSource": "regions_precomputed",
+                **precomputed,
+            }
+            with _map_stats_cache_lock:
+                _map_stats_cache[cache_key] = (now + _MAP_STATS_CACHE_TTL_SECONDS, payload)
+            return payload
 
     query = _base_match_query(region_norm, map_norm, act_norm)
     projection = {
@@ -526,6 +797,7 @@ def get_global_map_stats(
         "matchInfo.seasonId": 1,
         "teams": 1,
         "roundResults.roundCeremony": 1,
+        "roundResults.winningTeam": 1,
         "players.teamId": 1,
         "players.characterId": 1,
         "players.competitiveTier": 1,
@@ -574,8 +846,13 @@ def get_global_map_stats(
         match_has_filtered_player = False
         filtered_player_teams: set[str] = set()
         teams_raw = [team for team in (match.get("teams") or []) if isinstance(team, dict)]
+        analytics_players = [
+            player
+            for player in (match.get("players", []) or [])
+            if isinstance(player, dict) and player.get("analytics")
+        ]
 
-        for player in match.get("players", []) or []:
+        for player in analytics_players:
             if not _player_matches_map_filters(player, rank=rank_tier, agent_id=agent_norm):
                 continue
             analytics = player.get("analytics") or {}
@@ -596,34 +873,6 @@ def get_global_map_stats(
                 target = bucket["sides"][side_name]
                 for field in ("rounds", "wins", "kills", "deaths", "damage_dealt", "score"):
                     target[field] += int(side.get(field, 0) or 0)
-
-            current_agent_id = str(player.get("characterId") or "UNKNOWN")
-            agent_bucket = map_agents[current_map_id][current_agent_id]
-            agent_bucket["agent_name"] = analytics.get("agent_name") or agent_names.get(current_agent_id, current_agent_id)
-            agent_bucket["picks"] += 1
-            agent_bucket["wins"] += 1 if analytics.get("won_match") else 0
-            for field in _SUM_FIELDS:
-                agent_bucket["totals"][field] += int(overview.get(field, 0) or 0)
-            _add_legacy_rate_fallbacks(agent_bucket["totals"], overview)
-
-            for weapon in _normalize_weapon_stats(overview.get("weapon_stats")):
-                weapon_id = str(
-                    weapon.get("weapon_id")
-                    or weapon.get("weaponId")
-                    or weapon.get("key")
-                    or weapon.get("name")
-                    or weapon.get("weapon_name")
-                    or "UNKNOWN"
-                )
-                weapon_bucket = map_weapons[current_map_id][weapon_id]
-                weapon_bucket["weapon_name"] = weapon.get("weapon_name") or weapon.get("weaponName") or weapon.get("name") or weapon_id
-                weapon_bucket["is_armor"] = bool(weapon.get("is_armor"))
-                for field in (
-                    "rounds", "rounds_equipped", "rounds_purchased", "wins", "kills", "deaths",
-                    "headshots", "bodyshots", "legshots", "damage_dealt", "damage_received",
-                    "survival_rounds", "loadout_value_total",
-                ):
-                    weapon_bucket[field] += int(weapon.get(field, 0) or 0)
 
             filtered_players += 1
             match_has_filtered_player = True
@@ -664,6 +913,37 @@ def get_global_map_stats(
                 bucket["team_round_wins"] += rounds_won
                 bucket["team_round_losses"] += rounds_lost
 
+            for player in analytics_players:
+                analytics = player.get("analytics") or {}
+                overview = analytics.get("overview") or {}
+                current_agent_id = str(player.get("characterId") or "UNKNOWN")
+                agent_bucket = map_agents[current_map_id][current_agent_id]
+                agent_bucket["agent_name"] = analytics.get("agent_name") or agent_names.get(current_agent_id, current_agent_id)
+                agent_bucket["picks"] += 1
+                agent_bucket["wins"] += 1 if analytics.get("won_match") else 0
+                for field in _SUM_FIELDS:
+                    agent_bucket["totals"][field] += int(overview.get(field, 0) or 0)
+                _add_legacy_rate_fallbacks(agent_bucket["totals"], overview)
+
+                for weapon in _normalize_weapon_stats(overview.get("weapon_stats")):
+                    weapon_id = str(
+                        weapon.get("weapon_id")
+                        or weapon.get("weaponId")
+                        or weapon.get("key")
+                        or weapon.get("name")
+                        or weapon.get("weapon_name")
+                        or "UNKNOWN"
+                    )
+                    weapon_bucket = map_weapons[current_map_id][weapon_id]
+                    weapon_bucket["weapon_name"] = weapon.get("weapon_name") or weapon.get("weaponName") or weapon.get("name") or weapon_id
+                    weapon_bucket["is_armor"] = bool(weapon.get("is_armor"))
+                    for field in (
+                        "rounds", "rounds_equipped", "rounds_purchased", "wins", "kills", "deaths",
+                        "headshots", "bodyshots", "legshots", "damage_dealt", "damage_received",
+                        "survival_rounds", "loadout_value_total",
+                    ):
+                        weapon_bucket[field] += int(weapon.get(field, 0) or 0)
+
         team_results = {
             str(team.get("teamId") or "").lower(): team
             for team in match.get("teams", []) or []
@@ -678,12 +958,12 @@ def get_global_map_stats(
         for team_id, players in players_by_team.items():
             if len(players) != 5:
                 continue
-            if rank_tier is not None and not any(_coerce_rank(player.get("competitiveTier")) == rank_tier for player in players):
+            if rank_tier is not None and not match_has_filtered_player:
+                continue
+            if agent_norm and not match_has_filtered_player:
                 continue
             team_agent_ids = sorted(str(player.get("characterId") or "").strip() for player in players)
             if len([agent for agent in team_agent_ids if agent]) != 5:
-                continue
-            if agent_norm and agent_norm not in team_agent_ids:
                 continue
             key = "|".join(team_agent_ids)
             team_result = team_results.get(team_id) or {}
@@ -826,7 +1106,7 @@ def get_global_map_stats(
     elif filtered_players < 100:
         warnings.append("Muestra global baja para el subconjunto filtrado.")
 
-    return {
+    payload = {
         "filters": {
             "region": region_norm,
             "rank": str(rank_tier) if rank_tier is not None else None,
@@ -834,7 +1114,7 @@ def get_global_map_stats(
             "act": act_norm,
             "agent": agent_norm,
         },
-        "options": _build_map_options_for_filters(
+        "options": _build_map_options_for_filters_cached(
             region=region_norm,
             map_id=map_norm,
             act_id=act_norm,
@@ -852,3 +1132,6 @@ def get_global_map_stats(
         "weaponStatsByMap": weapon_stats_by_map,
         "compositionsByMap": compositions_by_map,
     }
+    with _map_stats_cache_lock:
+        _map_stats_cache[cache_key] = (now + _MAP_STATS_CACHE_TTL_SECONDS, payload)
+    return payload

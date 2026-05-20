@@ -2,14 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import type { GlobalAgentStatsFilters, GlobalMapStatsFilters } from "../types/globalStats";
 import { getGlobalAgentStats, getGlobalMapStats, getRegions } from "./globalStats";
 
-const GLOBAL_STATS_STALE = 0;
+const GLOBAL_STATS_STALE = 1000 * 60 * 10;
 
 export function useRegions() {
   return useQuery({
     queryKey: ["global-stats", "regions"],
     queryFn: getRegions,
     staleTime: GLOBAL_STATS_STALE,
-    refetchOnMount: "always",
   });
 }
 
@@ -29,7 +28,7 @@ export function useGlobalAgentStats(filters: GlobalAgentStatsFilters) {
   });
 }
 
-export function useGlobalMapStats(filters: GlobalMapStatsFilters) {
+export function useGlobalMapStats(filters: GlobalMapStatsFilters, enabled = true) {
   return useQuery({
     queryKey: [
       "global-stats",
@@ -41,8 +40,8 @@ export function useGlobalMapStats(filters: GlobalMapStatsFilters) {
       filters.agent ?? "all",
     ],
     queryFn: () => getGlobalMapStats(filters),
+    enabled,
     placeholderData: (previousData) => previousData,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: GLOBAL_STATS_STALE,
   });
 }
