@@ -1,6 +1,6 @@
 import type { AnalyticsMatch } from "../../types/dashboard";
 import type { MapContent } from "../../types/content";
-import type { RegionAgentStats, RegionMapCompositionStats, RegionWeaponStats } from "../../types/globalStats";
+import type { RegionAgentStats, RegionMapAgentStats, RegionMapCompositionStats, RegionMapWeaponStats, RegionWeaponStats } from "../../types/globalStats";
 import { normalizeLabel } from "../../utils/formatters";
 import { bayesianAdjustedRate } from "./mapUtils";
 
@@ -140,7 +140,7 @@ export function buildBestWeaponsForMap(
     .slice(0, 5);
 }
 
-export function buildBestWeaponsFromGlobal(weaponStats: Record<string, RegionWeaponStats> | undefined): WeaponMapRow[] {
+export function buildBestWeaponsFromGlobal(weaponStats: Record<string, RegionWeaponStats | RegionMapWeaponStats> | undefined): WeaponMapRow[] {
   const rows = Object.entries(weaponStats ?? {})
     .filter(([, stats]) => !stats.is_armor)
     .map(([weaponId, stats]) => {
@@ -154,7 +154,9 @@ export function buildBestWeaponsFromGlobal(weaponStats: Record<string, RegionWea
         wins: Number(stats.wins ?? 0),
         hsPct: stats.headshot_pct,
         killsPerRound,
-        winRate: stats.win_rate,
+        winRate: stats.win_rate ?? stats.round_win_rate,
+        score: stats.score,
+        sampleConfidence: stats.sample_confidence,
       };
     })
     .filter((row) => row.kills > 0 || row.rounds > 0);
@@ -171,8 +173,8 @@ export function buildBestWeaponsFromGlobal(weaponStats: Record<string, RegionWea
       const sampleConfidence = clamp(row.rounds / 80);
       return {
         ...row,
-        score: adjustedWinRate * 0.35 + combatScore * 0.35 + useRate * 0.2 + sampleConfidence * 100 * 0.1,
-        sampleConfidence,
+        score: row.score ?? adjustedWinRate * 0.35 + combatScore * 0.35 + useRate * 0.2 + sampleConfidence * 100 * 0.1,
+        sampleConfidence: row.sampleConfidence ?? sampleConfidence,
       };
     })
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.rounds - a.rounds)
@@ -236,8 +238,8 @@ export function buildBestCompositionsForMap(
     .slice(0, 5);
 }
 
-export function buildBestCompositionsFromGlobal(rows: RegionMapCompositionStats[] | undefined): CompositionMapRow[] {
-  const source = rows ?? [];
+export function buildBestCompositionsFromGlobal(rows: RegionMapCompositionStats[] | Record<string, RegionMapCompositionStats> | undefined): CompositionMapRow[] {
+  const source = Array.isArray(rows) ? rows : Object.values(rows ?? {});
   const prior = source.length ? source.reduce((sum, row) => sum + Number(row.win_rate ?? 0), 0) / source.length : 50;
   const maxMatches = Math.max(...source.map((row) => Number(row.matches ?? 0)), 1);
   return source
@@ -247,36 +249,36 @@ export function buildBestCompositionsFromGlobal(rows: RegionMapCompositionStats[
       const playRate = clamp(matches / maxMatches) * 100;
       const sampleConfidence = clamp(matches / 15);
       return {
-        key: row.key,
-        agents: row.agents,
+        key: row.key ?? (row.agent_ids ?? row.agent_names ?? row.agents ?? []).join("|"),
+        agents: row.agents ?? row.agent_names ?? row.agent_ids ?? [],
         matches,
         wins: Number(row.wins ?? 0),
-        roundsWon: Number(row.rounds_won ?? 0),
-        roundsLost: Number(row.rounds_lost ?? 0),
+        roundsWon: Number(row.rounds_won ?? row.wins ?? 0),
+        roundsLost: Number(row.rounds_lost ?? row.losses ?? 0),
         winRate: row.win_rate,
-        score: adjustedWinRate * 0.65 + playRate * 0.2 + sampleConfidence * 100 * 0.15,
-        sampleConfidence,
+        score: row.score ?? adjustedWinRate * 0.65 + playRate * 0.2 + sampleConfidence * 100 * 0.15,
+        sampleConfidence: row.sample_confidence ?? sampleConfidence,
       };
     })
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.matches - a.matches)
     .slice(0, 5);
 }
 
-export function getBestAgents(agentStats: Record<string, RegionAgentStats> | undefined): AgentMapRow[] {
+export function getBestAgents(agentStats: Record<string, RegionAgentStats | RegionMapAgentStats> | undefined): AgentMapRow[] {
   const rows = Object.entries(agentStats ?? {}).map(([agentId, stats]) => {
     const raw = stats.win_rate ?? 0;
-    const matches = stats.matches ?? stats.picks ?? 0;
-    const rounds = stats.rounds ?? stats.totals?.rounds ?? 0;
-    const adjustedWinRate = bayesianAdjustedRate(raw, matches, 50, 15) ?? raw;
+    const matches = stats.matches ?? stats.matches_played ?? stats.picks ?? 0;
+    const rounds = stats.rounds ?? stats.rounds_played ?? stats.totals?.rounds ?? 0;
+    const adjustedWinRate = stats.adjusted_win_rate ?? bayesianAdjustedRate(raw, matches, 50, 15) ?? raw;
     const normalizedPerformance = (
-      normalized(stats.avg_kd, 1, 1.4) * 0.35 +
-      normalized(stats.avg_adr, 140, 120) * 0.35 +
-      normalized(stats.avg_acs, 210, 180) * 0.2 +
-      normalized(stats.avg_kda, 1.4, 1.6) * 0.1
+      normalized(stats.avg_kd ?? stats.kd, 1, 1.4) * 0.35 +
+      normalized(stats.avg_adr ?? stats.adr, 140, 120) * 0.35 +
+      normalized(stats.avg_acs ?? stats.acs, 210, 180) * 0.2 +
+      normalized(stats.avg_kda ?? stats.kda, 1.4, 1.6) * 0.1
     ) * 100;
     const normalizedPickRate = normalized(stats.pick_rate, 10, 25) * 100;
-    const sampleConfidence = clamp(Math.max(matches / 15, rounds / 250));
-    const score = adjustedWinRate * 0.45 + normalizedPerformance * 0.35 + normalizedPickRate * 0.15 + sampleConfidence * 100 * 0.05;
+    const sampleConfidence = stats.sample_confidence ?? clamp(Math.max(matches / 15, rounds / 250));
+    const score = stats.score ?? adjustedWinRate * 0.45 + normalizedPerformance * 0.35 + normalizedPickRate * 0.15 + sampleConfidence * 100 * 0.05;
     return {
       agentId,
       name: stats.agent_name ?? "Unknown",
@@ -284,9 +286,9 @@ export function getBestAgents(agentStats: Record<string, RegionAgentStats> | und
       rounds,
       winRate: raw,
       pickRate: stats.pick_rate,
-      kd: stats.avg_kd,
-      adr: stats.avg_adr,
-      acs: stats.avg_acs,
+      kd: stats.avg_kd ?? stats.kd,
+      adr: stats.avg_adr ?? stats.adr,
+      acs: stats.avg_acs ?? stats.acs,
       score,
       sampleConfidence,
     };

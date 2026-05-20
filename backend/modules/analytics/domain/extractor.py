@@ -1012,7 +1012,6 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
                     survival_rounds > 0
                     or rounds_with_kill > 0
                     or rounds_with_assist > 0
-                    or int(trade_metrics["traded_deaths"]) > 0
                 )
                 else 0
             )

@@ -591,10 +591,6 @@ def get_global_map_stats(
             for field in _SUM_FIELDS:
                 bucket["totals"][field] += int(overview.get(field, 0) or 0)
             _add_legacy_rate_fallbacks(bucket["totals"], overview)
-            if rank_tier is not None or agent_norm:
-                for ceremony, value in (overview.get("round_ceremonies") or {}).items():
-                    bucket["round_ceremonies"][str(ceremony)] += int(value or 0)
-
             for side_name in ("attack", "defense"):
                 side = (analytics.get("sides") or {}).get(side_name) or {}
                 target = bucket["sides"][side_name]
@@ -639,13 +635,18 @@ def get_global_map_stats(
             match_rounds = _match_rounds_from_teams(teams_raw)
             bucket["map_rounds"] += match_rounds
 
-            if rank_tier is None and not agent_norm:
-                for round_obj in match.get("roundResults", []) or []:
-                    if not isinstance(round_obj, dict):
-                        continue
-                    ceremony = str(round_obj.get("roundCeremony") or "").strip()
-                    if ceremony:
-                        bucket["round_ceremonies"][ceremony] += 1
+            for round_obj in match.get("roundResults", []) or []:
+                if not isinstance(round_obj, dict):
+                    continue
+                ceremony = str(round_obj.get("roundCeremony") or "").strip()
+                if not ceremony:
+                    continue
+                if rank_tier is None and not agent_norm:
+                    bucket["round_ceremonies"][ceremony] += 1
+                    continue
+                winning_team = str(round_obj.get("winningTeam") or "").lower()
+                if winning_team in filtered_player_teams:
+                    bucket["round_ceremonies"][ceremony] += 1
 
             team_results_once = {
                 str(team.get("teamId") or "").lower(): team
@@ -727,6 +728,7 @@ def get_global_map_stats(
             "team_round_losses": int(bucket["team_round_losses"]),
             "total_rounds": int(bucket["map_rounds"]),
             "rounds_with_kast": int(totals.get("rounds_with_kast", 0) or 0),
+            "assists": int(totals.get("assists", 0) or 0),
             "survival_rounds": int(totals.get("survival_rounds", 0) or 0),
             "clutch_opportunities": int(totals.get("clutch_opportunities", 0) or 0),
             "clutches_won": int(totals.get("clutches_won", 0) or 0),
@@ -750,6 +752,7 @@ def get_global_map_stats(
                 "clutch_win_rate": derived["clutch_win_rate"],
                 "kills_per_round": derived["kills_per_round"],
                 "deaths_per_round": derived["deaths_per_round"],
+                "assists_per_round": derived["assists_per_round"],
             },
             "sides": sides,
             "round_ceremonies": dict(bucket["round_ceremonies"]),
