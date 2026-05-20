@@ -2,6 +2,7 @@ import type { AnalyticsMatch } from "../../types/dashboard";
 import type { MapContent } from "../../types/content";
 import type { RegionMapStats } from "../../types/globalStats";
 import { normalizeLabel, safeDivide } from "../../utils/formatters";
+export { translateValorantCoordinatesToMapPosition } from "./mapCallouts";
 
 export type MapModeGroupKey = "core" | "skirmish" | "tdm" | "training";
 
@@ -45,57 +46,6 @@ export function classifyValorantMapMode(map: Partial<MapContent>): MapModeGroup 
     return MAP_MODE_GROUPS[1];
   }
   return MAP_MODE_GROUPS[0];
-}
-
-export function translateValorantCoordinatesToMapPosition(input: {
-  gameX?: number | string | null;
-  gameY?: number | string | null;
-  game_x?: number | string | null;
-  game_y?: number | string | null;
-  xMultiplier?: number | string | null;
-  yMultiplier?: number | string | null;
-  xScalarToAdd?: number | string | null;
-  yScalarToAdd?: number | string | null;
-}) {
-  const {
-    xMultiplier,
-    yMultiplier,
-    xScalarToAdd,
-    yScalarToAdd,
-  } = input;
-  const toFiniteNumber = (value: number | string | null | undefined) => {
-    if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
-    if (typeof value === "string" && value.trim()) {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : undefined;
-    }
-    return undefined;
-  };
-  const gameX = toFiniteNumber(input.gameX ?? input.game_x);
-  const gameY = toFiniteNumber(input.gameY ?? input.game_y);
-  const xMult = toFiniteNumber(xMultiplier);
-  const yMult = toFiniteNumber(yMultiplier);
-  const xAdd = toFiniteNumber(xScalarToAdd);
-  const yAdd = toFiniteNumber(yScalarToAdd);
-  if (
-    gameX === undefined ||
-    gameY === undefined ||
-    xMult === undefined ||
-    yMult === undefined ||
-    xAdd === undefined ||
-    yAdd === undefined
-  ) {
-    return null;
-  }
-
-  // Valorant's map transform intentionally swaps game_x/game_y for the image axes.
-  const x = gameY * xMult + xAdd;
-  const y = gameX * yMult + yAdd;
-
-  return {
-    xPercent: x * 100,
-    yPercent: y * 100,
-  };
 }
 
 export function bayesianAdjustedRate(
@@ -186,7 +136,6 @@ function finalizeComputedStats(stats: ComputedMapStats, priorRate?: number): Com
   const performanceRounds = stats.playerRounds || stats.rounds;
   const winRateSample = stats.playerMatches || stats.matches;
   stats.losses = Math.max(0, winRateSample - stats.wins);
-  stats.roundsLost = Math.max(0, stats.rounds - stats.roundsWon);
   stats.roundDiff = stats.roundsWon - stats.roundsLost;
   stats.winRate = winRateSample > 0 ? safeDivide(stats.wins * 100, winRateSample) : stats.winRate;
   stats.killsPerRound = performanceRounds > 0 ? safeDivide(stats.kills, performanceRounds) : undefined;
@@ -195,16 +144,16 @@ function finalizeComputedStats(stats: ComputedMapStats, priorRate?: number): Com
   stats.acs = performanceRounds > 0 ? safeDivide(stats.score, performanceRounds) : undefined;
   stats.kd = stats.deaths > 0 ? stats.kills / stats.deaths : stats.kills > 0 ? stats.kills : undefined;
   stats.headshotPct = shots > 0 ? safeDivide(stats.headshots * 100, shots) : undefined;
-  stats.survivalRate = stats.survivalRounds > 0 && performanceRounds > 0
+  stats.survivalRate = performanceRounds > 0
     ? safeDivide(stats.survivalRounds * 100, performanceRounds)
     : stats.survivalRate;
-  stats.kastPct = stats.roundsWithKast > 0 && performanceRounds > 0
+  stats.kastPct = performanceRounds > 0
     ? safeDivide(stats.roundsWithKast * 100, performanceRounds)
     : stats.kastPct;
   stats.clutchRate = stats.clutchOpportunities > 0
     ? safeDivide(stats.clutchesWon * 100, stats.clutchOpportunities)
-    : stats.clutchRate;
-  stats.adjustedWinRate = bayesianAdjustedRate(stats.winRate, stats.matches, priorRate, 12);
+    : undefined;
+  stats.adjustedWinRate = bayesianAdjustedRate(stats.winRate, winRateSample, priorRate, 12);
   return stats;
 }
 
@@ -232,6 +181,7 @@ export function regionMapStatsToComputed(
     roundDiff: roundsWon - roundsLost,
     kills: Number(attack?.kills ?? 0) + Number(defense?.kills ?? 0),
     deaths: Number(attack?.deaths ?? 0) + Number(defense?.deaths ?? 0),
+    assists: Number(stats.assists ?? stats.totals?.assists ?? 0),
     clutchesWon: Number(stats.clutches_won ?? 0),
     clutchOpportunities: Number(stats.clutch_opportunities ?? 0),
     survivalRounds: Number(stats.survival_rounds ?? 0),
@@ -250,7 +200,9 @@ export function regionMapStatsToComputed(
     deathsPerRound: stats.averages?.deaths_per_round,
     kastPct: stats.kast_pct ?? stats.averages?.kast_pct,
     survivalRate: stats.survival_rate ?? stats.averages?.survival_rate,
-    clutchRate: stats.clutch_win_rate ?? stats.averages?.clutch_win_rate,
+    clutchRate: Number(stats.clutch_opportunities ?? 0) > 0
+      ? stats.clutch_win_rate ?? stats.averages?.clutch_win_rate
+      : undefined,
     headshotPct: stats.averages?.headshot_pct,
   }, priorRate);
 }
@@ -295,7 +247,15 @@ export function calculatePersonalMapStats(
     stats.kills += Number(overview.kills ?? match.player_totals_from_match?.kills ?? 0);
     stats.deaths += Number(overview.deaths ?? match.player_totals_from_match?.deaths ?? 0);
     stats.assists += Number(overview.assists ?? match.player_totals_from_match?.assists ?? 0);
-    stats.damageDealt += Number((overview as Record<string, unknown>).damage_dealt ?? 0);
+    const overviewRecord = overview as Record<string, unknown>;
+    const sideDamageDealt = Number(attack?.damage_dealt ?? 0) + Number(defense?.damage_dealt ?? 0);
+    const overviewDamageDealt = Number(
+      overviewRecord.damage_dealt ??
+      overviewRecord.damageDealt ??
+      (typeof overview.adr === "number" && rounds > 0 ? overview.adr * rounds : undefined) ??
+      sideDamageDealt,
+    );
+    stats.damageDealt += Number.isFinite(overviewDamageDealt) ? overviewDamageDealt : 0;
     stats.score += Number(match.player_totals_from_match?.score ?? 0);
     stats.headshots += Number(overview.headshots ?? 0);
     stats.bodyshots += Number(overview.bodyshots ?? 0);
@@ -320,11 +280,15 @@ export function calculatePersonalMapStats(
   });
 
   if (stats.matches === 0 && stats.rounds === 0) return null;
+  stats.roundsLost = Math.max(0, stats.rounds - stats.roundsWon);
   stats.attackWinRate = sideTotals.attack.rounds > 0
     ? safeDivide(sideTotals.attack.wins * 100, sideTotals.attack.rounds)
     : undefined;
   stats.defenseWinRate = sideTotals.defense.rounds > 0
     ? safeDivide(sideTotals.defense.wins * 100, sideTotals.defense.rounds)
+    : undefined;
+  stats.teamRoundWinRate = stats.rounds > 0
+    ? safeDivide(stats.roundsWon * 100, stats.rounds)
     : undefined;
   return finalizeComputedStats(stats, priorRate);
 }

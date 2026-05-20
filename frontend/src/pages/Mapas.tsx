@@ -20,10 +20,13 @@ import {
   classifyValorantMapMode,
   inferSiteCount,
   regionMapStatsToComputed,
-  translateValorantCoordinatesToMapPosition,
   type ComputedMapStats,
   type MapModeGroupKey,
 } from "./Mapas/mapUtils";
+import {
+  isValidMapPercentPosition,
+  translateValorantCoordinatesToMapPosition,
+} from "./Mapas/mapCallouts";
 import {
   buildBestCompositionsForMap,
   buildBestCompositionsFromGlobal,
@@ -157,7 +160,7 @@ function buildComparisonMetrics(
   const configs = [
     { key: "rounds", label: "Rondas mapa", format: "number" as const, noDiff: true, noNormalize: true },
     { key: "playerRounds", label: "Player-rounds", format: "number" as const, noDiff: true, noNormalize: true },
-    { key: "roundDiff", label: "Diferencial rondas", format: "number" as const, sampleKey: "rounds" },
+    { key: "roundDiff", label: "Diferencial equipo", format: "number" as const, sampleKey: "rounds" },
     { key: "winRate", label: "Winrate jugadores", format: "percent" as const, sampleKey: "playerMatches" },
     { key: "teamRoundWinRate", label: "WR rondas equipo", format: "percent" as const, sampleKey: "rounds" },
     { key: "attackWinRate", label: "Attack WR", format: "percent" as const, sampleKey: "rounds" },
@@ -167,7 +170,7 @@ function buildComparisonMetrics(
     { key: "adr", label: "ADR", format: "number" as const, sampleKey: "playerRounds" },
     { key: "kd", label: "K/D", format: "number" as const, sampleKey: "playerRounds" },
     { key: "acs", label: "ACS", format: "number" as const, sampleKey: "playerRounds" },
-    { key: "kastPct", label: "KAST", format: "percent" as const, sampleKey: "playerRounds" },
+    { key: "kastPct", label: "KAST (K/A/S)", format: "percent" as const, sampleKey: "playerRounds" },
     { key: "survivalRate", label: "Supervivencia", format: "percent" as const, sampleKey: "playerRounds" },
     { key: "clutchRate", label: "Clutch rate", format: "percent" as const, sampleKey: "clutchOpportunities" },
   ];
@@ -242,7 +245,12 @@ function buildRoundCeremonySharesFromGlobal(stats: RegionMapStats | undefined) {
     CeremonyThrifty: "Thrifty",
   };
   const entries = Object.entries(stats?.round_ceremonies ?? {})
-    .map(([key, value]) => ({ key, wins: Number(value ?? 0) }))
+    .map(([key, value]) => {
+      const wins = typeof value === "number"
+        ? value
+        : Number(value?.wins ?? value?.rounds ?? 0);
+      return { key, wins };
+    })
     .filter((item) => item.wins > 0);
   const totalWinsWithRoundCeremony = entries.reduce((sum, item) => sum + item.wins, 0);
   if (totalWinsWithRoundCeremony <= 0) return [];
@@ -275,13 +283,7 @@ function CalloutMap({ map }: { map: MapEntry }) {
       return { callout, position };
     })
     .filter((item): item is { callout: NonNullable<MapEntry["callouts"]>[number]; position: { xPercent: number; yPercent: number } } =>
-      Boolean(
-        item.position &&
-        item.position.xPercent >= 0 &&
-        item.position.xPercent <= 100 &&
-        item.position.yPercent >= 0 &&
-        item.position.yPercent <= 100,
-      ),
+      isValidMapPercentPosition(item.position),
     );
 
   if (!image) {
@@ -343,7 +345,7 @@ function StatGrid({ stats, totalMatches }: { stats: ComputedMapStats | null | un
     ["Player-rounds", formatMaybeNumber(stats?.playerRounds)],
     ["Rondas equipo ganadas", formatMaybeNumber(stats?.roundsWon)],
     ["Rondas equipo perdidas", formatMaybeNumber(stats?.roundsLost)],
-    ["Diferencial", isAvailableNumber(stats?.roundDiff) ? `${(stats?.roundDiff ?? 0) > 0 ? "+" : ""}${formatNumber(stats?.roundDiff ?? 0, 0)}` : "Sin datos"],
+    ["Diferencial equipo", isAvailableNumber(stats?.roundDiff) ? `${(stats?.roundDiff ?? 0) > 0 ? "+" : ""}${formatNumber(stats?.roundDiff ?? 0, 0)}` : "Sin datos"],
     ["Winrate jugadores", formatMaybePercent(stats?.winRate)],
     ["WR rondas equipo", formatMaybePercent(stats?.teamRoundWinRate)],
     ["Attack WR", formatMaybePercent(stats?.attackWinRate)],
@@ -355,7 +357,7 @@ function StatGrid({ stats, totalMatches }: { stats: ComputedMapStats | null | un
     ["K/D", formatMaybeNumber(stats?.kd, 2)],
     ["KDA", formatMaybeNumber(kda, 2)],
     ["ACS", formatMaybeNumber(stats?.acs, 1)],
-    ["KAST", formatMaybePercent(stats?.kastPct)],
+    ["KAST (K/A/S)", formatMaybePercent(stats?.kastPct)],
     ["Supervivencia", formatMaybePercent(stats?.survivalRate)],
     ["Clutch rate", formatMaybePercent(stats?.clutchRate)],
     ["Play rate", formatMaybePercent(playRate)],
@@ -519,6 +521,7 @@ export default function Mapas() {
     () => globalMapStatsValues.reduce((sum, stats) => sum + Number(stats.map_rounds ?? stats.total_rounds ?? 0), 0),
     [globalMapStatsValues],
   );
+  const hasGlobalStatsDataset = globalMapStatsQuery.isSuccess && globalMapStatsValues.length > 0;
 
   const maps = useMemo<MapEntry[]>(() => {
     const data = query.data ?? {};
@@ -596,25 +599,31 @@ export default function Mapas() {
       ? getMapStatsKey(selected)
       : Object.entries(globalMapStatsById).find(([, stats]) => normalizeText(stats.map_name) === normalizeText(selected.displayName))?.[0])
     : undefined;
+  const selectedGlobalMapStats = selectedGlobalMapKey ? globalMapStatsById[selectedGlobalMapKey] : selected?.globalStats;
   const bestAgents = useMemo(
-    () => getBestAgents(selectedGlobalMapKey ? globalMapStatsQuery.data?.agentStatsByMap?.[selectedGlobalMapKey] : undefined)
+    () => getBestAgents(
+      (selectedGlobalMapKey ? globalMapStatsQuery.data?.agentStatsByMap?.[selectedGlobalMapKey] : undefined)
+        ?? selectedGlobalMapStats?.agent_stats,
+    )
       .filter((agent) => agentFilter === ALL || agent.agentId === agentFilter),
-    [agentFilter, globalMapStatsQuery.data?.agentStatsByMap, selectedGlobalMapKey],
+    [agentFilter, globalMapStatsQuery.data?.agentStatsByMap, selectedGlobalMapKey, selectedGlobalMapStats?.agent_stats],
   );
   const bestWeapons = useMemo(
     () => {
       const globalRows = buildBestWeaponsFromGlobal(
-        selectedGlobalMapKey ? globalMapStatsQuery.data?.weaponStatsByMap?.[selectedGlobalMapKey] : undefined,
+        (selectedGlobalMapKey ? globalMapStatsQuery.data?.weaponStatsByMap?.[selectedGlobalMapKey] : undefined)
+          ?? selectedGlobalMapStats?.weapon_stats,
       );
       if (globalRows.length > 0) return globalRows;
       return buildBestWeaponsForMap(personalDashboardQuery.data?.analyticsList, selected, { act: actFilter, rank: rankFilter, agent: agentFilter });
     },
-    [actFilter, agentFilter, globalMapStatsQuery.data?.weaponStatsByMap, personalDashboardQuery.data?.analyticsList, rankFilter, selected, selectedGlobalMapKey],
+    [actFilter, agentFilter, globalMapStatsQuery.data?.weaponStatsByMap, personalDashboardQuery.data?.analyticsList, rankFilter, selected, selectedGlobalMapKey, selectedGlobalMapStats?.weapon_stats],
   );
   const bestCompositions = useMemo(
     () => {
       const globalRows = buildBestCompositionsFromGlobal(
-        selectedGlobalMapKey ? globalMapStatsQuery.data?.compositionsByMap?.[selectedGlobalMapKey] : undefined,
+        (selectedGlobalMapKey ? globalMapStatsQuery.data?.compositionsByMap?.[selectedGlobalMapKey] : undefined)
+          ?? selectedGlobalMapStats?.composition_stats,
       );
       if (globalRows.length > 0) return globalRows;
       return buildBestCompositionsForMap(
@@ -624,7 +633,7 @@ export default function Mapas() {
       agentNameById,
       );
     },
-    [actFilter, agentFilter, agentNameById, globalMapStatsQuery.data?.compositionsByMap, personalDashboardQuery.data?.analyticsList, rankFilter, selected, selectedGlobalMapKey],
+    [actFilter, agentFilter, agentNameById, globalMapStatsQuery.data?.compositionsByMap, personalDashboardQuery.data?.analyticsList, rankFilter, selected, selectedGlobalMapKey, selectedGlobalMapStats?.composition_stats],
   );
 
   const filtered = useMemo(() => {
@@ -636,7 +645,8 @@ export default function Mapas() {
         map.groupKey === modeFilter;
       const hasGlobal = Boolean(map.computedGlobalStats?.matches || map.computedGlobalStats?.rounds);
       const hasPersonal = personalStatsByMapKey.has(getMapStatsKey(map));
-      return matchesSearch && matchesMode && (hasGlobal || hasPersonal);
+      const hasStatsForActiveFilters = hasGlobal || hasPersonal;
+      return matchesSearch && matchesMode && (hasGlobalStatsDataset ? hasStatsForActiveFilters : true);
     });
     return [...filteredMaps].sort((a, b) => {
       if (sortKey === "name") return a.displayName.localeCompare(b.displayName);
@@ -644,19 +654,22 @@ export default function Mapas() {
       if (sortKey === "winRate") return (b.computedGlobalStats?.adjustedWinRate ?? 0) - (a.computedGlobalStats?.adjustedWinRate ?? 0) || a.displayName.localeCompare(b.displayName);
       return a.displayName.localeCompare(b.displayName);
     });
-  }, [maps, modeFilter, personalStatsByMapKey, search, sortKey]);
+  }, [hasGlobalStatsDataset, maps, modeFilter, personalStatsByMapKey, search, sortKey]);
 
   const availableModeOptions = useMemo(() => {
     const groupsWithData = new Set(
       maps
-        .filter((map) => Boolean(map.computedGlobalStats?.matches || map.computedGlobalStats?.rounds) || personalStatsByMapKey.has(getMapStatsKey(map)))
+        .filter((map) => {
+          if (!hasGlobalStatsDataset) return true;
+          return Boolean(map.computedGlobalStats?.matches || map.computedGlobalStats?.rounds) || personalStatsByMapKey.has(getMapStatsKey(map));
+        })
         .map((map) => map.groupKey),
     );
     return MODE_OPTIONS.filter((option) => {
       if (option.value === COMPETITIVE) return groupsWithData.has("core");
       return groupsWithData.has(option.value as MapModeGroupKey);
     });
-  }, [maps, personalStatsByMapKey]);
+  }, [hasGlobalStatsDataset, maps, personalStatsByMapKey]);
 
   useEffect(() => {
     if (availableModeOptions.some((option) => option.value === modeFilter)) return;

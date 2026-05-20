@@ -67,15 +67,25 @@ export type RegionAgentStats = {
   role?: string;
   picks?: number;
   wins?: number;
+  matches_played?: number;
   matches?: number;
+  rounds_played?: number;
   rounds?: number;
   totals?: RegionMetricTotals;
   pick_rate?: number;
   win_rate?: number;
+  adjusted_win_rate?: number;
+  score?: number;
+  sample?: number;
+  sample_confidence?: number;
   avg_kd?: number;
   avg_kda?: number;
   avg_acs?: number;
   avg_adr?: number;
+  kd?: number;
+  kda?: number;
+  acs?: number;
+  adr?: number;
   avg_headshot_pct?: number;
   avg_fk_rate?: number;
   avg_fd_rate?: number;
@@ -91,9 +101,14 @@ export type RegionAgentStats = {
 
 export type RegionMapStats = {
   map_name?: string;
+  map_url?: string;
+  matches_played?: number;
   matches?: number;
   player_matches?: number;
   wins?: number;
+  rounds_played?: number;
+  rounds_won?: number;
+  rounds_lost?: number;
   win_rate?: number;
   player_win_rate?: number;
   total_rounds?: number;
@@ -102,13 +117,30 @@ export type RegionMapStats = {
   team_round_wins?: number;
   team_round_losses?: number;
   team_round_win_rate?: number;
+  attack_rounds?: number;
+  attack_wins?: number;
+  attack_win_rate?: number;
+  defense_rounds?: number;
+  defense_wins?: number;
+  defense_win_rate?: number;
+  round_differential?: number;
   rounds_with_kast?: number;
+  kast_rounds?: number;
+  kast_rate?: number;
+  kast_has_trade_component?: boolean;
+  survived_rounds?: number;
   survival_rounds?: number;
+  damage_dealt?: number;
+  damage_received?: number;
+  kills?: number;
+  deaths?: number;
+  assists?: number;
   clutch_opportunities?: number;
   clutches_won?: number;
+  clutch_rate?: number | null;
   kast_pct?: number;
   survival_rate?: number;
-  clutch_win_rate?: number;
+  clutch_win_rate?: number | null;
   avg_rounds_per_match?: number;
   averages?: Pick<
     RegionAverages,
@@ -126,7 +158,38 @@ export type RegionMapStats = {
     attack?: RegionSideStats;
     defense?: RegionSideStats;
   };
-  round_ceremonies?: Record<string, number>;
+  round_ceremonies?: Record<string, number | RegionRoundCeremonyStats>;
+  agent_stats?: Record<string, RegionMapAgentStats>;
+  weapon_stats?: Record<string, RegionMapWeaponStats>;
+  composition_stats?: Record<string, RegionMapCompositionStats>;
+  totals?: RegionMetricTotals;
+};
+
+export type RegionRoundCeremonyStats = {
+  wins?: number;
+  rounds?: number;
+  percentage_of_wins?: number;
+};
+
+export type RegionMapAgentStats = RegionAgentStats & {
+  agent_name?: string;
+  matches_played?: number;
+  rounds_played?: number;
+  pick_count?: number;
+  score?: number;
+  adjusted_win_rate?: number;
+  sample?: number;
+  sample_confidence?: number;
+  survival_rate?: number;
+  kast_rate?: number;
+  kd?: number;
+  kda?: number;
+  adr?: number;
+  acs?: number;
+  kills?: number;
+  deaths?: number;
+  assists?: number;
+  damage_dealt?: number;
 };
 
 export type RegionWeaponStats = {
@@ -136,6 +199,8 @@ export type RegionWeaponStats = {
   rounds_purchased?: number;
   wins?: number;
   win_rate?: number;
+  round_win_rate?: number;
+  adjusted_round_win_rate?: number;
   kills?: number;
   deaths?: number;
   headshots?: number;
@@ -153,6 +218,20 @@ export type RegionWeaponStats = {
   kills_per_round?: number;
   adr?: number;
   pick_rate_per_round?: number;
+  use_rate?: number;
+  score?: number;
+  sample?: number;
+  sample_confidence?: number;
+};
+
+export type RegionMapWeaponStats = RegionWeaponStats & {
+  rounds_won_with_weapon?: number;
+  round_win_rate?: number;
+  adjusted_round_win_rate?: number;
+  use_rate?: number;
+  score?: number;
+  sample?: number;
+  sample_confidence?: number;
 };
 
 export type RegionEconomyStats = {
@@ -243,13 +322,22 @@ export type GlobalAgentStatsFilters = {
 };
 
 export type RegionMapCompositionStats = {
-  key: string;
-  agents: string[];
+  key?: string;
+  agent_ids?: string[];
+  agent_names?: string[];
+  agents?: string[];
+  matches_played?: number;
   matches?: number;
   wins?: number;
+  losses?: number;
   rounds_won?: number;
   rounds_lost?: number;
   win_rate?: number;
+  adjusted_win_rate?: number;
+  pick_rate?: number;
+  score?: number;
+  sample?: number;
+  sample_confidence?: number;
 };
 
 export type GlobalMapStatsPayload = {

@@ -810,7 +810,6 @@ def _compute_round_overview_from_round_results(
             not died
             or has_kill
             or has_assist
-            or int(round_trade_metrics["traded_deaths"]) > 0
         )
 
         if unique_kills and unique_kills[0].get("killer") == puuid:
