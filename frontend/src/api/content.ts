@@ -44,13 +44,13 @@ export async function getContentSummary(): Promise<ContentSummary> {
 }
 
 export async function getMapas(): Promise<MapGroups> {
-  const res = await fetch(apiUrl("/content/mapas"), { cache: "no-store" });
+  const res = await fetch(apiUrl("/content/mapas"));
   if (!res.ok) throw new Error("Error mapas");
   return res.json();
 }
 
 export async function getMapasGeo() {
-  const res = await fetch(apiUrl("/content/mapas-geo"), { cache: "no-store" });
+  const res = await fetch(apiUrl("/content/mapas-geo"));
   if (!res.ok) throw new Error("Error mapas geo");
   return res.json();
 }

@@ -8,9 +8,7 @@ import type {
 } from "../types/globalStats";
 
 export async function getRegions(): Promise<RegionStats[]> {
-  const res = await fetch(apiUrl("/regions/"), {
-    cache: "no-store",
-  });
+  const res = await fetch(apiUrl("/regions/"));
   if (!res.ok) throw new Error("Error regiones");
   return res.json();
 }
@@ -44,9 +42,7 @@ export async function getGlobalMapStats(
   if (filters.agent && filters.agent !== "all") params.set("agent", filters.agent);
 
   const query = params.toString();
-  const res = await fetch(apiUrl(`/regions/map-stats${query ? `?${query}` : ""}`), {
-    cache: "no-store",
-  });
+  const res = await fetch(apiUrl(`/regions/map-stats${query ? `?${query}` : ""}`));
   if (!res.ok) throw new Error("Error estadisticas globales de mapas");
   return res.json();
 }
