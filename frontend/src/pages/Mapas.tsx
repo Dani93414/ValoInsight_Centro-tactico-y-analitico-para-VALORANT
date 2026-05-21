@@ -1563,6 +1563,13 @@ export default function Mapas() {
     globalMapStatsQuery.isLoading ||
     globalMapStatsQuery.isFetching;
   const showSelectedStatsLoading = Boolean(selected) && showStatsLoading;
+  const initialMapasLoading =
+    query.isLoading ||
+    agentsQuery.isLoading ||
+    weaponsQuery.isLoading ||
+    actsQuery.isLoading ||
+    regionsQuery.isLoading ||
+    isWaitingForPlayerRegion;
 
   useEffect(() => {
     const updateColumns = () => setMapGridColumns(getMapGridColumns());
@@ -1716,7 +1723,7 @@ export default function Mapas() {
       ? Math.min(filtered.length - 1, selectedIndex + (mapGridColumns - 1 - (selectedIndex % mapGridColumns)))
       : -1;
 
-  if (query.isLoading) {
+  if (initialMapasLoading) {
     return <ContentLoading title="Cargando mapas" />;
   }
 

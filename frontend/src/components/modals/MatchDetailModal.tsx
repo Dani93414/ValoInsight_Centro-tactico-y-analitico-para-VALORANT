@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useMatchById,
   useAgentes,
@@ -57,8 +57,6 @@ type EventFilterKey =
   | "all"
   | "kills"
   | "deaths"
-  | "opening"
-  | "trade"
   | "objectives";
 
 type WeaponCatalogEntry = {
@@ -83,6 +81,7 @@ type KillRoundEvent = {
   weaponIcon?: string | null;
   damageType?: string;
   playerLocations: RawPlayerLocation[];
+  killerLocation?: RawLocation;
   victimLocation?: RawLocation;
   isPlayerKill: boolean;
   isPlayerDeath: boolean;
@@ -194,10 +193,22 @@ type EventMapMarker = {
   y: number;
   label: string;
   icon?: string;
+  actorIcon?: string;
+  actorLabel?: string;
+  weaponIcon?: string | null;
+  weaponLabel?: string;
+  deathIcon?: string;
   team: "ally" | "enemy" | "neutral";
   kind: "player" | "victim" | "objective";
   isTarget: boolean;
 };
+
+type EventMapState = {
+  markers: EventMapMarker[];
+  hasSnapshot: boolean;
+};
+
+type MatchResultState = "win" | "loss" | "draw";
 
 const WEAPON_ICON_ID_RE = /\/content\/weapons\/([^/]+)\/displayIcon\.png/i;
 
@@ -368,6 +379,434 @@ function roundLabel(roundNum: number): string {
   return `Ronda ${roundNum + 1}`;
 }
 
+function getEventDescription(event: RoundEvent): string {
+  if (event.kind === "kill") {
+    return `${event.killerName} eliminó a ${event.victimName}`;
+  }
+  return `${event.kind === "plant" ? "Plant" : "Defuse"}`;
+}
+
+function getTeamScoreState(
+  currentMatch: RawMatchDetail | null,
+  playerTeam: string,
+): {
+  selectedTeamRounds: number;
+  opponentTeamRounds: number;
+  resultState: MatchResultState;
+} {
+  const teams = currentMatch?.teams ?? [];
+  const selectedTeamInfo =
+    teams.find((team) => cleanId(team.teamId) === playerTeam) ?? null;
+  const opponentTeamInfo =
+    teams.find((team) => cleanId(team.teamId) !== playerTeam) ?? null;
+
+  const selectedRoundsFromTeam = toNumber(selectedTeamInfo?.roundsWon);
+  const opponentRoundsFromTeam = toNumber(opponentTeamInfo?.roundsWon);
+  const selectedRoundsLost = toNumber(selectedTeamInfo?.roundsLost);
+  let countedSelectedRounds = 0;
+  let countedOpponentRounds = 0;
+
+  for (const round of currentMatch?.roundResults ?? []) {
+    const winningTeam = cleanId(round.winningTeam);
+    if (!winningTeam) continue;
+    if (winningTeam === playerTeam) {
+      countedSelectedRounds += 1;
+    } else {
+      countedOpponentRounds += 1;
+    }
+  }
+
+  const selectedTeamRounds = selectedRoundsFromTeam || countedSelectedRounds;
+  let opponentTeamRounds = opponentRoundsFromTeam;
+
+  if (!opponentTeamRounds && selectedRoundsLost > 0) {
+    opponentTeamRounds = selectedRoundsLost;
+  }
+
+  if (!opponentTeamRounds && countedOpponentRounds > 0) {
+    opponentTeamRounds = countedOpponentRounds;
+  }
+
+  const resultState: MatchResultState =
+    selectedTeamRounds === opponentTeamRounds
+      ? "draw"
+      : selectedTeamRounds > opponentTeamRounds
+        ? "win"
+        : "loss";
+
+  return { selectedTeamRounds, opponentTeamRounds, resultState };
+}
+
+function buildEventMapState({
+  event,
+  mapTransform,
+  playersByPuuid,
+  playerTeam,
+  selectedPlayerId,
+  agentById,
+}: {
+  event: RoundEvent | null;
+  mapTransform: MapTransform | null;
+  playersByPuuid: Map<string, RawPlayer>;
+  playerTeam: string;
+  selectedPlayerId: string;
+  agentById: Map<string, AgentContent>;
+}): EventMapState {
+  if (!event) {
+    return { markers: [], hasSnapshot: false };
+  }
+
+  const markers: EventMapMarker[] = [];
+  const usedIds = new Set<string>();
+  const objectiveActorId =
+    event.kind === "plant" || event.kind === "defuse"
+      ? cleanId(event.actor)
+      : "";
+
+  const pushMarker = (marker: EventMapMarker) => {
+    if (usedIds.has(marker.id)) return;
+    usedIds.add(marker.id);
+    markers.push(marker);
+  };
+
+  const addSnapshotMarker = (entry: RawPlayerLocation, index: number) => {
+    const puuid = cleanId(entry.puuid);
+    if (objectiveActorId && puuid === objectiveActorId) return;
+
+    const position = transformLocation(entry.location, mapTransform);
+    if (!position) return;
+
+    const player = puuid ? playersByPuuid.get(puuid) : undefined;
+    const agent = cleanId(player?.characterId)
+      ? agentById.get(cleanId(player?.characterId))
+      : undefined;
+    const teamId = puuid ? cleanId(player?.teamId) : "";
+
+    pushMarker({
+      id: `snapshot-${event.id}-${puuid || index}`,
+      x: position.x,
+      y: position.y,
+      label: getPlayerDisplay(player),
+      icon: agent?.displayIconSmall ?? agent?.displayIcon ?? undefined,
+      team:
+        !teamId || !playerTeam
+          ? "neutral"
+          : teamId === playerTeam
+            ? "ally"
+            : "enemy",
+      kind: "player",
+      isTarget: puuid === selectedPlayerId,
+      weaponIcon:
+        event.kind === "kill" && puuid === cleanId(event.killer)
+          ? event.weaponIcon
+          : undefined,
+      weaponLabel:
+        event.kind === "kill" && puuid === cleanId(event.killer)
+          ? event.weaponName
+          : undefined,
+    });
+  };
+
+  event.playerLocations.forEach(addSnapshotMarker);
+
+  if (event.kind === "kill") {
+    const killerId = cleanId(event.killer);
+    const hasKillerSnapshot = event.playerLocations.some(
+      (entry) => cleanId(entry.puuid) === killerId,
+    );
+    const killerPos = transformLocation(event.killerLocation, mapTransform);
+    if (killerId && killerPos && !hasKillerSnapshot) {
+      const killer = playersByPuuid.get(killerId);
+      const killerTeamId = cleanId(killer?.teamId);
+      const killerAgent = cleanId(killer?.characterId)
+        ? agentById.get(cleanId(killer?.characterId))
+        : undefined;
+
+      pushMarker({
+        id: `killer-${event.id}`,
+        x: killerPos.x,
+        y: killerPos.y,
+        label: event.killerName,
+        icon: killerAgent?.displayIconSmall ?? killerAgent?.displayIcon ?? undefined,
+        weaponIcon: event.weaponIcon,
+        weaponLabel: event.weaponName,
+        team:
+          !killerTeamId || !playerTeam
+            ? "neutral"
+            : killerTeamId === playerTeam
+              ? "ally"
+              : "enemy",
+        kind: "player",
+        isTarget: killerId === selectedPlayerId,
+      });
+    }
+
+    const victimPos = transformLocation(event.victimLocation, mapTransform);
+    if (victimPos) {
+      const victim = cleanId(event.victim)
+        ? playersByPuuid.get(cleanId(event.victim))
+        : undefined;
+      const victimTeamId = cleanId(victim?.teamId);
+      const victimAgent = cleanId(victim?.characterId)
+        ? agentById.get(cleanId(victim?.characterId))
+        : undefined;
+
+      pushMarker({
+        id: `victim-${event.id}`,
+        x: victimPos.x,
+        y: victimPos.y,
+        label: `Posición de ${event.victimName}`,
+        icon: victimAgent?.displayIconSmall ?? victimAgent?.displayIcon ?? undefined,
+        deathIcon: "X",
+        team:
+          !victimTeamId || !playerTeam
+            ? "neutral"
+            : victimTeamId === playerTeam
+              ? "ally"
+              : "enemy",
+        kind: "victim",
+        isTarget: cleanId(event.victim) === selectedPlayerId,
+      });
+    }
+  }
+
+  if (event.kind === "plant" || event.kind === "defuse") {
+    const objectivePos = transformLocation(event.location, mapTransform);
+    if (objectivePos) {
+      const actor = objectiveActorId
+        ? playersByPuuid.get(objectiveActorId)
+        : undefined;
+      const actorAgent = cleanId(actor?.characterId)
+        ? agentById.get(cleanId(actor?.characterId))
+        : undefined;
+
+      pushMarker({
+        id: `${event.kind}-${event.id}-objective`,
+        x: objectivePos.x,
+        y: objectivePos.y,
+        label:
+          event.kind === "plant"
+            ? `Plant${event.site ? ` en ${event.site}` : ""}`
+            : "Defuse",
+        actorIcon: actorAgent?.displayIconSmall ?? actorAgent?.displayIcon ?? undefined,
+        actorLabel: getPlayerDisplay(actor) || event.actorName,
+        team: "neutral",
+        kind: "objective",
+        isTarget: false,
+      });
+    }
+  }
+
+  return {
+    markers,
+    hasSnapshot: event.playerLocations.length > 0,
+  };
+}
+
+function MatchEventMapCanvas({
+  mapName,
+  mapImageUrl,
+  selectedEvent,
+  eventMapState,
+  mapTransform,
+  compact = false,
+}: {
+  mapName: string;
+  mapImageUrl: string;
+  selectedEvent: RoundEvent | null;
+  eventMapState: EventMapState;
+  mapTransform: MapTransform | null;
+  compact?: boolean;
+}) {
+  if (!selectedEvent) {
+    return (
+      <div className="empty-panel">
+        Selecciona un evento de la ronda para ver el mapa.
+      </div>
+    );
+  }
+
+  const killConnection =
+    selectedEvent.kind === "kill"
+      ? (() => {
+          const killerId = cleanId(selectedEvent.killer);
+          const killerMarker = eventMapState.markers.find(
+            (marker) =>
+              marker.id === `killer-${selectedEvent.id}` ||
+              marker.id === `snapshot-${selectedEvent.id}-${killerId}`,
+          );
+          const victimMarker = eventMapState.markers.find(
+            (marker) => marker.id === `victim-${selectedEvent.id}`,
+          );
+          return killerMarker && victimMarker
+            ? { killer: killerMarker, victim: victimMarker }
+            : null;
+        })()
+      : null;
+  const killConnectionLine = killConnection
+    ? (() => {
+        const x1 = killConnection.killer.x * 100;
+        const y1 = killConnection.killer.y * 100;
+        const x2 = killConnection.victim.x * 100;
+        const y2 = killConnection.victim.y * 100;
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= 0) return null;
+
+        const markerEdgeOffset = Math.min(2.2, distance / 3);
+        const ux = dx / distance;
+        const uy = dy / distance;
+
+        return {
+          x1: x1 + ux * markerEdgeOffset,
+          y1: y1 + uy * markerEdgeOffset,
+          x2: x2 - ux * markerEdgeOffset,
+          y2: y2 - uy * markerEdgeOffset,
+        };
+      })()
+    : null;
+
+  return (
+    <>
+      <div className={`match-event-map-header ${compact ? "is-hidden" : ""}`}>
+        <strong>
+          {roundLabel(selectedEvent.roundNum)} ·{" "}
+          {toSecondsLabel(selectedEvent.timeMs)}
+        </strong>
+        <span>{getEventDescription(selectedEvent)}</span>
+      </div>
+
+      {mapImageUrl ? (
+        <div className="match-event-map-stage">
+          <img src={mapImageUrl} alt={mapName} />
+          <div className="match-event-map-overlay">
+            {killConnectionLine && (
+              <svg
+                className="event-map-action-line"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <line
+                  x1={killConnectionLine.x1}
+                  y1={killConnectionLine.y1}
+                  x2={killConnectionLine.x2}
+                  y2={killConnectionLine.y2}
+                />
+              </svg>
+            )}
+            {eventMapState.markers.map((marker) => (
+              <div
+                key={marker.id}
+                className={`event-map-marker event-map-marker--${marker.team} event-map-marker--${marker.kind} ${marker.isTarget ? "is-target" : ""}`}
+                style={{
+                  left: `${marker.x * 100}%`,
+                  top: `${marker.y * 100}%`,
+                }}
+                title={marker.label}
+              >
+                {marker.kind === "objective" ? (
+                  <>
+                    <span>{selectedEvent.kind === "defuse" ? "D" : "P"}</span>
+                    {marker.actorIcon || marker.actorLabel ? (
+                      <span
+                        className="event-map-marker-linked-agent"
+                        title={marker.actorLabel}
+                      >
+                        {marker.actorIcon ? (
+                          <img src={marker.actorIcon} alt={marker.actorLabel ?? ""} />
+                        ) : (
+                          marker.actorLabel?.charAt(0).toUpperCase()
+                        )}
+                      </span>
+                    ) : null}
+                  </>
+                ) : marker.icon ? (
+                  <>
+                    <img src={marker.icon} alt={marker.label} />
+                    {marker.weaponIcon || marker.weaponLabel ? (
+                      <span
+                        className="event-map-marker-weapon-badge"
+                        title={marker.weaponLabel}
+                      >
+                        {marker.weaponIcon ? (
+                          <img src={marker.weaponIcon} alt={marker.weaponLabel ?? ""} />
+                        ) : (
+                          marker.weaponLabel?.charAt(0).toUpperCase()
+                        )}
+                      </span>
+                    ) : null}
+                    {marker.deathIcon ? (
+                      <span
+                        className="event-map-marker-death-badge"
+                        title="Jugador eliminado"
+                      >
+                        {marker.deathIcon}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <span>{marker.label.charAt(0).toUpperCase()}</span>
+                    {marker.deathIcon ? (
+                      <span
+                        className="event-map-marker-death-badge"
+                        title="Jugador eliminado"
+                      >
+                        {marker.deathIcon}
+                      </span>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="empty-chart">No hay imagen de mapa disponible.</div>
+      )}
+
+      {!compact && !mapTransform && (
+        <p className="match-event-map-note">
+          Este mapa no tiene transformación de coordenadas disponible.
+        </p>
+      )}
+
+      {!compact && mapTransform && eventMapState.markers.length === 0 && (
+        <p className="match-event-map-note">
+          No hay posiciones válidas para este evento en el dataset.
+        </p>
+      )}
+
+      {!compact &&
+        mapTransform &&
+        eventMapState.markers.length > 0 &&
+        !eventMapState.hasSnapshot && (
+          <p className="match-event-map-note">
+            Se muestra solo la posición del evento porque no hay snapshot
+            completo de jugadores.
+          </p>
+        )}
+
+      <div className={`match-event-map-legend ${compact ? "is-hidden" : ""}`}>
+        <span>
+          <i className="dot ally" /> Aliado
+        </span>
+        <span>
+          <i className="dot enemy" /> Enemigo
+        </span>
+        <span>
+          <i className="dot neutral" /> Objetivo
+        </span>
+        <span>
+          <i className="dot target" /> Posición del jugador
+        </span>
+      </div>
+    </>
+  );
+}
+
 export default function MatchDetailModal({
   matchId,
   playerId,
@@ -391,11 +830,13 @@ export default function MatchDetailModal({
       ? selectedPlayerState.selectedPlayerId
       : playerId;
   const [selectedRoundNum, setSelectedRoundNum] = useState<number | null>(null);
-  const [expandedRounds, setExpandedRounds] = useState<Set<number>>(
-    () => new Set(),
-  );
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [eventFilter, setEventFilter] = useState<EventFilterKey>("all");
+  const [playbackOpen, setPlaybackOpen] = useState(false);
+  const [playbackEvents, setPlaybackEvents] = useState<RoundEvent[]>([]);
+  const [playbackIndex, setPlaybackIndex] = useState(0);
+  const [playbackPlaying, setPlaybackPlaying] = useState(false);
+  const [playbackTitle, setPlaybackTitle] = useState("");
 
   const loading =
     matchLoading ||
@@ -515,10 +956,6 @@ export default function MatchDetailModal({
   }, [playersByPuuid, selectedPlayerId]);
 
   const playerTeam = cleanId(playerInfo?.teamId);
-  const teamInfo =
-    (currentMatch?.teams ?? []).find((team) => team.teamId === playerTeam) ??
-    null;
-
   const {
     name: playerAgentName,
     icon: playerAgentIcon,
@@ -717,6 +1154,7 @@ export default function MatchDetailModal({
           playerLocations: Array.isArray(kill.playerLocations)
             ? kill.playerLocations
             : [],
+          killerLocation: kill.killerLocation,
           victimLocation: kill.victimLocation,
           isPlayerKill,
           isPlayerDeath,
@@ -1039,12 +1477,6 @@ export default function MatchDetailModal({
     );
   }, [matchAnalysis, selectedRoundNum]);
 
-  const selectedEvent = useMemo(() => {
-    const explicitEvent =
-      allRoundEvents.find((event) => event.id === selectedEventId) ?? null;
-    return explicitEvent ?? selectedRound?.events[0] ?? null;
-  }, [allRoundEvents, selectedEventId, selectedRound]);
-
   const filteredSelectedRoundEvents = useMemo(() => {
     const events = selectedRound?.events ?? [];
     switch (eventFilter) {
@@ -1056,12 +1488,6 @@ export default function MatchDetailModal({
         return events.filter(
           (event) => event.kind === "kill" && event.isPlayerDeath,
         );
-      case "opening":
-        return events.filter(
-          (event) => event.kind === "kill" && event.isOpening,
-        );
-      case "trade":
-        return events.filter((event) => event.kind === "kill" && event.isTrade);
       case "objectives":
         return events.filter(
           (event) => event.kind === "plant" || event.kind === "defuse",
@@ -1071,124 +1497,32 @@ export default function MatchDetailModal({
     }
   }, [eventFilter, selectedRound]);
 
-  const eventMapState = useMemo(() => {
-    if (!selectedEvent) {
-      return {
-        markers: [] as EventMapMarker[],
-        hasSnapshot: false,
-      };
-    }
+  const selectedEvent = useMemo(() => {
+    const explicitEvent =
+      filteredSelectedRoundEvents.find((event) => event.id === selectedEventId) ??
+      null;
+    return explicitEvent ?? filteredSelectedRoundEvents[0] ?? null;
+  }, [filteredSelectedRoundEvents, selectedEventId]);
 
-    const markers: EventMapMarker[] = [];
-    const usedIds = new Set<string>();
-
-    const pushMarker = (marker: EventMapMarker) => {
-      if (usedIds.has(marker.id)) return;
-      usedIds.add(marker.id);
-      markers.push(marker);
-    };
-
-    const addSnapshotMarker = (entry: RawPlayerLocation, index: number) => {
-      const position = transformLocation(entry.location, mapTransform);
-      if (!position) return;
-
-      const puuid = cleanId(entry.puuid);
-      const player = puuid ? playersByPuuid.get(puuid) : undefined;
-      const agent = cleanId(player?.characterId)
-        ? agentById.get(cleanId(player?.characterId))
-        : undefined;
-
-      const markerId = `snapshot-${selectedEvent.id}-${puuid || index}`;
-      const teamId = puuid ? cleanId(player?.teamId) : "";
-
-      pushMarker({
-        id: markerId,
-        x: position.x,
-        y: position.y,
-        label: getPlayerDisplay(player),
-        icon: agent?.displayIconSmall ?? agent?.displayIcon ?? undefined,
-        team:
-          !teamId || !playerTeam
-            ? "neutral"
-            : teamId === playerTeam
-              ? "ally"
-              : "enemy",
-        kind: "player",
-        isTarget: puuid === selectedPlayerId,
-      });
-    };
-
-    selectedEvent.playerLocations.forEach(addSnapshotMarker);
-
-    if (selectedEvent.kind === "kill") {
-      const victimPos = transformLocation(
-        selectedEvent.victimLocation,
+  const eventMapState = useMemo(
+    () =>
+      buildEventMapState({
+        event: selectedEvent,
         mapTransform,
-      );
-      if (victimPos) {
-        const victim = cleanId(selectedEvent.victim)
-          ? playersByPuuid.get(cleanId(selectedEvent.victim))
-          : undefined;
-        const victimTeamId = cleanId(victim?.teamId);
-        const victimAgent = cleanId(victim?.characterId)
-          ? agentById.get(cleanId(victim?.characterId))
-          : undefined;
-
-        pushMarker({
-          id: `victim-${selectedEvent.id}`,
-          x: victimPos.x,
-          y: victimPos.y,
-          label: `Posición de ${selectedEvent.victimName}`,
-          icon:
-            victimAgent?.displayIconSmall ??
-            victimAgent?.displayIcon ??
-            undefined,
-          team:
-            !victimTeamId || !playerTeam
-              ? "neutral"
-              : victimTeamId === playerTeam
-                ? "ally"
-                : "enemy",
-          kind: "victim",
-          isTarget: cleanId(selectedEvent.victim) === selectedPlayerId,
-        });
-      }
-    }
-
-    if (selectedEvent.kind === "plant" || selectedEvent.kind === "defuse") {
-      const objectivePos = transformLocation(
-        selectedEvent.location,
-        mapTransform,
-      );
-      if (objectivePos) {
-        pushMarker({
-          id: `${selectedEvent.kind}-${selectedEvent.id}-objective`,
-          x: objectivePos.x,
-          y: objectivePos.y,
-          label:
-            selectedEvent.kind === "plant"
-              ? `Plant${selectedEvent.site ? ` en ${selectedEvent.site}` : ""}`
-              : "Defuse",
-          team: "neutral",
-          kind: "objective",
-          isTarget: false,
-        });
-      }
-    }
-
-    return {
-      markers,
-      hasSnapshot: selectedEvent.playerLocations.length > 0,
-    };
-  }, [
-    selectedEvent,
-    mapTransform,
-    playersByPuuid,
-    playerTeam,
-    selectedPlayerId,
-    agentById,
-  ]);
-
+        playersByPuuid,
+        playerTeam,
+        selectedPlayerId,
+        agentById,
+      }),
+    [
+      selectedEvent,
+      mapTransform,
+      playersByPuuid,
+      playerTeam,
+      selectedPlayerId,
+      agentById,
+    ],
+  );
   const sideBest = useMemo(() => {
     if (!matchAnalysis) return null;
     return [...matchAnalysis.sideSummary]
@@ -1196,12 +1530,11 @@ export default function MatchDetailModal({
       .sort((a, b) => b.winRate - a.winRate || b.kda - a.kda)[0];
   }, [matchAnalysis]);
 
-  const resultState = useMemo(() => {
-    const won = toNumber(teamInfo?.roundsWon);
-    const lost = toNumber(teamInfo?.roundsLost);
-    if (won === lost) return "draw";
-    return won > lost || teamInfo?.won ? "win" : "loss";
-  }, [teamInfo]);
+  const scoreState = useMemo(
+    () => getTeamScoreState(currentMatch, playerTeam),
+    [currentMatch, playerTeam],
+  );
+  const { resultState } = scoreState;
 
   const impactLevel = useMemo(() => {
     if (!matchAnalysis) return null;
@@ -1232,6 +1565,20 @@ export default function MatchDetailModal({
       text: "Aportación estable, con margen para decidir más rondas ganadas.",
     };
   }, [matchAnalysis]);
+
+  useEffect(() => {
+    if (!playbackOpen || !playbackPlaying || playbackEvents.length <= 1) return;
+    const interval = window.setInterval(() => {
+      setPlaybackIndex((current) => {
+        if (current >= playbackEvents.length - 1) {
+          setPlaybackPlaying(false);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 1400);
+    return () => window.clearInterval(interval);
+  }, [playbackEvents.length, playbackOpen, playbackPlaying]);
 
   if (!loading && !currentMatch) {
     return (
@@ -1273,22 +1620,6 @@ export default function MatchDetailModal({
     setEventFilter("all");
   };
 
-  const handleRoundToggle = (roundNum: number, firstEventId?: string) => {
-    setExpandedRounds((previous) => {
-      const next = new Set(previous);
-      if (next.has(roundNum)) {
-        next.delete(roundNum);
-      } else {
-        next.add(roundNum);
-      }
-      return next;
-    });
-
-    if (!selectedEventId && firstEventId) {
-      setSelectedEventId(firstEventId);
-    }
-  };
-
   const handlePlayerSelect = (nextPlayerId: string) => {
     setSelectedPlayerState({
       matchId,
@@ -1296,22 +1627,48 @@ export default function MatchDetailModal({
       selectedPlayerId: nextPlayerId,
     });
     setSelectedRoundNum(null);
-    setExpandedRounds(new Set());
     setSelectedEventId(null);
     setEventFilter("all");
+    setPlaybackOpen(false);
+    setPlaybackPlaying(false);
   };
 
   const eventFilterOptions: Array<{ key: EventFilterKey; label: string }> = [
     { key: "all", label: "Todos" },
     { key: "kills", label: "Kills del jugador" },
     { key: "deaths", label: "Muertes del jugador" },
-    { key: "opening", label: "Opening" },
-    { key: "trade", label: "Trade" },
     { key: "objectives", label: "Objetivos" },
   ];
 
   const renderRoundEventButton = (event: RoundEvent) => {
-    const isActive = selectedEventId === event.id;
+    const isActive = selectedEvent?.id === event.id;
+    const renderActionParticipant = (
+      puuid: string | undefined,
+      name: string,
+      icon?: string,
+    ) => {
+      const cleanPuuid = cleanId(puuid);
+      const participantTeam = cleanPuuid
+        ? cleanId(playersByPuuid.get(cleanPuuid)?.teamId)
+        : "";
+      const tone =
+        cleanPuuid === selectedPlayerId
+          ? "target"
+          : participantTeam && participantTeam === playerTeam
+            ? "ally"
+            : "enemy";
+
+      return (
+        <span className={`match-action-player is-${tone}`}>
+          {icon ? (
+            <img src={icon} alt="" />
+          ) : (
+            <span>{name.charAt(0).toUpperCase()}</span>
+          )}
+          <strong>{name}</strong>
+        </span>
+      );
+    };
 
     if (event.kind === "kill") {
       return (
@@ -1326,9 +1683,19 @@ export default function MatchDetailModal({
             <span className="match-round-event-time">
               {toSecondsLabel(event.timeMs)}
             </span>
-            <strong>
-              {event.killerName} eliminó a {event.victimName}
-            </strong>
+            <span className="match-action-text">
+              {renderActionParticipant(
+                event.killer,
+                event.killerName,
+                event.killerIcon,
+              )}
+              <span>eliminó a</span>
+              {renderActionParticipant(
+                event.victim,
+                event.victimName,
+                event.victimIcon,
+              )}
+            </span>
           </div>
 
           <div className="match-round-event-meta">
@@ -1345,6 +1712,12 @@ export default function MatchDetailModal({
       );
     }
 
+    const actorMeta = getAgentMeta(
+      event.actor ? playersByPuuid.get(event.actor) : null,
+      agentById,
+      agentNameMap,
+    );
+
     return (
       <button
         key={event.id}
@@ -1357,8 +1730,10 @@ export default function MatchDetailModal({
           <span className="match-round-event-time">
             {toSecondsLabel(event.timeMs)}
           </span>
+          {actorMeta.icon &&
+            renderActionParticipant(event.actor, event.actorName, actorMeta.icon)}
           <strong>
-            {event.kind === "plant" ? "Plant" : "Defuse"} · {event.actorName}
+            {event.kind === "plant" ? "Plant" : "Defuse"}
           </strong>
         </div>
         <div className="match-round-event-meta">
@@ -1372,7 +1747,138 @@ export default function MatchDetailModal({
     );
   };
 
-  const showLegacyRoundList = expandedRounds.size < 0;
+  const openRoundPlayback = (round: RoundSummary) => {
+    if (round.events.length === 0) return;
+    setPlaybackEvents(round.events);
+    setPlaybackIndex(0);
+    setPlaybackTitle(`Reproducción de ${roundLabel(round.roundNum)}`);
+    setPlaybackPlaying(true);
+    setPlaybackOpen(true);
+  };
+
+  const openMatchPlayback = () => {
+    if (allRoundEvents.length === 0) return;
+    setPlaybackEvents(
+      [...allRoundEvents].sort(
+        (a, b) => a.roundNum - b.roundNum || a.timeMs - b.timeMs,
+      ),
+    );
+    setPlaybackIndex(0);
+    setPlaybackTitle("Reproducción de partida");
+    setPlaybackPlaying(true);
+    setPlaybackOpen(true);
+  };
+
+  const closePlayback = () => {
+    setPlaybackOpen(false);
+    setPlaybackPlaying(false);
+  };
+
+  const nextPlaybackEvent = () => {
+    setPlaybackIndex((current) => {
+      if (current >= playbackEvents.length - 1) {
+        setPlaybackPlaying(false);
+        return current;
+      }
+      return current + 1;
+    });
+  };
+
+  const previousPlaybackEvent = () => {
+    setPlaybackIndex((current) => Math.max(0, current - 1));
+  };
+
+  const restartPlayback = () => {
+    setPlaybackIndex(0);
+    setPlaybackPlaying(playbackEvents.length > 0);
+  };
+
+  const playbackEvent = playbackEvents[playbackIndex] ?? null;
+  const playbackMapState = buildEventMapState({
+    event: playbackEvent,
+    mapTransform,
+    playersByPuuid,
+    playerTeam,
+    selectedPlayerId,
+    agentById,
+  });
+
+  const renderPlaybackEventButton = (event: RoundEvent, index: number) => {
+    const isActive = index === playbackIndex;
+    const renderActionParticipant = (
+      puuid: string | undefined,
+      name: string,
+      icon?: string,
+    ) => {
+      const cleanPuuid = cleanId(puuid);
+      const participantTeam = cleanPuuid
+        ? cleanId(playersByPuuid.get(cleanPuuid)?.teamId)
+        : "";
+      const tone =
+        cleanPuuid === selectedPlayerId
+          ? "target"
+          : participantTeam && participantTeam === playerTeam
+            ? "ally"
+            : "enemy";
+
+      return (
+        <span className={`match-action-player is-${tone}`}>
+          {icon ? (
+            <img src={icon} alt="" />
+          ) : (
+            <span>{name.charAt(0).toUpperCase()}</span>
+          )}
+          <strong>{name}</strong>
+        </span>
+      );
+    };
+    const actorMeta =
+      event.kind === "kill"
+        ? null
+        : getAgentMeta(
+            event.actor ? playersByPuuid.get(event.actor) : null,
+            agentById,
+            agentNameMap,
+          );
+
+    return (
+      <button
+        key={event.id}
+        type="button"
+        className={`match-playback-action ${isActive ? "is-active" : ""}`}
+        onClick={() => setPlaybackIndex(index)}
+        aria-current={isActive ? "true" : undefined}
+      >
+        <span className="match-round-event-time">
+          {roundLabel(event.roundNum)} · {toSecondsLabel(event.timeMs)}
+        </span>
+        <span className="match-action-text">
+          {event.kind === "kill" ? (
+            <>
+              {renderActionParticipant(
+                event.killer,
+                event.killerName,
+                event.killerIcon,
+              )}
+              <span>eliminó a</span>
+              {renderActionParticipant(
+                event.victim,
+                event.victimName,
+                event.victimIcon,
+              )}
+            </>
+          ) : (
+            <>
+              {actorMeta?.icon &&
+                renderActionParticipant(event.actor, event.actorName, actorMeta.icon)}
+              <span>{event.kind === "plant" ? "Plant" : "Defuse"}</span>
+            </>
+          )}
+        </span>
+      </button>
+    );
+  };
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -1484,7 +1990,8 @@ export default function MatchDetailModal({
                 <div className="match-score-main">
                   <span className="match-score-label">Resultado</span>
                   <strong className="match-score-value">
-                    {teamInfo?.roundsWon ?? 0} - {teamInfo?.roundsLost ?? 0}
+                    {scoreState.selectedTeamRounds} -{" "}
+                    {scoreState.opponentTeamRounds}
                   </strong>
                 </div>
 
@@ -1538,6 +2045,19 @@ export default function MatchDetailModal({
                   )}
                   <span>{playerRankName}</span>
                   <span>MVP partida: {getPlayerDisplay(mvp)}</span>
+                  <button
+                    type="button"
+                    className="match-play-button"
+                    onClick={openMatchPlayback}
+                    disabled={allRoundEvents.length === 0}
+                    title={
+                      allRoundEvents.length === 0
+                        ? "Sin eventos reproducibles"
+                        : "Reproducir partida"
+                    }
+                  >
+                    Reproducir partida
+                  </button>
                 </div>
               </div>
             </header>
@@ -1588,6 +2108,19 @@ export default function MatchDetailModal({
                       </p>
                     </div>
                     <div className="round-trigger-summary">
+                      <button
+                        type="button"
+                        className="match-play-button"
+                        onClick={() => openRoundPlayback(selectedRound)}
+                        disabled={selectedRound.events.length === 0}
+                        title={
+                          selectedRound.events.length === 0
+                            ? "Sin eventos reproducibles"
+                            : "Reproducir ronda"
+                        }
+                      >
+                        Reproducir ronda
+                      </button>
                       <span
                         className={
                           selectedRound.didWin ? "text-positive" : "text-negative"
@@ -1603,7 +2136,8 @@ export default function MatchDetailModal({
                     </div>
                   </div>
 
-                  <div className="match-round-accordion-body">
+                  <div className="match-selected-round-layout">
+                    <div className="match-selected-round-actions">
                     <div className="match-round-player-row">
                       <span>
                         Score <strong>{formatNumber(selectedRound.playerScore)}</strong>
@@ -1643,6 +2177,16 @@ export default function MatchDetailModal({
                         filteredSelectedRoundEvents.map(renderRoundEventButton)
                       )}
                     </div>
+                    </div>
+                    <aside className="match-selected-round-map">
+                      <MatchEventMapCanvas
+                        mapName={mapName}
+                        mapImageUrl={mapImageUrl}
+                        selectedEvent={selectedEvent}
+                        eventMapState={eventMapState}
+                        mapTransform={mapTransform}
+                      />
+                    </aside>
                   </div>
                 </article>
               )}
@@ -1907,302 +2451,85 @@ export default function MatchDetailModal({
               </div>
             </section>
 
-            <section className="match-event-map-zone">
-              {showLegacyRoundList && (
-              <article className="match-rounds-zone">
-                <div className="panel-header">
-                  <div>
-                    <h3 className="panel-title">Detalle de ronda</h3>
-                    <p className="panel-subtitle">
-                      Abre cada ronda para ver resultado, eventos y tu impacto.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="match-round-accordion-list">
-                  {matchAnalysis.rounds.map((round) => {
-                    const isOpen = expandedRounds.has(round.roundNum);
-                    return (
-                      <article
-                        key={`round-card-${round.roundNum}`}
-                        className={`match-round-accordion ${isOpen ? "is-open" : ""}`}
-                      >
-                        <button
-                          type="button"
-                          className="match-round-accordion-trigger"
-                          onClick={() =>
-                            handleRoundToggle(
-                              round.roundNum,
-                              round.events[0]?.id,
-                            )
-                          }
-                          aria-expanded={isOpen}
-                        >
-                          <div className="round-trigger-main">
-                            <strong>{roundLabel(round.roundNum)}</strong>
-                            <small>
-                              {round.side === "attack" ? "Ataque" : "Defensa"} ·{" "}
-                              {round.roundResult}
-                            </small>
-                          </div>
-
-                          <div className="round-trigger-summary">
-                            <span
-                              className={
-                                round.didWin ? "text-positive" : "text-negative"
-                              }
-                            >
-                              {round.didWin ? "Ganada" : "Perdida"}
-                            </span>
-                            <span>{round.playerKills}K</span>
-                            <span>{round.playerDeaths}D</span>
-                            <span>{round.playerAssists}A</span>
-                            {round.hadPlant && <em>Plant</em>}
-                            {round.hadDefuse && <em>Defuse</em>}
-                          </div>
-                        </button>
-
-                        {isOpen && (
-                          <div className="match-round-accordion-body">
-                            <div className="match-round-player-row">
-                              <span>
-                                Score{" "}
-                                <strong>
-                                  {formatNumber(round.playerScore)}
-                                </strong>
-                              </span>
-                              <span>
-                                Daño{" "}
-                                <strong>
-                                  {formatNumber(round.playerDamage)}
-                                </strong>
-                              </span>
-                              <span>
-                                Gasto{" "}
-                                <strong>
-                                  {formatNumber(round.playerSpent)}
-                                </strong>
-                              </span>
-                              <span>
-                                Loadout{" "}
-                                <strong>
-                                  {formatNumber(round.playerLoadout)}
-                                </strong>
-                              </span>
-                            </div>
-
-                            <div className="match-round-events">
-                              {round.events.length === 0 ? (
-                                <div className="empty-chart">
-                                  Sin eventos relevantes en esta ronda.
-                                </div>
-                              ) : (
-                                round.events.map((event) => {
-                                  const isActive = selectedEventId === event.id;
-
-                                  if (event.kind === "kill") {
-                                    return (
-                                      <button
-                                        key={event.id}
-                                        type="button"
-                                        className={`match-round-event-btn ${isActive ? "is-active" : ""}`}
-                                        onClick={() =>
-                                          setSelectedEventId(event.id)
-                                        }
-                                      >
-                                        <div className="match-round-event-top">
-                                          <span className="match-round-event-time">
-                                            {toSecondsLabel(event.timeMs)}
-                                          </span>
-                                          <strong>
-                                            {event.killerName} eliminó a{" "}
-                                            {event.victimName}
-                                          </strong>
-                                        </div>
-
-                                        <div className="match-round-event-meta">
-                                          {event.weaponIcon && (
-                                            <img
-                                              src={event.weaponIcon}
-                                              alt={event.weaponName}
-                                            />
-                                          )}
-                                          <span>{event.weaponName}</span>
-                                          {event.isPlayerKill && (
-                                            <span className="meta-pill">
-                                              Kill
-                                            </span>
-                                          )}
-                                          {event.isPlayerDeath && (
-                                            <span className="meta-pill">
-                                              Muerte
-                                            </span>
-                                          )}
-                                          {event.isOpening && (
-                                            <span className="meta-pill">
-                                              Opening
-                                            </span>
-                                          )}
-                                          {event.isTrade && (
-                                            <span className="meta-pill">
-                                              Trade
-                                            </span>
-                                          )}
-                                        </div>
-                                      </button>
-                                    );
-                                  }
-
-                                  return (
-                                    <button
-                                      key={event.id}
-                                      type="button"
-                                      className={`match-round-event-btn match-round-event-btn-objective ${isActive ? "is-active" : ""}`}
-                                      onClick={() =>
-                                        setSelectedEventId(event.id)
-                                      }
-                                    >
-                                      <div className="match-round-event-top">
-                                        <span className="match-round-event-time">
-                                          {toSecondsLabel(event.timeMs)}
-                                        </span>
-                                        <strong>
-                                          {event.kind === "plant"
-                                            ? "Plant"
-                                            : "Defuse"}{" "}
-                                          · {event.actorName}
-                                        </strong>
-                                      </div>
-                                      <div className="match-round-event-meta">
-                                        <span>
-                                          {event.site
-                                            ? `${event.kind === "plant" ? "Spike en" : "Sitio"} ${event.site}`
-                                            : "Evento de objetivo"}
-                                        </span>
-                                      </div>
-                                    </button>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </article>
-                    );
-                  })}
-                </div>
-              </article>
-              )}
-
-              <div>
-                <div className="panel-header">
-                  <div>
-                    <h3 className="panel-title">
-                      Mapa del evento seleccionado
-                    </h3>
-                    <p className="panel-subtitle">
-                      Click en un evento para ver posiciones instantáneas.
-                    </p>
-                  </div>
-                </div>
-
-                {!selectedEvent ? (
-                  <div className="empty-panel">
-                    Selecciona un evento de cualquier ronda para ver el mapa.
-                  </div>
-                ) : (
-                  <>
-                    <div className="match-event-map-header">
-                      <strong>
-                        {roundLabel(selectedEvent.roundNum)} ·{" "}
-                        {toSecondsLabel(selectedEvent.timeMs)}
-                      </strong>
-                      <span>
-                        {selectedEvent.kind === "kill"
-                          ? `${selectedEvent.killerName} → ${selectedEvent.victimName}`
-                          : `${selectedEvent.kind === "plant" ? "Plant" : "Defuse"} de ${selectedEvent.actorName}`}
-                      </span>
-                    </div>
-
-                    {mapImageUrl ? (
-                      <div className="match-event-map-stage">
-                        <img src={mapImageUrl} alt={mapName} />
-                        <div className="match-event-map-overlay">
-                          {eventMapState.markers.map((marker) => (
-                            <div
-                              key={marker.id}
-                              className={`event-map-marker event-map-marker--${marker.team} event-map-marker--${marker.kind} ${marker.isTarget ? "is-target" : ""}`}
-                              style={{
-                                left: `${marker.x * 100}%`,
-                                top: `${marker.y * 100}%`,
-                              }}
-                              title={marker.label}
-                            >
-                              {marker.kind === "objective" ? (
-                                <span>
-                                  {selectedEvent.kind === "defuse" ? "D" : "P"}
-                                </span>
-                              ) : marker.icon ? (
-                                <img src={marker.icon} alt={marker.label} />
-                              ) : (
-                                <span>
-                                  {marker.label.charAt(0).toUpperCase()}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="empty-chart">
-                        No hay imagen de mapa disponible.
-                      </div>
-                    )}
-
-                    {!mapTransform && (
-                      <p className="match-event-map-note">
-                        Este mapa no tiene transformación de coordenadas
-                        disponible.
-                      </p>
-                    )}
-
-                    {mapTransform && eventMapState.markers.length === 0 && (
-                      <p className="match-event-map-note">
-                        No hay posiciones válidas para este evento en el
-                        dataset.
-                      </p>
-                    )}
-
-                    {mapTransform &&
-                      eventMapState.markers.length > 0 &&
-                      !eventMapState.hasSnapshot && (
-                        <p className="match-event-map-note">
-                          Se muestra solo la posición del evento porque no hay
-                          snapshot completo de jugadores.
-                        </p>
-                      )}
-
-                    <div className="match-event-map-legend">
-                      <span>
-                        <i className="dot ally" /> Aliado
-                      </span>
-                      <span>
-                        <i className="dot enemy" /> Enemigo
-                      </span>
-                      <span>
-                        <i className="dot neutral" /> Objetivo
-                      </span>
-                      <span>
-                        <i className="dot target" /> Posición del jugador
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            </section>
           </div>
         )}
       </div>
+      {playbackOpen && (
+        <div
+          className="match-playback-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={playbackTitle}
+          onClick={closePlayback}
+        >
+          <div
+            className="match-playback-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="match-playback-header">
+              <div>
+                <span className="stats-eyebrow">{playbackTitle}</span>
+              </div>
+              <button type="button" className="modal-close" onClick={closePlayback}>
+                ×
+              </button>
+            </header>
+
+            <div className="match-playback-body">
+              <aside className="match-playback-actions">
+                <div className="match-playback-progress">
+                  Evento {playbackEvents.length === 0 ? 0 : playbackIndex + 1} de{" "}
+                  {playbackEvents.length}
+                </div>
+                <div className="match-playback-action-list">
+                  {playbackEvents.map(renderPlaybackEventButton)}
+                </div>
+              </aside>
+
+              <div className="match-playback-map">
+                <MatchEventMapCanvas
+                  mapName={mapName}
+                  mapImageUrl={mapImageUrl}
+                  selectedEvent={playbackEvent}
+                  eventMapState={playbackMapState}
+                  mapTransform={mapTransform}
+                  compact
+                />
+              </div>
+
+              <div className="match-playback-controls">
+                <button type="button" onClick={restartPlayback}>
+                  Reiniciar
+                </button>
+                <button
+                  type="button"
+                  onClick={previousPlaybackEvent}
+                  disabled={playbackIndex === 0}
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlaybackPlaying((playing) => !playing)}
+                  disabled={playbackEvents.length <= 1}
+                >
+                  {playbackPlaying ? "Pausar" : "Reanudar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={nextPlaybackEvent}
+                  disabled={playbackIndex >= playbackEvents.length - 1}
+                >
+                  Siguiente
+                </button>
+                <button type="button" onClick={closePlayback}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
