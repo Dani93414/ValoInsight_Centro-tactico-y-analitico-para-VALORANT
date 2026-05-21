@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   useMatchById,
   useAgentes,
@@ -62,12 +63,14 @@ type EventFilterKey =
   | "objectives";
 type MatchDetailSection =
   | "summary"
+  | "classification"
   | "rounds"
   | "duels"
   | "economy"
-  | "team"
   | "map";
 type TeamScoreboardMode = "grouped" | "combined";
+type ScoreboardSideFilter = "all" | "attack" | "defense";
+type DuelMatrixFilter = "all" | "withKills" | "teamA" | "teamB" | "ties";
 
 type WeaponCatalogEntry = {
   id: string;
@@ -119,6 +122,7 @@ type RoundSummary = {
   didWin: boolean;
   winningTeam: string;
   roundResult: string;
+  roundCeremony: string;
   playerKills: number;
   playerDeaths: number;
   playerAssists: number;
@@ -235,12 +239,33 @@ type PlayerScoreboardStats = {
   multikillRounds: number;
 };
 
+type RoundTeamLoadout = {
+  roundNum: number;
+  teamAValue: number;
+  teamBValue: number;
+  teamAWon: boolean;
+  teamBWon: boolean;
+  hadPlant: boolean;
+  hadDefuse: boolean;
+};
+
+type PlayerDuelCell = {
+  key: string;
+  teamAPlayer: RawPlayer;
+  teamBPlayer: RawPlayer;
+  teamAKillsOnB: number;
+  teamBKillsOnA: number;
+  total: number;
+  leader: "teamA" | "teamB" | "tie";
+  events: RoundEvent[];
+};
+
 const matchDetailSections = [
   { key: "summary", label: "Resumen" },
+  { key: "classification", label: "Tabla de clasificaciÃ³n" },
   { key: "rounds", label: "Rondas" },
   { key: "duels", label: "Duelos" },
-  { key: "economy", label: "Economía" },
-  { key: "team", label: "Equipo" },
+  { key: "economy", label: "EconomÃ­a" },
   { key: "map", label: "Mapa" },
 ] as const satisfies ReadonlyArray<{
   key: MatchDetailSection;
@@ -375,22 +400,6 @@ function getPlayerShortDisplay(player?: RawPlayer | null) {
   return player.gameName?.trim() || getPlayerDisplay(player);
 }
 
-function getPlayerMatchKd(player: RawPlayer): number {
-  return safeDivide(toNumber(player.stats?.kills), Math.max(toNumber(player.stats?.deaths), 1));
-}
-
-function getPlayerMatchAcs(player: RawPlayer): number {
-  return safeDivide(toNumber(player.stats?.score), Math.max(toNumber(player.stats?.roundsPlayed), 1));
-}
-
-function getPlayerKills(player: RawPlayer): number {
-  return toNumber(player.stats?.kills);
-}
-
-function getPlayerScore(player: RawPlayer): number {
-  return toNumber(player.stats?.score);
-}
-
 function compareScoreboardPlayers(
   a: PlayerScoreboardStats,
   b: PlayerScoreboardStats,
@@ -501,7 +510,7 @@ function roundLabel(roundNum: number): string {
 
 function getEventDescription(event: RoundEvent): string {
   if (event.kind === "kill") {
-    return `${event.killerName} eliminó a ${event.victimName}`;
+    return `${event.killerName} eliminÃ³ a ${event.victimName}`;
   }
   return `${event.kind === "plant" ? "Plant" : "Defuse"}`;
 }
@@ -555,6 +564,454 @@ function getTeamScoreState(
         : "loss";
 
   return { selectedTeamRounds, opponentTeamRounds, resultState };
+}
+
+function getTeamRoundsWon(currentMatch: RawMatchDetail | null, teamId: string): number {
+  const teamInfo =
+    currentMatch?.teams?.find((team) => cleanId(team.teamId) === teamId) ?? null;
+  const roundsFromTeam = toNumber(teamInfo?.roundsWon);
+  if (roundsFromTeam > 0) return roundsFromTeam;
+
+  return (currentMatch?.roundResults ?? []).filter(
+    (round) => cleanId(round.winningTeam) === teamId,
+  ).length;
+}
+
+function getRoundSpecialLabel(round: RoundSummary): string {
+  const ceremony = round.roundCeremony.toLowerCase();
+  const result = round.roundResult.toLowerCase();
+  const text = `${ceremony} ${result}`;
+
+  if (text.includes("ace")) return "ACE";
+  if (text.includes("flawless")) return "FL";
+  if (text.includes("thrifty")) return "TH";
+  if (round.hadDefuse) return "DEF";
+  if (round.hadPlant) return "P";
+  return "";
+}
+
+function buildRoundTeamLoadoutTimeline(
+  currentMatch: RawMatchDetail,
+  playersByTeam: Array<[string, RawPlayer[]]>,
+): RoundTeamLoadout[] {
+  const teamAId = cleanId(playersByTeam[0]?.[0]);
+  const teamBId = cleanId(playersByTeam[1]?.[0]);
+  const playerTeamByPuuid = new Map<string, string>();
+
+  for (const [teamId, teamPlayers] of playersByTeam) {
+    for (const player of teamPlayers) {
+      const puuid = cleanId(player.puuid);
+      if (puuid) playerTeamByPuuid.set(puuid, cleanId(teamId));
+    }
+  }
+
+  return (currentMatch.roundResults ?? []).map((round, index) => {
+    const roundNum = Number.isFinite(round.roundNum)
+      ? Number(round.roundNum)
+      : index;
+    let teamAValue = 0;
+    let teamBValue = 0;
+
+    for (const stat of round.playerStats ?? []) {
+      const puuid = cleanId(stat.puuid);
+      const teamId = puuid ? playerTeamByPuuid.get(puuid) : "";
+      const loadoutValue = toNumber(stat.economy?.loadoutValue);
+      if (teamId === teamAId) teamAValue += loadoutValue;
+      if (teamId === teamBId) teamBValue += loadoutValue;
+    }
+
+    const winningTeam = cleanId(round.winningTeam);
+    return {
+      roundNum,
+      teamAValue,
+      teamBValue,
+      teamAWon: Boolean(teamAId) && winningTeam === teamAId,
+      teamBWon: Boolean(teamBId) && winningTeam === teamBId,
+      hadPlant: Boolean(cleanId(round.bombPlanter)),
+      hadDefuse: Boolean(cleanId(round.bombDefuser)),
+    };
+  });
+}
+
+function MatchLoadoutTimeline({
+  data,
+  teamALabel,
+  teamBLabel,
+}: {
+  data: RoundTeamLoadout[];
+  teamALabel: string;
+  teamBLabel: string;
+}) {
+  const globalMax = Math.max(
+    ...data.flatMap((round) => [round.teamAValue, round.teamBValue]),
+    0,
+  );
+
+  return (
+    <section className="match-loadout-timeline-panel">
+      <div className="match-loadout-timeline-header">
+        <div>
+          <h4>Comparativa de loadout por ronda</h4>
+          <p>Valor total de equipamiento por equipo antes de cada ronda.</p>
+        </div>
+        <div className="match-loadout-legend" aria-label="Leyenda loadout">
+          <span><i className="is-team-a" /> {teamALabel}</span>
+          <span><i className="is-team-b" /> {teamBLabel}</span>
+        </div>
+      </div>
+
+      {data.length === 0 || globalMax <= 0 ? (
+        <div className="empty-chart">No hay datos de loadout por ronda.</div>
+      ) : (
+        <div className="match-loadout-timeline-scroll">
+          {data.map((round) => {
+            const winner = round.teamAWon
+              ? teamALabel
+              : round.teamBWon
+                ? teamBLabel
+                : "Empate";
+            const teamAHeight = Math.max(6, safeDivide(round.teamAValue, globalMax) * 100);
+            const teamBHeight = Math.max(6, safeDivide(round.teamBValue, globalMax) * 100);
+
+            return (
+              <article
+                key={`loadout-${round.roundNum}`}
+                className={`match-loadout-round ${
+                  round.teamAWon ? "is-team-a-win" : round.teamBWon ? "is-team-b-win" : ""
+                }`}
+                title={`${roundLabel(round.roundNum)} Â· ${teamALabel} ${formatNumber(
+                  round.teamAValue,
+                )} Â· ${teamBLabel} ${formatNumber(round.teamBValue)} Â· GanÃ³ ${winner}`}
+              >
+                <span className="match-loadout-round-number">
+                  {round.roundNum + 1}
+                </span>
+                <div className="match-loadout-bars" aria-hidden="true">
+                  <span
+                    className="match-loadout-bar match-loadout-bar--team-a"
+                    style={{ height: `${teamAHeight}%` }}
+                  />
+                  <span
+                    className="match-loadout-bar match-loadout-bar--team-b"
+                    style={{ height: `${teamBHeight}%` }}
+                  />
+                </div>
+                <span className="match-loadout-round-meta">
+                  {round.hadPlant && <em>P</em>}
+                  {round.hadDefuse && <em>DEF</em>}
+                </span>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function buildPlayerScoreboardStats({
+  player,
+  currentMatch,
+  sideFilter,
+  teamByPuuid,
+  agentById,
+  agentNameMap,
+  tierByNumber,
+}: {
+  player: RawPlayer;
+  currentMatch: RawMatchDetail;
+  sideFilter: ScoreboardSideFilter;
+  teamByPuuid: Map<string, string>;
+  agentById: Map<string, AgentContent>;
+  agentNameMap: Record<string, string>;
+  tierByNumber: Map<number, CompetitiveTierContent>;
+}): PlayerScoreboardStats {
+  const puuid = cleanId(player.puuid);
+  const teamId = cleanId(player.teamId) || "Sin equipo";
+  const agent = getAgentMeta(player, agentById, agentNameMap);
+  const rankTier =
+    typeof player.competitiveTier === "number" ? player.competitiveTier : null;
+  const tierAsset = rankTier !== null ? tierByNumber.get(rankTier) : undefined;
+  const rankIcon = normalizeCompetitiveTierIconPath(
+    tierAsset?.smallIcon ??
+      tierAsset?.largeIcon ??
+      player.competitiveTierImage ??
+      null,
+  );
+
+  let rounds = 0;
+  let kills = 0;
+  let deaths = 0;
+  let assists = 0;
+  let score = 0;
+  let damageDealt = 0;
+  let damageReceived = 0;
+  let headshots = 0;
+  let bodyshots = 0;
+  let legshots = 0;
+  let firstKills = 0;
+  let firstDeaths = 0;
+  let kastRounds = 0;
+  let multikillRounds = 0;
+
+  for (const [roundIndex, round] of (currentMatch.roundResults ?? []).entries()) {
+    const roundNum = Number.isFinite(round.roundNum)
+      ? Number(round.roundNum)
+      : roundIndex;
+    const side = determineRoundSide(teamId, roundNum);
+    if (sideFilter !== "all" && side !== sideFilter) continue;
+
+    rounds += 1;
+    const roundState = { kills: 0, assists: 0, deaths: 0, traded: false };
+    const timelineKills: Array<{ kill: RawKillEvent; ownerPuuid: string }> = [];
+
+    for (const stat of round.playerStats ?? []) {
+      const ownerPuuid = cleanId(stat.puuid);
+      if (ownerPuuid === puuid) {
+        score += toNumber(stat.score);
+        for (const damageEntry of stat.damage ?? []) {
+          damageDealt += toNumber(damageEntry.damage);
+          headshots += toNumber(damageEntry.headshots);
+          bodyshots += toNumber(damageEntry.bodyshots);
+          legshots += toNumber(damageEntry.legshots);
+        }
+      }
+
+      for (const damageEntry of stat.damage ?? []) {
+        if (cleanId(damageEntry.receiver) === puuid) {
+          damageReceived += toNumber(damageEntry.damage);
+        }
+      }
+
+      for (const kill of stat.kills ?? []) {
+        timelineKills.push({ kill, ownerPuuid });
+      }
+    }
+
+    timelineKills.sort(
+      (a, b) =>
+        toNumber(a.kill.timeSinceRoundStartMillis) -
+        toNumber(b.kill.timeSinceRoundStartMillis),
+    );
+    const firstKill = timelineKills[0]?.kill ?? null;
+
+    for (let killIndex = 0; killIndex < timelineKills.length; killIndex += 1) {
+      const { kill, ownerPuuid } = timelineKills[killIndex];
+      const killerId = cleanId(kill.killer) || ownerPuuid;
+      const victimId = cleanId(kill.victim);
+      const timeMs = toNumber(kill.timeSinceRoundStartMillis);
+
+      if (killerId === puuid) {
+        roundState.kills += 1;
+        if (firstKill === kill) firstKills += 1;
+      }
+
+      if (victimId === puuid) {
+        roundState.deaths += 1;
+        if (firstKill === kill) firstDeaths += 1;
+
+        for (let forward = killIndex + 1; forward < timelineKills.length; forward += 1) {
+          const next = timelineKills[forward].kill;
+          const nextTime = toNumber(next.timeSinceRoundStartMillis);
+          if (nextTime - timeMs > 5000) break;
+
+          const nextKiller = cleanId(next.killer);
+          const nextVictim = cleanId(next.victim);
+          if (
+            nextVictim === killerId &&
+            nextKiller &&
+            teamByPuuid.get(nextKiller) === teamByPuuid.get(victimId)
+          ) {
+            roundState.traded = true;
+            break;
+          }
+        }
+      }
+
+      if (killerId !== puuid && parseAssistants(kill.assistants).includes(puuid)) {
+        roundState.assists += 1;
+      }
+    }
+
+    kills += roundState.kills;
+    deaths += roundState.deaths;
+    assists += roundState.assists;
+    if (roundState.kills >= 3) multikillRounds += 1;
+    if (
+      roundState.kills > 0 ||
+      roundState.assists > 0 ||
+      roundState.deaths === 0 ||
+      roundState.traded
+    ) {
+      kastRounds += 1;
+    }
+  }
+
+  const totalHits = headshots + bodyshots + legshots;
+  return {
+    player,
+    puuid,
+    teamId,
+    agentName: agent.name,
+    agentIcon: agent.icon,
+    rankTier,
+    rankName: getRankNameFromTier(rankTier),
+    rankIcon,
+    kills,
+    deaths,
+    assists,
+    score,
+    rounds,
+    acs: safeDivide(score, Math.max(rounds, 1)),
+    kd: safeDivide(kills, Math.max(deaths, 1)),
+    plusMinus: kills - deaths,
+    damageDealt,
+    damageReceived,
+    damageDelta: safeDivide(damageDealt - damageReceived, Math.max(rounds, 1)),
+    adr: safeDivide(damageDealt, Math.max(rounds, 1)),
+    headshots,
+    bodyshots,
+    legshots,
+    hsPct: safeDivide(headshots, Math.max(totalHits, 1)) * 100,
+    kastRounds,
+    kastPct: safeDivide(kastRounds, Math.max(rounds, 1)) * 100,
+    firstKills,
+    firstDeaths,
+    multikillRounds,
+  };
+}
+
+function buildDuelMatrix(
+  playersByTeam: Array<[string, RawPlayer[]]>,
+  allRoundEvents: RoundEvent[],
+): PlayerDuelCell[] {
+  const teamAPlayers = playersByTeam[0]?.[1] ?? [];
+  const teamBPlayers = playersByTeam[1]?.[1] ?? [];
+  const teamAIds = new Set(teamAPlayers.map((player) => cleanId(player.puuid)).filter(Boolean));
+  const teamBIds = new Set(teamBPlayers.map((player) => cleanId(player.puuid)).filter(Boolean));
+  const cells = new Map<string, PlayerDuelCell>();
+
+  for (const teamAPlayer of teamAPlayers) {
+    const teamAId = cleanId(teamAPlayer.puuid);
+    if (!teamAId) continue;
+    for (const teamBPlayer of teamBPlayers) {
+      const teamBId = cleanId(teamBPlayer.puuid);
+      if (!teamBId) continue;
+      cells.set(`${teamAId}:${teamBId}`, {
+        key: `${teamAId}:${teamBId}`,
+        teamAPlayer,
+        teamBPlayer,
+        teamAKillsOnB: 0,
+        teamBKillsOnA: 0,
+        total: 0,
+        leader: "tie",
+        events: [],
+      });
+    }
+  }
+
+  for (const event of allRoundEvents) {
+    if (event.kind !== "kill") continue;
+    const killer = cleanId(event.killer);
+    const victim = cleanId(event.victim);
+    if (!killer || !victim) continue;
+
+    let key = "";
+    let teamAKill = false;
+    if (teamAIds.has(killer) && teamBIds.has(victim)) {
+      key = `${killer}:${victim}`;
+      teamAKill = true;
+    } else if (teamBIds.has(killer) && teamAIds.has(victim)) {
+      key = `${victim}:${killer}`;
+    }
+
+    const cell = key ? cells.get(key) : undefined;
+    if (!cell) continue;
+    if (teamAKill) {
+      cell.teamAKillsOnB += 1;
+    } else {
+      cell.teamBKillsOnA += 1;
+    }
+    cell.total += 1;
+    cell.events.push(event);
+  }
+
+  for (const cell of cells.values()) {
+    cell.events.sort((a, b) => a.roundNum - b.roundNum || a.timeMs - b.timeMs);
+    cell.leader =
+      cell.teamAKillsOnB > cell.teamBKillsOnA
+        ? "teamA"
+        : cell.teamBKillsOnA > cell.teamAKillsOnB
+          ? "teamB"
+          : "tie";
+  }
+
+  return [...cells.values()];
+}
+
+function MatchRoundResultTimeline({
+  rounds,
+  playersByTeam,
+  currentMatch,
+}: {
+  rounds: RoundSummary[];
+  playersByTeam: Array<[string, RawPlayer[]]>;
+  currentMatch: RawMatchDetail | null;
+}) {
+  const teams = playersByTeam.slice(0, 2).map(([teamId], index) => ({
+    teamId,
+    label: `Team ${String.fromCharCode(65 + index)}`,
+    score: getTeamRoundsWon(currentMatch, teamId),
+  }));
+
+  if (teams.length < 2 || rounds.length === 0) {
+    return (
+      <div className="match-summary-round-timeline empty-panel">
+        No hay rondas suficientes para construir el timeline.
+      </div>
+    );
+  }
+
+  return (
+    <section className="match-summary-round-timeline" aria-label="Resultado por ronda">
+      {teams.map((team) => (
+        <div key={`summary-team-${team.teamId}`} className="match-summary-round-row">
+          <div className="match-summary-round-team-label">{team.label}</div>
+          <div className="match-summary-round-score">{team.score}</div>
+          <div className="match-summary-round-track">
+            {rounds.map((round) => {
+              const isWin = round.winningTeam === team.teamId;
+              const specialLabel = isWin ? getRoundSpecialLabel(round) : "";
+              return (
+                <span
+                  key={`summary-${team.teamId}-${round.roundNum}`}
+                  className={`match-summary-round-cell ${isWin ? "is-win" : "is-loss"} ${
+                    specialLabel ? "has-objective" : ""
+                  }`}
+                  title={`${roundLabel(round.roundNum)} Â· ${
+                    isWin ? "ganada" : "perdida"
+                  }${specialLabel ? ` Â· ${specialLabel}` : ""}`}
+                >
+                  {isWin ? specialLabel || "â—" : "Â·"}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <div className="match-summary-round-numbers" aria-hidden="true">
+        <span />
+        <span />
+        <div className="match-summary-round-track">
+          {rounds.map((round) => (
+            <small key={`summary-number-${round.roundNum}`}>
+              {round.roundNum + 1}
+            </small>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function buildEventMapState({
@@ -675,7 +1132,7 @@ function buildEventMapState({
         id: `victim-${event.id}`,
         x: victimPos.x,
         y: victimPos.y,
-        label: `Posición de ${event.victimName}`,
+        label: `PosiciÃ³n de ${event.victimName}`,
         icon: victimAgent?.displayIconSmall ?? victimAgent?.displayIcon ?? undefined,
         deathIcon: "X",
         team:
@@ -791,7 +1248,7 @@ function MatchEventMapCanvas({
     <>
       <div className={`match-event-map-header ${compact ? "is-hidden" : ""}`}>
         <strong>
-          {roundLabel(selectedEvent.roundNum)} ·{" "}
+          {roundLabel(selectedEvent.roundNum)} Â·{" "}
           {toSecondsLabel(selectedEvent.timeMs)}
         </strong>
         <span>{getEventDescription(selectedEvent)}</span>
@@ -889,13 +1346,13 @@ function MatchEventMapCanvas({
 
       {!compact && !mapTransform && (
         <p className="match-event-map-note">
-          Este mapa no tiene transformación de coordenadas disponible.
+          Este mapa no tiene transformaciÃ³n de coordenadas disponible.
         </p>
       )}
 
       {!compact && mapTransform && eventMapState.markers.length === 0 && (
         <p className="match-event-map-note">
-          No hay posiciones válidas para este evento en el dataset.
+          No hay posiciones vÃ¡lidas para este evento en el dataset.
         </p>
       )}
 
@@ -904,7 +1361,7 @@ function MatchEventMapCanvas({
         eventMapState.markers.length > 0 &&
         !eventMapState.hasSnapshot && (
           <p className="match-event-map-note">
-            Se muestra solo la posición del evento porque no hay snapshot
+            Se muestra solo la posiciÃ³n del evento porque no hay snapshot
             completo de jugadores.
           </p>
         )}
@@ -920,7 +1377,7 @@ function MatchEventMapCanvas({
           <i className="dot neutral" /> Objetivo
         </span>
         <span>
-          <i className="dot target" /> Posición del jugador
+          <i className="dot target" /> PosiciÃ³n del jugador
         </span>
       </div>
     </>
@@ -972,6 +1429,11 @@ export default function MatchDetailModal({
   };
   const [teamScoreboardMode, setTeamScoreboardMode] =
     useState<TeamScoreboardMode>("grouped");
+  const [scoreboardSideFilter, setScoreboardSideFilter] =
+    useState<ScoreboardSideFilter>("all");
+  const [selectedDuelKey, setSelectedDuelKey] = useState<string | null>(null);
+  const [duelMatrixFilter, setDuelMatrixFilter] =
+    useState<DuelMatrixFilter>("all");
   const [playbackOpen, setPlaybackOpen] = useState(false);
   const [playbackEvents, setPlaybackEvents] = useState<RoundEvent[]>([]);
   const [playbackIndex, setPlaybackIndex] = useState(0);
@@ -1369,6 +1831,7 @@ export default function MatchDetailModal({
         didWin,
         winningTeam: cleanId(round.winningTeam),
         roundResult: cleanId(round.roundResult) || "Sin detalle",
+        roundCeremony: cleanId(round.roundCeremony),
         playerKills,
         playerDeaths,
         playerAssists,
@@ -1581,7 +2044,7 @@ export default function MatchDetailModal({
     }
     if (topWeapons[0]) {
       insights.push(
-        `Arma más efectiva: ${topWeapons[0].name} con ${formatNumber(topWeapons[0].kills)} kills.`,
+        `Arma mÃ¡s efectiva: ${topWeapons[0].name} con ${formatNumber(topWeapons[0].kills)} kills.`,
       );
     }
     if (bestRound) {
@@ -1784,234 +2247,81 @@ export default function MatchDetailModal({
       .sort((a, b) => b.winRate - a.winRate || b.kda - a.kda)[0];
   }, [matchAnalysis]);
 
+  const sideComparison = useMemo(() => {
+    if (!matchAnalysis) return null;
+    const attack = matchAnalysis.sideSummary.find((side) => side.key === "attack");
+    const defense = matchAnalysis.sideSummary.find((side) => side.key === "defense");
+    if (!attack || !defense) return null;
+
+    const best = attack.winRate >= defense.winRate ? attack : defense;
+    const other = best.key === "attack" ? defense : attack;
+    const winRateDiff = best.winRate - other.winRate;
+    const kdDiff = best.kd - other.kd;
+    const acsDiff = safeDivide(best.score, Math.max(best.rounds, 1)) -
+      safeDivide(other.score, Math.max(other.rounds, 1));
+    const maxWinRate = Math.max(attack.winRate, defense.winRate, 1);
+    const maxKillsPerRound = Math.max(
+      attack.killsPerRound,
+      defense.killsPerRound,
+      1,
+    );
+    const maxAvgSpent = Math.max(attack.avgSpent, defense.avgSpent, 1);
+    const killsLeader =
+      attack.killsPerRound >= defense.killsPerRound ? attack : defense;
+    const kdLeader = attack.kd >= defense.kd ? attack : defense;
+    const quickRead =
+      best.key === kdLeader.key
+        ? `${best.label} fue el lado mÃ¡s fuerte: mejor winrate y mejor KD.`
+        : killsLeader.key !== best.key
+          ? `${killsLeader.label} generÃ³ mÃ¡s kills por ronda, pero ${best.label} cerrÃ³ mejor las rondas.`
+          : `${best.label} cerrÃ³ mejor las rondas, aunque el KD estuvo mÃ¡s equilibrado.`;
+
+    return {
+      attack,
+      defense,
+      best,
+      winRateDiff,
+      kdDiff,
+      acsDiff,
+      quickRead,
+      maxWinRate,
+      maxKillsPerRound,
+      maxAvgSpent,
+    };
+  }, [matchAnalysis]);
+
   const playerScoreboardStatsByPuuid = useMemo(() => {
     const stats = new Map<string, PlayerScoreboardStats>();
-    const totalRounds = currentMatch?.roundResults?.length ?? 0;
+    if (!currentMatch) return stats;
 
     for (const player of players) {
       const puuid = cleanId(player.puuid);
       if (!puuid) continue;
-
-      const agent = getAgentMeta(player, agentById, agentNameMap);
-      const rankTier =
-        typeof player.competitiveTier === "number"
-          ? player.competitiveTier
-          : null;
-      const tierAsset =
-        rankTier !== null ? tierByNumber.get(rankTier) : undefined;
-      const rankIcon = normalizeCompetitiveTierIconPath(
-        tierAsset?.smallIcon ??
-          tierAsset?.largeIcon ??
-          player.competitiveTierImage ??
-          null,
-      );
-      const rounds =
-        toNumber(player.stats?.roundsPlayed) ||
-        totalRounds ||
-        1;
-      const kills = getPlayerKills(player);
-      const deaths = toNumber(player.stats?.deaths);
-      const assists = toNumber(player.stats?.assists);
-      const score = getPlayerScore(player);
-
-      stats.set(puuid, {
-        player,
+      stats.set(
         puuid,
-        teamId: cleanId(player.teamId) || "Sin equipo",
-        agentName: agent.name,
-        agentIcon: agent.icon,
-        rankTier,
-        rankName: getRankNameFromTier(rankTier),
-        rankIcon,
-        kills,
-        deaths,
-        assists,
-        score,
-        rounds,
-        acs: getPlayerMatchAcs(player),
-        kd: getPlayerMatchKd(player),
-        plusMinus: kills - deaths,
-        damageDealt: 0,
-        damageReceived: 0,
-        damageDelta: 0,
-        adr: 0,
-        headshots: 0,
-        bodyshots: 0,
-        legshots: 0,
-        hsPct: 0,
-        kastRounds: 0,
-        kastPct: 0,
-        firstKills: 0,
-        firstDeaths: 0,
-        multikillRounds: 0,
-      });
-    }
-
-    for (const round of currentMatch?.roundResults ?? []) {
-      const roundPlayerState = new Map<
-        string,
-        { kills: number; assists: number; deaths: number; traded: boolean }
-      >();
-      const getRoundState = (puuid: string) => {
-        const existing = roundPlayerState.get(puuid);
-        if (existing) return existing;
-        const next = { kills: 0, assists: 0, deaths: 0, traded: false };
-        roundPlayerState.set(puuid, next);
-        return next;
-      };
-      for (const puuid of stats.keys()) {
-        getRoundState(puuid);
-      }
-
-      const timelineKills: Array<{ kill: RawKillEvent; ownerPuuid: string }> =
-        [];
-      for (const stat of round.playerStats ?? []) {
-        const ownerPuuid = cleanId(stat.puuid);
-        const ownerStats = ownerPuuid ? stats.get(ownerPuuid) : undefined;
-
-        for (const damageEntry of stat.damage ?? []) {
-          const damage = toNumber(damageEntry.damage);
-          if (ownerStats) {
-            ownerStats.damageDealt += damage;
-            ownerStats.headshots += toNumber(damageEntry.headshots);
-            ownerStats.bodyshots += toNumber(damageEntry.bodyshots);
-            ownerStats.legshots += toNumber(damageEntry.legshots);
-          }
-
-          const receiver = cleanId(damageEntry.receiver);
-          const receiverStats = receiver ? stats.get(receiver) : undefined;
-          if (receiverStats) {
-            receiverStats.damageReceived += damage;
-          }
-        }
-
-        for (const kill of stat.kills ?? []) {
-          timelineKills.push({ kill, ownerPuuid });
-        }
-      }
-
-      timelineKills.sort(
-        (a, b) =>
-          toNumber(a.kill.timeSinceRoundStartMillis) -
-          toNumber(b.kill.timeSinceRoundStartMillis),
+        buildPlayerScoreboardStats({
+          player,
+          currentMatch,
+          sideFilter: scoreboardSideFilter,
+          teamByPuuid,
+          agentById,
+          agentNameMap,
+          tierByNumber,
+        }),
       );
-
-      const firstKill = timelineKills[0]?.kill ?? null;
-
-      for (
-        let killIndex = 0;
-        killIndex < timelineKills.length;
-        killIndex += 1
-      ) {
-        const { kill, ownerPuuid } = timelineKills[killIndex];
-        const killerId = cleanId(kill.killer) || ownerPuuid;
-        const victimId = cleanId(kill.victim);
-        const timeMs = toNumber(kill.timeSinceRoundStartMillis);
-
-        if (killerId && stats.has(killerId)) {
-          getRoundState(killerId).kills += 1;
-          if (firstKill === kill) {
-            const killerStats = stats.get(killerId);
-            if (killerStats) killerStats.firstKills += 1;
-          }
-        }
-
-        if (victimId && stats.has(victimId)) {
-          getRoundState(victimId).deaths += 1;
-          if (firstKill === kill) {
-            const victimStats = stats.get(victimId);
-            if (victimStats) victimStats.firstDeaths += 1;
-          }
-          for (
-            let forward = killIndex + 1;
-            forward < timelineKills.length;
-            forward += 1
-          ) {
-            const next = timelineKills[forward].kill;
-            const nextTime = toNumber(next.timeSinceRoundStartMillis);
-            if (nextTime - timeMs > 5000) break;
-
-            const nextKiller = cleanId(next.killer);
-            const nextVictim = cleanId(next.victim);
-            if (
-              nextVictim === killerId &&
-              nextKiller &&
-              teamByPuuid.get(nextKiller) === teamByPuuid.get(victimId)
-            ) {
-              getRoundState(victimId).traded = true;
-              break;
-            }
-          }
-        }
-
-        for (const assistant of parseAssistants(kill.assistants)) {
-          if (stats.has(assistant)) {
-            getRoundState(assistant).assists += 1;
-          }
-        }
-
-        if (killerId && victimId && stats.has(killerId)) {
-          for (let back = killIndex - 1; back >= 0; back -= 1) {
-            const previous = timelineKills[back].kill;
-            const previousTime = toNumber(previous.timeSinceRoundStartMillis);
-            if (timeMs - previousTime > 5000) break;
-
-            const previousVictim = cleanId(previous.victim);
-            const previousKiller = cleanId(previous.killer);
-            if (!previousVictim || !previousKiller) continue;
-
-            if (
-              teamByPuuid.get(previousVictim) === teamByPuuid.get(killerId) &&
-              previousKiller === victimId
-            ) {
-              break;
-            }
-          }
-        }
-      }
-
-      for (const [puuid, playerRound] of roundPlayerState) {
-        const playerStats = stats.get(puuid);
-        if (!playerStats) continue;
-        if (playerRound.kills >= 3) {
-          playerStats.multikillRounds += 1;
-        }
-        if (
-          playerRound.kills > 0 ||
-          playerRound.assists > 0 ||
-          playerRound.deaths === 0 ||
-          playerRound.traded
-        ) {
-          playerStats.kastRounds += 1;
-        }
-      }
-    }
-
-    for (const playerStats of stats.values()) {
-      playerStats.damageDelta = safeDivide(
-        playerStats.damageDealt - playerStats.damageReceived,
-        playerStats.rounds,
-      );
-      playerStats.adr = safeDivide(playerStats.damageDealt, playerStats.rounds);
-      const totalHits =
-        playerStats.headshots +
-        playerStats.bodyshots +
-        playerStats.legshots;
-      playerStats.hsPct =
-        safeDivide(playerStats.headshots, Math.max(totalHits, 1)) * 100;
-      playerStats.kastPct =
-        safeDivide(playerStats.kastRounds, playerStats.rounds) * 100;
     }
 
     return stats;
   }, [
     currentMatch,
     players,
+    scoreboardSideFilter,
+    teamByPuuid,
     agentById,
     agentNameMap,
     tierByNumber,
-    teamByPuuid,
   ]);
+
 
   const teamScoreboardGroups = useMemo(() => {
     return playersByTeam.map(([teamId, teamPlayers], index) => {
@@ -2041,6 +2351,135 @@ export default function MatchDetailModal({
     [playerScoreboardStatsByPuuid],
   );
 
+  const scoreboardSideContext =
+    scoreboardSideFilter === "attack"
+      ? "MÃ©tricas: Solo ataque"
+      : scoreboardSideFilter === "defense"
+        ? "MÃ©tricas: Solo defensa"
+        : "MÃ©tricas: Ambos lados";
+
+  const roundTeamLoadoutTimeline = useMemo(
+    () =>
+      currentMatch
+        ? buildRoundTeamLoadoutTimeline(currentMatch, playersByTeam)
+        : [],
+    [currentMatch, playersByTeam],
+  );
+
+  const orderedPlayersByTeam = useMemo<Array<[string, RawPlayer[]]>>(
+    () =>
+      teamScoreboardGroups.map((group) => [
+        group.teamId,
+        group.rows.map((row) => row.player),
+      ]),
+    [teamScoreboardGroups],
+  );
+
+  const duelMatrix = useMemo(
+    () => buildDuelMatrix(orderedPlayersByTeam, allRoundEvents),
+    [orderedPlayersByTeam, allRoundEvents],
+  );
+
+  const filteredDuelMatrix = useMemo(() => {
+    switch (duelMatrixFilter) {
+      case "withKills":
+        return duelMatrix.filter((cell) => cell.total > 0);
+      case "teamA":
+        return duelMatrix.filter((cell) => cell.leader === "teamA");
+      case "teamB":
+        return duelMatrix.filter((cell) => cell.leader === "teamB");
+      case "ties":
+        return duelMatrix.filter((cell) => cell.total > 0 && cell.leader === "tie");
+      default:
+        return duelMatrix;
+    }
+  }, [duelMatrix, duelMatrixFilter]);
+
+  const activeDuel =
+    duelMatrix.find((cell) => cell.key === selectedDuelKey) ??
+    filteredDuelMatrix.find((cell) => cell.total > 0) ??
+    filteredDuelMatrix[0] ??
+    null;
+
+  const selectedDuelDetailEvent = useMemo(() => {
+    if (!activeDuel) return null;
+    return (
+      activeDuel.events.find((event) => event.id === selectedEventId) ??
+      activeDuel.events[0] ??
+      null
+    );
+  }, [activeDuel, selectedEventId]);
+
+  const selectedDuelMapState = useMemo(
+    () =>
+      buildEventMapState({
+        event: selectedDuelDetailEvent,
+        mapTransform,
+        playersByPuuid,
+        playerTeam,
+        selectedPlayerId,
+        agentById,
+      }),
+    [
+      selectedDuelDetailEvent,
+      mapTransform,
+      playersByPuuid,
+      playerTeam,
+      selectedPlayerId,
+      agentById,
+    ],
+  );
+
+  const duelSummary = useMemo(() => {
+    const playedCells = duelMatrix.filter((cell) => cell.total > 0);
+    return {
+      teamAKills: duelMatrix.reduce((sum, cell) => sum + cell.teamAKillsOnB, 0),
+      teamBKills: duelMatrix.reduce((sum, cell) => sum + cell.teamBKillsOnA, 0),
+      teamAWon: playedCells.filter((cell) => cell.leader === "teamA").length,
+      teamBWon: playedCells.filter((cell) => cell.leader === "teamB").length,
+      ties: playedCells.filter((cell) => cell.leader === "tie").length,
+    };
+  }, [duelMatrix]);
+
+  const duelHighlights = useMemo(() => {
+    const played = duelMatrix.filter((cell) => cell.total > 0);
+    return {
+      top: [...played].sort((a, b) => b.total - a.total)[0] ?? null,
+      teamA: [...played].sort(
+        (a, b) =>
+          b.teamAKillsOnB - b.teamBKillsOnA -
+          (a.teamAKillsOnB - a.teamBKillsOnA),
+      )[0] ?? null,
+      teamB: [...played].sort(
+        (a, b) =>
+          b.teamBKillsOnA - b.teamAKillsOnB -
+          (a.teamBKillsOnA - a.teamAKillsOnB),
+      )[0] ?? null,
+    };
+  }, [duelMatrix]);
+
+  const visibleDuelTeamAPlayers = useMemo(() => {
+    const allowed = new Set(filteredDuelMatrix.map((cell) => cleanId(cell.teamAPlayer.puuid)));
+    return (orderedPlayersByTeam[0]?.[1] ?? []).filter((player) =>
+      allowed.has(cleanId(player.puuid)),
+    );
+  }, [filteredDuelMatrix, orderedPlayersByTeam]);
+
+  const visibleDuelTeamBPlayers = useMemo(() => {
+    const allowed = new Set(filteredDuelMatrix.map((cell) => cleanId(cell.teamBPlayer.puuid)));
+    return (orderedPlayersByTeam[1]?.[1] ?? []).filter((player) =>
+      allowed.has(cleanId(player.puuid)),
+    );
+  }, [filteredDuelMatrix, orderedPlayersByTeam]);
+
+  const duelCellByKey = useMemo(() => {
+    const map = new Map<string, PlayerDuelCell>();
+    for (const cell of filteredDuelMatrix) {
+      map.set(cell.key, cell);
+    }
+    return map;
+  }, [filteredDuelMatrix]);
+
   const scoreState = useMemo(
     () => getTeamScoreState(currentMatch, playerTeam),
     [currentMatch, playerTeam],
@@ -2057,7 +2496,7 @@ export default function MatchDetailModal({
       return {
         label: "Impacto alto",
         tone: "high",
-        text: "Buen impacto por KD, kills por ronda o participación en rondas ganadas.",
+        text: "Buen impacto por KD, kills por ronda o participaciÃ³n en rondas ganadas.",
       };
     }
     if (
@@ -2067,13 +2506,13 @@ export default function MatchDetailModal({
       return {
         label: "Impacto bajo",
         tone: "low",
-        text: "Impacto limitado por bajo KD y poca participación en rondas ganadas.",
+        text: "Impacto limitado por bajo KD y poca participaciÃ³n en rondas ganadas.",
       };
     }
     return {
       label: "Impacto medio",
       tone: "medium",
-      text: "Aportación estable, con margen para decidir más rondas ganadas.",
+      text: "AportaciÃ³n estable, con margen para decidir mÃ¡s rondas ganadas.",
     };
   }, [matchAnalysis]);
 
@@ -2172,7 +2611,7 @@ export default function MatchDetailModal({
           onClick={(event) => event.stopPropagation()}
         >
           <button className="modal-close" onClick={onClose}>
-            ✕
+            âœ•
           </button>
           <div className="empty-panel">No se pudo cargar la partida.</div>
         </div>
@@ -2194,7 +2633,7 @@ export default function MatchDetailModal({
           onClick={(event) => event.stopPropagation()}
         >
           <button className="modal-close" onClick={onClose}>
-            ✕
+            âœ•
           </button>
           <div className="empty-panel">
             El jugador objetivo no aparece en esta partida.
@@ -2285,7 +2724,7 @@ export default function MatchDetailModal({
                 event.killerName,
                 event.killerIcon,
               )}
-              <span>eliminó a</span>
+              <span>eliminÃ³ a</span>
               {renderActionParticipant(
                 event.victim,
                 event.victimName,
@@ -2350,7 +2789,7 @@ export default function MatchDetailModal({
     if (round.events.length === 0) return;
     setPlaybackEvents(round.events);
     setPlaybackIndex(0);
-    setPlaybackTitle(`Reproducción de ${roundLabel(round.roundNum)}`);
+    setPlaybackTitle(`ReproducciÃ³n de ${roundLabel(round.roundNum)}`);
     setPlaybackPlaying(true);
     setPlaybackOpen(true);
   };
@@ -2359,7 +2798,7 @@ export default function MatchDetailModal({
     if (allRoundEvents.length === 0) return;
     setPlaybackEvents(sortedAllRoundEvents);
     setPlaybackIndex(0);
-    setPlaybackTitle("Reproducción de partida");
+    setPlaybackTitle("ReproducciÃ³n de partida");
     setPlaybackPlaying(true);
     setPlaybackOpen(true);
   };
@@ -2445,7 +2884,7 @@ export default function MatchDetailModal({
         aria-current={isActive ? "true" : undefined}
       >
         <span className="match-round-event-time">
-          {roundLabel(event.roundNum)} · {toSecondsLabel(event.timeMs)}
+          {roundLabel(event.roundNum)} Â· {toSecondsLabel(event.timeMs)}
         </span>
         <span className="match-action-text">
           {event.kind === "kill" ? (
@@ -2455,7 +2894,7 @@ export default function MatchDetailModal({
                 event.killerName,
                 event.killerIcon,
               )}
-              <span>eliminó a</span>
+              <span>eliminÃ³ a</span>
               {renderActionParticipant(
                 event.victim,
                 event.victimName,
@@ -2493,6 +2932,7 @@ export default function MatchDetailModal({
     options: { showTeamBadge?: boolean } = {},
   ) => (
     <div className="match-scoreboard-table-wrap">
+      <span className="match-scoreboard-side-context">{scoreboardSideContext}</span>
       <div className="match-scoreboard-table">
         <div className="match-scoreboard-table-head">
           <span>Jugador</span>
@@ -2503,7 +2943,7 @@ export default function MatchDetailModal({
           <span>A</span>
           <span>+/-</span>
           <span>K/D</span>
-          <span>DDΔ</span>
+          <span>DDÎ”</span>
           <span>ADR</span>
           <span>HS%</span>
           <span>KAST</span>
@@ -2602,6 +3042,159 @@ export default function MatchDetailModal({
     </div>
   );
 
+  const renderDuelPlayer = (player: RawPlayer) => {
+    const agent = getAgentMeta(player, agentById, agentNameMap);
+    return (
+      <span className="match-duel-player">
+        {agent.icon ? <img src={agent.icon} alt="" /> : <i>{agent.name.charAt(0)}</i>}
+        <strong>{getPlayerShortDisplay(player)}</strong>
+      </span>
+    );
+  };
+
+  const renderDuelHighlight = (
+    title: string,
+    cell: PlayerDuelCell | null,
+    tone: "top" | "team-a" | "team-b",
+  ) => (
+    <article className={`match-duel-highlight-card match-duel-highlight-card--${tone}`}>
+      <span>{title}</span>
+      {cell ? (
+        <button type="button" onClick={() => setSelectedDuelKey(cell.key)}>
+          <span className="match-duel-highlight-player">
+            {renderDuelPlayer(cell.teamAPlayer)}
+          </span>
+          <strong className="match-duel-highlight-score">
+            {cell.teamAKillsOnB} - {cell.teamBKillsOnA}
+          </strong>
+          <span className="match-duel-highlight-player">
+            {renderDuelPlayer(cell.teamBPlayer)}
+          </span>
+        </button>
+      ) : (
+        <p>Sin datos suficientes</p>
+      )}
+    </article>
+  );
+
+  const matchDetailHero = matchAnalysis ? (
+    <header className="match-detail-hero">
+      <div className="match-detail-hero-copy">
+        <span className="stats-eyebrow">Detalle de partida</span>
+
+        <div className="match-detail-title-row">
+          {playerAgentIcon && (
+            <img
+              src={playerAgentIcon}
+              alt={playerAgentName}
+              className="match-detail-player-agent"
+            />
+          )}
+          <h2 className="stats-title modal-title-small">{mapName}</h2>
+        </div>
+
+        <p className="stats-subtitle">
+          {getPlayerDisplay(playerInfo)} Â· {playerAgentName}
+        </p>
+
+        <div className="match-detail-meta-row">
+          <span className={`meta-pill match-pill-${resultState}`}>
+            {resultState === "draw"
+              ? "Empate"
+              : resultState === "win"
+                ? "Victoria"
+                : "Derrota"}
+          </span>
+          <span className="meta-pill">{matchAnalysis.totalRounds} rondas</span>
+          <span className="meta-pill">
+            {cleanId(currentMatch?.matchInfo?.queueId) || "Cola desconocida"}
+          </span>
+          <span className="meta-pill">
+            {cleanId(currentMatch?.matchInfo?.gameMode) || "Modo desconocido"}
+          </span>
+          <span className="meta-pill">
+            {toGameDurationLabel(currentMatch?.matchInfo?.gameLengthMillis) ||
+              "DuraciÃ³n no disponible"}
+          </span>
+          <span className="meta-pill">
+            {formatDateTime(currentMatch?.matchInfo?.gameStartMillis)}
+          </span>
+        </div>
+      </div>
+
+      <div className={`match-result-card result-${resultState}`}>
+        <div className="match-score-main">
+          <span className="match-score-label">Resultado</span>
+          <strong className="match-score-value">
+            {scoreState.selectedTeamRounds} - {scoreState.opponentTeamRounds}
+          </strong>
+        </div>
+
+        <div className="match-score-split">
+          <div>
+            <span>K / D / A</span>
+            <strong>
+              {matchAnalysis.kills}/{matchAnalysis.deaths}/{matchAnalysis.assists}
+            </strong>
+          </div>
+          <div>
+            <span>KD</span>
+            <strong>{formatNumber(matchAnalysis.kd, 2)}</strong>
+          </div>
+          <div>
+            <span>KDA</span>
+            <strong>{formatNumber(matchAnalysis.kda, 2)}</strong>
+          </div>
+          <div>
+            <span>Score</span>
+            <strong>{formatNumber(matchAnalysis.score)}</strong>
+          </div>
+          <div>
+            <span>ACS</span>
+            <strong>{formatNumber(matchAnalysis.acs)}</strong>
+          </div>
+          <div>
+            <span>ADR</span>
+            <strong>{formatNumber(matchAnalysis.adr, 1)}</strong>
+          </div>
+          <div>
+            <span>Supervivencia</span>
+            <strong>{formatPercent(matchAnalysis.survivalPct, 1)}</strong>
+          </div>
+          <div>
+            <span>Impacto en wins</span>
+            <strong>{formatPercent(matchAnalysis.winRoundParticipationPct, 1)}</strong>
+          </div>
+        </div>
+
+        <div className="match-rank-line">
+          {playerRankIcon && (
+            <img
+              src={playerRankIcon}
+              alt={playerRankName}
+              className="match-rank-icon-inline"
+            />
+          )}
+          <span>{playerRankName}</span>
+          <span>MVP partida: {getPlayerDisplay(mvp)}</span>
+          <button
+            type="button"
+            className="match-play-button"
+            onClick={openMatchPlayback}
+            disabled={allRoundEvents.length === 0}
+            title={
+              allRoundEvents.length === 0
+                ? "Sin eventos reproducibles"
+                : "Reproducir partida"
+            }
+          >
+            Reproducir partida
+          </button>
+        </div>
+      </div>
+    </header>
+  ) : null;
+
 
   return (
     <div
@@ -2616,7 +3209,7 @@ export default function MatchDetailModal({
         onClick={(event) => event.stopPropagation()}
       >
         <button className="modal-close" onClick={onClose}>
-          ✕
+          âœ•
         </button>
 
         {loading || !matchAnalysis ? (
@@ -2667,130 +3260,6 @@ export default function MatchDetailModal({
               ))}
             </section>
 
-            <header className="match-detail-hero">
-              <div className="match-detail-hero-copy">
-                <span className="stats-eyebrow">Detalle de partida</span>
-
-                <div className="match-detail-title-row">
-                  {playerAgentIcon && (
-                    <img
-                      src={playerAgentIcon}
-                      alt={playerAgentName}
-                      className="match-detail-player-agent"
-                    />
-                  )}
-                  <h2 className="stats-title modal-title-small">{mapName}</h2>
-                </div>
-
-                <p className="stats-subtitle">
-                  {getPlayerDisplay(playerInfo)} · {playerAgentName}
-                </p>
-
-                <div className="match-detail-meta-row">
-                  <span
-                    className={`meta-pill match-pill-${resultState}`}
-                  >
-                    {resultState === "draw"
-                      ? "Empate"
-                      : resultState === "win"
-                        ? "Victoria"
-                        : "Derrota"}
-                  </span>
-                  <span className="meta-pill">
-                    {matchAnalysis.totalRounds} rondas
-                  </span>
-                  <span className="meta-pill">
-                    {cleanId(currentMatch?.matchInfo?.queueId) || "Cola desconocida"}
-                  </span>
-                  <span className="meta-pill">
-                    {cleanId(currentMatch?.matchInfo?.gameMode) || "Modo desconocido"}
-                  </span>
-                  <span className="meta-pill">
-                    {toGameDurationLabel(currentMatch?.matchInfo?.gameLengthMillis) ||
-                      "Duración no disponible"}
-                  </span>
-                  <span className="meta-pill">
-                    {formatDateTime(currentMatch?.matchInfo?.gameStartMillis)}
-                  </span>
-                </div>
-              </div>
-
-              <div className={`match-result-card result-${resultState}`}>
-                <div className="match-score-main">
-                  <span className="match-score-label">Resultado</span>
-                  <strong className="match-score-value">
-                    {scoreState.selectedTeamRounds} -{" "}
-                    {scoreState.opponentTeamRounds}
-                  </strong>
-                </div>
-
-                <div className="match-score-split">
-                  <div>
-                    <span>K / D / A</span>
-                    <strong>
-                      {matchAnalysis.kills}/{matchAnalysis.deaths}/
-                      {matchAnalysis.assists}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>KD</span>
-                    <strong>{formatNumber(matchAnalysis.kd, 2)}</strong>
-                  </div>
-                  <div>
-                    <span>KDA</span>
-                    <strong>{formatNumber(matchAnalysis.kda, 2)}</strong>
-                  </div>
-                  <div>
-                    <span>Score</span>
-                    <strong>{formatNumber(matchAnalysis.score)}</strong>
-                  </div>
-                  <div>
-                    <span>ACS</span>
-                    <strong>{formatNumber(matchAnalysis.acs)}</strong>
-                  </div>
-                  <div>
-                    <span>ADR</span>
-                    <strong>{formatNumber(matchAnalysis.adr, 1)}</strong>
-                  </div>
-                  <div>
-                    <span>Supervivencia</span>
-                    <strong>{formatPercent(matchAnalysis.survivalPct, 1)}</strong>
-                  </div>
-                  <div>
-                    <span>Impacto en wins</span>
-                    <strong>
-                      {formatPercent(matchAnalysis.winRoundParticipationPct, 1)}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="match-rank-line">
-                  {playerRankIcon && (
-                    <img
-                      src={playerRankIcon}
-                      alt={playerRankName}
-                      className="match-rank-icon-inline"
-                    />
-                  )}
-                  <span>{playerRankName}</span>
-                  <span>MVP partida: {getPlayerDisplay(mvp)}</span>
-                  <button
-                    type="button"
-                    className="match-play-button"
-                    onClick={openMatchPlayback}
-                    disabled={allRoundEvents.length === 0}
-                    title={
-                      allRoundEvents.length === 0
-                        ? "Sin eventos reproducibles"
-                        : "Reproducir partida"
-                    }
-                  >
-                    Reproducir partida
-                  </button>
-                </div>
-              </div>
-            </header>
-
             <nav
               className="match-detail-tabs"
               aria-label="Secciones del detalle de partida"
@@ -2815,12 +3284,28 @@ export default function MatchDetailModal({
                   role="region"
                   aria-label={activeSectionLabel}
                 >
+                  {matchDetailHero}
+
+                  <div className="match-summary-title-block">
+                    <span className="stats-eyebrow">Detalle de partida</span>
+                    <h3>Resumen de la partida</h3>
+                    <p>Lectura rÃ¡pida del rendimiento y evoluciÃ³n ronda a ronda.</p>
+                  </div>
+
+                  <MatchRoundResultTimeline
+                    rounds={matchAnalysis.rounds}
+                    playersByTeam={playersByTeam}
+                    currentMatch={currentMatch}
+                  />
+
                   {impactLevel && (
                     <div className="match-summary-hero-card">
-                      <span className={`impact-level-badge is-${impactLevel.tone}`}>
-                        {impactLevel.label}
-                      </span>
-                      <p>{impactLevel.text}</p>
+                      <div className="match-summary-impact-copy">
+                        <span className={`impact-level-badge is-${impactLevel.tone}`}>
+                          {impactLevel.label}
+                        </span>
+                        <p>{impactLevel.text}</p>
+                      </div>
                       <div className="match-summary-actions">
                         {matchAnalysis.bestRound && (
                           <button
@@ -2845,11 +3330,15 @@ export default function MatchDetailModal({
                   )}
 
                   <div className="match-summary-grid">
+                    <article className="is-blue">
+                      <span>Impacto del jugador</span>
+                      <strong>{impactLevel?.label ?? "Sin datos"}</strong>
+                    </article>
                     <article>
                       <span>Ronda clave</span>
                       <strong>
                         {matchAnalysis.bestRound
-                          ? `${roundLabel(matchAnalysis.bestRound.roundNum)} · ${matchAnalysis.bestRound.playerKills}K`
+                          ? `${roundLabel(matchAnalysis.bestRound.roundNum)} Â· ${matchAnalysis.bestRound.playerKills}K`
                           : "Sin datos"}
                       </strong>
                     </article>
@@ -2857,7 +3346,7 @@ export default function MatchDetailModal({
                       <span>Mejor lado</span>
                       <strong>
                         {sideBest
-                          ? `${sideBest.label} · ${formatPercent(sideBest.winRate, 1)}`
+                          ? `${sideBest.label} Â· ${formatPercent(sideBest.winRate, 1)}`
                           : "Sin datos"}
                       </strong>
                     </article>
@@ -2865,7 +3354,7 @@ export default function MatchDetailModal({
                       <span>Arma principal</span>
                       <strong>
                         {matchAnalysis.topWeapons[0]
-                          ? `${matchAnalysis.topWeapons[0].name} · ${matchAnalysis.topWeapons[0].kills}K`
+                          ? `${matchAnalysis.topWeapons[0].name} Â· ${matchAnalysis.topWeapons[0].kills}K`
                           : "Sin kills"}
                       </strong>
                     </article>
@@ -2881,9 +3370,9 @@ export default function MatchDetailModal({
                       <strong>{formatNumber(matchAnalysis.tradeKills)}</strong>
                     </article>
                     <article>
-                      <span>Economía</span>
+                      <span>EconomÃ­a</span>
                       <strong>
-                        Eco {matchAnalysis.ecoWins}/{matchAnalysis.ecoRounds} · Full{" "}
+                        Eco {matchAnalysis.ecoWins}/{matchAnalysis.ecoRounds} Â· Full{" "}
                         {matchAnalysis.fullBuyWins}/{matchAnalysis.fullBuyRounds}
                       </strong>
                     </article>
@@ -2894,7 +3383,7 @@ export default function MatchDetailModal({
                     <article>
                       <span>Multikills</span>
                       <strong>
-                        {matchAnalysis.multikillRounds} rondas · máximo{" "}
+                        {matchAnalysis.multikillRounds} rondas Â· mÃ¡ximo{" "}
                         {matchAnalysis.maxKillsInRound}K
                       </strong>
                     </article>
@@ -2917,26 +3406,56 @@ export default function MatchDetailModal({
                 </div>
               </div>
 
+              <div className="match-round-legend" aria-label="Leyenda de rondas">
+                <span className="match-round-legend-item">
+                  <i className="match-round-legend-dot is-win" /> Victoria
+                </span>
+                <span className="match-round-legend-item">
+                  <i className="match-round-legend-dot is-loss" /> Derrota
+                </span>
+                <span className="match-round-legend-item">
+                  <b className="match-round-legend-symbol">K</b> Kill
+                </span>
+                <span className="match-round-legend-item">
+                  <b className="match-round-legend-symbol is-death">M</b> Muerte
+                </span>
+                <span className="match-round-legend-item">
+                  <b className="match-round-legend-symbol is-plant">P</b> Plant
+                </span>
+                <span className="match-round-legend-item">
+                  <b className="match-round-legend-symbol is-defuse">DEF</b> Defuse
+                </span>
+                <span className="match-round-legend-item">
+                  <b className="match-round-legend-symbol is-key">â˜…</b> Ronda clave
+                </span>
+              </div>
+
               <div className="match-round-strip-track">
                 {matchAnalysis.rounds.map((round) => {
                   const isOpen = selectedRound?.roundNum === round.roundNum;
+                  const isKeyRound =
+                    round.roundNum === matchAnalysis.bestRound?.roundNum;
                   return (
                     <button
                       key={`strip-${round.roundNum}`}
                       type="button"
-                      className={`match-round-chip ${round.didWin ? "is-win" : "is-loss"} ${isOpen ? "is-open" : ""}`}
+                      className={`match-round-chip ${round.didWin ? "is-win" : "is-loss"} ${isOpen ? "is-open" : ""} ${isKeyRound ? "is-key-round" : ""}`}
                       onClick={() => handleRoundSelect(round)}
                       aria-label={`Abrir ronda ${round.roundNum + 1}, ${round.didWin ? "ganada" : "perdida"}, ${round.playerKills} kills`}
                       aria-current={isOpen ? "true" : undefined}
                       aria-pressed={isOpen}
                     >
-                      <span>{round.roundNum + 1}</span>
-                      {round.playerKills > 0 && (
-                        <small>{round.playerKills}K</small>
-                      )}
-                      {(round.hadPlant || round.hadDefuse) && (
-                        <em>{round.hadDefuse ? "D" : "P"}</em>
-                      )}
+                      <span className="match-round-chip-number">
+                        {round.roundNum + 1}
+                      </span>
+                      <span className="match-round-chip-meta">
+                        {round.playerKills > 0 && (
+                          <small>{round.playerKills}K</small>
+                        )}
+                        {round.playerDeaths > 0 && <em className="is-death">M</em>}
+                        {round.hadPlant && <em className="is-plant">P</em>}
+                        {round.hadDefuse && <em className="is-defuse">DEF</em>}
+                      </span>
                     </button>
                   );
                 })}
@@ -2948,7 +3467,7 @@ export default function MatchDetailModal({
                     <div>
                       <h4>{roundLabel(selectedRound.roundNum)}</h4>
                       <p>
-                        {selectedRound.side === "attack" ? "Ataque" : "Defensa"} ·{" "}
+                        {selectedRound.side === "attack" ? "Ataque" : "Defensa"} Â·{" "}
                         {selectedRound.roundResult}
                       </p>
                     </div>
@@ -2988,7 +3507,7 @@ export default function MatchDetailModal({
                         Score <strong>{formatNumber(selectedRound.playerScore)}</strong>
                       </span>
                       <span>
-                        Daño <strong>{formatNumber(selectedRound.playerDamage)}</strong>
+                        DaÃ±o <strong>{formatNumber(selectedRound.playerDamage)}</strong>
                       </span>
                       <span>
                         Gasto <strong>{formatNumber(selectedRound.playerSpent)}</strong>
@@ -3046,151 +3565,232 @@ export default function MatchDetailModal({
               >
                 <div className="panel-header">
                   <div>
-                    <h3 className="panel-title">Duelos y combate</h3>
+                    <h3 className="panel-title">Matriz de duelos</h3>
                     <p className="panel-subtitle">
-                      Eventos de combate de toda la partida desde esta perspectiva.
+                      Balance directo entre jugadores de Team A y Team B.
                     </p>
                   </div>
                 </div>
 
-                <div className="match-duel-stats-grid">
+                <div className="match-duel-highlights">
+                  {renderDuelHighlight("Top Rivalry", duelHighlights.top, "top")}
+                  {renderDuelHighlight("Mismatch A", duelHighlights.teamA, "team-a")}
+                  {renderDuelHighlight("Mismatch B", duelHighlights.teamB, "team-b")}
+                </div>
+
+                <div className="match-duel-summary-grid">
                   <article>
-                    <span>Opening</span>
-                    <strong>
-                      {matchAnalysis.openingWon}W / {matchAnalysis.openingLost}L
-                    </strong>
+                    <span>Team A kills</span>
+                    <strong>{duelSummary.teamAKills}</strong>
                   </article>
                   <article>
-                    <span>Kills</span>
-                    <strong>{matchAnalysis.kills}</strong>
+                    <span>Team B kills</span>
+                    <strong>{duelSummary.teamBKills}</strong>
                   </article>
                   <article>
-                    <span>Muertes</span>
-                    <strong>{matchAnalysis.deaths}</strong>
+                    <span>Duelos Team A</span>
+                    <strong>{duelSummary.teamAWon}</strong>
                   </article>
                   <article>
-                    <span>Trade kills</span>
-                    <strong>{matchAnalysis.tradeKills}</strong>
+                    <span>Duelos Team B</span>
+                    <strong>{duelSummary.teamBWon}</strong>
                   </article>
                   <article>
-                    <span>Rondas con kill</span>
-                    <strong>
-                      {matchAnalysis.roundsWithKills}/{matchAnalysis.totalRounds}
-                    </strong>
-                  </article>
-                  <article>
-                    <span>Supervivencia</span>
-                    <strong>{formatPercent(matchAnalysis.survivalPct, 1)}</strong>
+                    <span>Empates</span>
+                    <strong>{duelSummary.ties}</strong>
                   </article>
                 </div>
 
-                <div className="match-event-filters" aria-label="Filtros de duelos">
-                  {eventFilterOptions.map((option) => (
-                    <button
-                      key={`duel-${option.key}`}
-                      type="button"
-                      className={eventFilter === option.key ? "is-active" : ""}
-                      onClick={() => setEventFilter(option.key)}
-                      aria-pressed={eventFilter === option.key}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="match-duels-layout">
-                  <div className="match-duels-list">
-                    {filteredDuelEvents.length === 0 ? (
-                      <div className="empty-chart">
-                        No hay eventos para este filtro.
-                      </div>
-                    ) : (
-                      filteredDuelEvents.map(renderRoundEventButton)
-                    )}
+                <div className="match-duel-toolbar">
+                  <div className="match-round-legend" aria-label="Leyenda de duelos">
+                    <span className="match-round-legend-item">
+                      <i className="match-round-legend-dot is-win" /> Gana Team A
+                    </span>
+                    <span className="match-round-legend-item">
+                      <i className="match-round-legend-dot is-loss" /> Gana Team B
+                    </span>
+                    <span className="match-round-legend-item">
+                      <b className="match-round-legend-symbol is-key">=</b> Empate
+                    </span>
+                    <span className="match-round-legend-item">
+                      <b className="match-round-legend-symbol">—</b> Sin duelos
+                    </span>
                   </div>
-                  <aside className="match-selected-round-map">
-                    <MatchEventMapCanvas
-                      mapName={mapName}
-                      mapImageUrl={mapImageUrl}
-                      selectedEvent={selectedDuelEvent}
-                      eventMapState={duelEventMapState}
-                      mapTransform={mapTransform}
-                    />
+
+                  <div className="match-event-filters" aria-label="Filtros de matriz de duelos">
+                    {[
+                      ["all", "Todos"],
+                      ["withKills", "Con kills"],
+                      ["teamA", "Ventaja Team A"],
+                      ["teamB", "Ventaja Team B"],
+                      ["ties", "Empates"],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={duelMatrixFilter === key ? "is-active" : ""}
+                        onClick={() => setDuelMatrixFilter(key as DuelMatrixFilter)}
+                        aria-pressed={duelMatrixFilter === key}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="match-duel-matrix-layout">
+                  <section className="match-duel-matrix-panel">
+                    <div className="match-duel-matrix-scroll">
+                      <div
+                        className="match-duel-matrix"
+                        style={{
+                          gridTemplateColumns: `minmax(150px, 0.9fr) repeat(${Math.max(
+                            visibleDuelTeamBPlayers.length,
+                            1,
+                          )}, minmax(92px, 1fr))`,
+                        }}
+                      >
+                        <div className="match-duel-matrix-corner">Team A \ Team B</div>
+                        {visibleDuelTeamBPlayers.map((player) => (
+                          <button
+                            key={`duel-col-${cleanId(player.puuid)}`}
+                            type="button"
+                            className="match-duel-column-header"
+                            onClick={() => handlePlayerSelect(cleanId(player.puuid))}
+                          >
+                            {renderDuelPlayer(player)}
+                          </button>
+                        ))}
+
+                        {visibleDuelTeamAPlayers.map((teamAPlayer) => {
+                          const teamAId = cleanId(teamAPlayer.puuid);
+                          return (
+                            <Fragment key={`duel-row-${teamAId}`}>
+                              <button
+                                type="button"
+                                className="match-duel-row-header"
+                                onClick={() => handlePlayerSelect(teamAId)}
+                              >
+                                {renderDuelPlayer(teamAPlayer)}
+                              </button>
+                              {visibleDuelTeamBPlayers.map((teamBPlayer) => {
+                                const key = `${teamAId}:${cleanId(teamBPlayer.puuid)}`;
+                                const cell = duelCellByKey.get(key);
+                                const leader = cell?.leader ?? "tie";
+                                const isSelected = activeDuel?.key === key;
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    className={`match-duel-cell ${
+                                      !cell || cell.total === 0
+                                        ? "is-empty"
+                                        : leader === "teamA"
+                                          ? "is-team-a"
+                                          : leader === "teamB"
+                                            ? "is-team-b"
+                                            : "is-tie"
+                                    } ${isSelected ? "is-selected" : ""}`}
+                                    onClick={() => {
+                                      setSelectedDuelKey(key);
+                                      const firstEvent = cell?.events[0];
+                                      if (firstEvent) {
+                                        setSelectedRoundNum(firstEvent.roundNum);
+                                        setSelectedEventId(firstEvent.id);
+                                      }
+                                    }}
+                                    title={
+                                      cell
+                                        ? `${getPlayerShortDisplay(cell.teamAPlayer)} ${cell.teamAKillsOnB} - ${cell.teamBKillsOnA} ${getPlayerShortDisplay(cell.teamBPlayer)}`
+                                        : "Sin duelos"
+                                    }
+                                  >
+                                    {cell && cell.total > 0 ? (
+                                      <span className="match-duel-score-pill">
+                                        <strong>{cell.teamAKillsOnB}</strong>
+                                        <em>{cell.teamBKillsOnA}</em>
+                                      </span>
+                                    ) : (
+                                      <span className="match-duel-empty">—</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </Fragment>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </section>
+
+                  <aside className="match-duel-detail-panel">
+                    {activeDuel ? (
+                      <>
+                        <div className="match-duel-detail-header">
+                          <div>{renderDuelPlayer(activeDuel.teamAPlayer)}</div>
+                          <strong>{activeDuel.teamAKillsOnB} - {activeDuel.teamBKillsOnA}</strong>
+                          <div>{renderDuelPlayer(activeDuel.teamBPlayer)}</div>
+                        </div>
+                        <div className="match-duel-events">
+                          {activeDuel.events.length === 0 ? (
+                            <div className="empty-chart">No hay kills entre estos jugadores.</div>
+                          ) : (
+                            activeDuel.events.map((event) => (
+                              <button
+                                key={`duel-event-${event.id}`}
+                                type="button"
+                                className={`match-round-event-btn ${selectedDuelDetailEvent?.id === event.id ? "is-active" : ""}`}
+                                onClick={() => {
+                                  setSelectedRoundNum(event.roundNum);
+                                  setSelectedEventId(event.id);
+                                }}
+                              >
+                                <span className="match-round-event-time">
+                                  {roundLabel(event.roundNum)} · {toSecondsLabel(event.timeMs)}
+                                </span>
+                                <span className="match-action-text">
+                                  {event.kind === "kill" ? `${event.killerName} eliminó a ${event.victimName}` : getEventDescription(event)}
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                        <div className="match-duel-map">
+                          <MatchEventMapCanvas
+                            mapName={mapName}
+                            mapImageUrl={mapImageUrl}
+                            selectedEvent={selectedDuelDetailEvent}
+                            eventMapState={selectedDuelMapState}
+                            mapTransform={mapTransform}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="empty-panel">Selecciona un duelo para ver detalle.</div>
+                    )}
                   </aside>
                 </div>
               </section>
             )}
-
-            {activeSection === "team" && (
+            {activeSection === "classification" && (
             <section
-              className="match-team-section"
+              className="match-classification-section"
               role="region"
               aria-label={activeSectionLabel}
             >
-            <div className="match-side-comparison-zone">
-              <div className="panel-header">
-                <div>
-                  <h3 className="panel-title">Ataque vs Defensa</h3>
-                  <p className="panel-subtitle">
-                    Ataque y defensa derivados por orden real de rondas.
-                  </p>
-                </div>
-                {sideBest && (
-                  <span className="meta-pill match-side-badge">
-                    Mejor lado: {sideBest.label}
-                  </span>
-                )}
-              </div>
-
-              <div className="match-side-cards">
-                {matchAnalysis.sideSummary.map((side) => (
-                  <article key={side.key} className="match-side-card">
-                    <header>
-                      <h4>{side.label}</h4>
-                      <strong>{formatPercent(side.winRate, 1)}</strong>
-                    </header>
-
-                    <div className="match-side-grid">
-                      <span>Rondas</span>
-                      <strong>{side.rounds}</strong>
-
-                      <span>K / D / A</span>
-                      <strong>
-                        {side.kills}/{side.deaths}/{side.assists}
-                      </strong>
-
-                      <span>KD</span>
-                      <strong>{formatNumber(side.kd, 2)}</strong>
-
-                      <span>KPR</span>
-                      <strong>{formatNumber(side.killsPerRound, 2)}</strong>
-
-                      <span>Score total</span>
-                      <strong>{formatNumber(side.score)}</strong>
-
-                      <span>Gasto medio</span>
-                      <strong>{formatNumber(side.avgSpent)}</strong>
-                    </div>
-                  </article>
-                ))}
-              </div>
-
-            </div>
-
             <div className="match-scoreboard-panel">
-              <div className="panel-header">
+              <div className="panel-header match-scoreboard-panel-header">
                 <div>
                   <h3 className="panel-title">Scoreboard</h3>
                   <p className="panel-subtitle">
                     Cambia la perspectiva pulsando cualquier jugador.
                   </p>
                 </div>
-              </div>
 
-              <div className="match-scoreboard-controls">
+                <div className="match-scoreboard-controls">
                 <div
                   className="match-scoreboard-mode-toggle"
-                  aria-label="Modo de visualización del scoreboard"
+                  aria-label="Modo de visualizaciÃ³n del scoreboard"
                 >
                   <button
                     type="button"
@@ -3209,7 +3809,34 @@ export default function MatchDetailModal({
                     Vista global
                   </button>
                 </div>
+                <div
+                  className="match-scoreboard-side-toggle"
+                  aria-label="Filtro de lado del scoreboard"
+                >
+                  {[
+                    ["all", "Ambos"],
+                    ["attack", "Ataque"],
+                    ["defense", "Defensa"],
+                  ].map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={scoreboardSideFilter === key ? "is-active" : ""}
+                      onClick={() => setScoreboardSideFilter(key as ScoreboardSideFilter)}
+                      aria-pressed={scoreboardSideFilter === key}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                </div>
               </div>
+
+              <MatchLoadoutTimeline
+                data={roundTeamLoadoutTimeline}
+                teamALabel={teamScoreboardGroups[0]?.teamLabel ?? "Team A"}
+                teamBLabel={teamScoreboardGroups[1]?.teamLabel ?? "Team B"}
+              />
 
               <div className="match-scoreboard-teams">
                 {teamScoreboardMode === "grouped" ? (
@@ -3262,6 +3889,132 @@ export default function MatchDetailModal({
                 )}
               </div>
             </div>
+
+            <div className="match-side-comparison-zone">
+              <div className="panel-header">
+                <div>
+                  <h3 className="panel-title">Ataque vs Defensa</h3>
+                  <p className="panel-subtitle">
+                    Ataque y defensa derivados por orden real de rondas.
+                  </p>
+                </div>
+                {sideBest && (
+                  <span className="meta-pill match-side-badge">
+                    Mejor lado: {sideBest.label}
+                  </span>
+                )}
+              </div>
+
+              {sideComparison && (
+                <div className="match-side-summary-card">
+                  <strong>Mejor lado: {sideComparison.best.label}</strong>
+                  <span>
+                    +{formatNumber(sideComparison.winRateDiff, 1)} pts WR vs{" "}
+                    {sideComparison.best.key === "attack" ? "Defensa" : "Ataque"} Â·{" "}
+                    {sideComparison.kdDiff >= 0 ? "+" : ""}
+                    {formatNumber(sideComparison.kdDiff, 2)} KD Â·{" "}
+                    {sideComparison.acsDiff >= 0 ? "+" : ""}
+                    {formatNumber(sideComparison.acsDiff, 0)} ACS
+                  </span>
+                </div>
+              )}
+
+              <div className="match-side-cards">
+                {matchAnalysis.sideSummary.map((side) => (
+                  <article key={side.key} className="match-side-card">
+                    <header>
+                      <h4>{side.label}</h4>
+                      <strong>{formatPercent(side.winRate, 1)}</strong>
+                    </header>
+
+                    <div className="match-side-grid">
+                      <span>Rondas ganadas / jugadas</span>
+                      <strong>
+                        {side.wins}/{side.rounds}
+                      </strong>
+
+                      <span>K / D / A</span>
+                      <strong>
+                        {side.kills}/{side.deaths}/{side.assists}
+                      </strong>
+
+                      <span>KD</span>
+                      <strong>{formatNumber(side.kd, 2)}</strong>
+
+                      <span>KPR</span>
+                      <strong>{formatNumber(side.killsPerRound, 2)}</strong>
+
+                      <span>Score total</span>
+                      <strong>{formatNumber(side.score)}</strong>
+
+                      <span>Gasto medio</span>
+                      <strong>{formatNumber(side.avgSpent)}</strong>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              {sideComparison && (
+                <>
+                  <div className="match-side-bars">
+                    {[
+                      {
+                        label: "Winrate",
+                        attack: sideComparison.attack.winRate,
+                        defense: sideComparison.defense.winRate,
+                        max: sideComparison.maxWinRate,
+                        formatter: (value: number) => formatPercent(value, 1),
+                      },
+                      {
+                        label: "Kills/ronda",
+                        attack: sideComparison.attack.killsPerRound,
+                        defense: sideComparison.defense.killsPerRound,
+                        max: sideComparison.maxKillsPerRound,
+                        formatter: (value: number) => formatNumber(value, 2),
+                      },
+                      {
+                        label: "Gasto medio",
+                        attack: sideComparison.attack.avgSpent,
+                        defense: sideComparison.defense.avgSpent,
+                        max: sideComparison.maxAvgSpent,
+                        formatter: (value: number) => formatNumber(value),
+                      },
+                    ].map((metric) => (
+                      <div key={metric.label} className="match-side-bar-row">
+                        <span>{metric.label}</span>
+                        <div className="match-side-bar-pair">
+                          <div>
+                            <small>Ataque Â· {metric.formatter(metric.attack)}</small>
+                            <i
+                              style={{
+                                width: `${Math.max(
+                                  4,
+                                  safeDivide(metric.attack, metric.max) * 100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <small>Defensa Â· {metric.formatter(metric.defense)}</small>
+                            <i
+                              style={{
+                                width: `${Math.max(
+                                  4,
+                                  safeDivide(metric.defense, metric.max) * 100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="match-side-quick-read">{sideComparison.quickRead}</p>
+                </>
+              )}
+
+            </div>
+
             </section>
             )}
 
@@ -3273,7 +4026,7 @@ export default function MatchDetailModal({
             >
               <div className="panel-header">
                 <div>
-                  <h3 className="panel-title">Economía</h3>
+                  <h3 className="panel-title">EconomÃ­a</h3>
                   <p className="panel-subtitle">
                     Gasto y valor de equipamiento del jugador seleccionado.
                   </p>
@@ -3396,7 +4149,7 @@ export default function MatchDetailModal({
           </div>
         )}
       </div>
-      {playbackOpen && (
+      {playbackOpen && createPortal(
         <div
           className="match-playback-overlay"
           role="dialog"
@@ -3413,7 +4166,7 @@ export default function MatchDetailModal({
                 <span className="stats-eyebrow">{playbackTitle}</span>
               </div>
               <button type="button" className="modal-close" onClick={closePlayback}>
-                ×
+                Ã—
               </button>
             </header>
 
@@ -3471,7 +4224,7 @@ export default function MatchDetailModal({
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }
