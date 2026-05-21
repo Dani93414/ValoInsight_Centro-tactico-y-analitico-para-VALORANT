@@ -73,6 +73,42 @@
   padding: 1rem;
 }
 
+.match-detail-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1rem;
+  background: rgba(6, 8, 12, 0.82);
+  backdrop-filter: blur(6px);
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+}
+
+.match-detail-modal-overlay.is-centered {
+  justify-content: center;
+}
+
+.match-detail-modal-overlay.is-overflowing {
+  justify-content: flex-start;
+}
+
+.modal-panel.modal-panel-lg.match-detail-modal-panel {
+  flex: 0 0 auto;
+  align-self: center;
+  width: min(1880px, calc(100vw - 0.35rem));
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
 .modal-close {
   position: absolute;
   top: 1rem;
@@ -512,10 +548,13 @@
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
+  min-height: 0;
+  height: auto;
 }
 
 .match-detail-loading-state {
-  min-height: min(620px, calc(92vh - 2.8rem));
+  min-height: 0;
+  height: auto;
   display: grid;
   place-items: center;
   padding: clamp(2rem, 8vh, 4rem) 0;
@@ -1930,7 +1969,8 @@
 }
 
 .match-detail-section-body {
-  min-height: 360px;
+  min-height: 0;
+  height: auto;
 }
 
 .match-summary-section,
@@ -2153,6 +2193,312 @@
   font-size: 0.84rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.match-scoreboard-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.85rem;
+}
+
+.match-scoreboard-mode-toggle {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.28rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.match-scoreboard-mode-toggle button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #b7c1d1;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 900;
+  padding: 0.36rem 0.72rem;
+}
+
+.match-scoreboard-mode-toggle button.is-active {
+  border-color: rgba(255, 70, 85, 0.48);
+  background: rgba(255, 70, 85, 0.16);
+  color: #fff0f2;
+}
+
+.match-scoreboard-panel {
+  overflow: hidden;
+}
+
+.match-scoreboard-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.match-scoreboard-team-block {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(6, 9, 14, 0.34);
+}
+
+.match-scoreboard-team-block.is-team-a {
+  border-left: 4px solid rgba(45, 212, 191, 0.75);
+}
+
+.match-scoreboard-team-block.is-team-b {
+  border-left: 4px solid rgba(255, 70, 85, 0.8);
+}
+
+.match-scoreboard-team-header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 42px;
+  padding: 0.58rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.match-scoreboard-team-header.is-team-a {
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.18), rgba(45, 212, 191, 0.03));
+}
+
+.match-scoreboard-team-header.is-team-b {
+  background: linear-gradient(90deg, rgba(255, 70, 85, 0.2), rgba(255, 70, 85, 0.03));
+}
+
+.match-scoreboard-team-header strong {
+  color: #f2f6fb;
+  font-size: 0.88rem;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.match-scoreboard-team-header > span {
+  color: #aeb8c8;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.match-scoreboard-rank-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  color: #edf3fb !important;
+}
+
+.match-scoreboard-rank-summary img,
+.match-scoreboard-combined-summary img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.match-scoreboard-combined-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.match-scoreboard-combined-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #dce4ef;
+  font-size: 0.78rem;
+}
+
+.match-scoreboard-combined-summary strong {
+  color: #f3f6fb;
+}
+
+.match-scoreboard-table-wrap {
+  overflow-x: auto;
+}
+
+.match-scoreboard-table {
+  min-width: 1100px;
+}
+
+.match-scoreboard-table-head,
+.match-scoreboard-row {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.55fr) 92px 64px 44px 44px 44px 56px 60px 66px 64px 64px 70px 44px 44px 44px;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.match-scoreboard-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-height: 34px;
+  padding: 0.44rem 0.65rem;
+  background: rgba(12, 15, 21, 0.96);
+  color: #8f9bad;
+  font-size: 0.66rem;
+  font-weight: 1000;
+  letter-spacing: 0.55px;
+  text-transform: uppercase;
+}
+
+.match-scoreboard-table-head span:not(:first-child),
+.match-scoreboard-row > span:not(:first-child) {
+  text-align: center;
+  justify-content: center;
+}
+
+.match-scoreboard-row {
+  width: 100%;
+  min-height: 48px;
+  appearance: none;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.025);
+  color: #dce4ef;
+  cursor: pointer;
+  padding: 0.38rem 0.65rem;
+  text-align: left;
+}
+
+.match-scoreboard-row + .match-scoreboard-row {
+  margin-top: 0;
+}
+
+.match-scoreboard-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.match-scoreboard-row.is-team-a {
+  box-shadow: inset 3px 0 0 rgba(45, 212, 191, 0.46);
+}
+
+.match-scoreboard-row.is-team-b {
+  box-shadow: inset 3px 0 0 rgba(255, 70, 85, 0.52);
+}
+
+.match-scoreboard-row.is-selected {
+  border-color: transparent;
+  background: rgba(255, 70, 85, 0.16);
+  outline: 1px solid rgba(255, 70, 85, 0.55);
+  outline-offset: -1px;
+}
+
+.match-scoreboard-cell-player {
+  display: flex;
+  align-items: center;
+  gap: 0.48rem;
+  min-width: 0;
+}
+
+.match-scoreboard-cell-player img,
+.match-scoreboard-cell-player i {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.match-scoreboard-cell-player img {
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.match-scoreboard-cell-player i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.match-scoreboard-player-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.match-scoreboard-player-copy strong {
+  display: flex;
+  align-items: baseline;
+  gap: 0.22rem;
+  min-width: 0;
+  overflow: hidden;
+  color: #f4f7fb;
+  font-size: 0.83rem;
+  font-weight: 950;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.match-scoreboard-player-copy small,
+.match-scoreboard-player-copy em {
+  color: #96a2b4;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.match-scoreboard-team-badge {
+  flex: 0 0 auto;
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 0.16rem 0.42rem;
+  font-size: 0.64rem;
+  font-weight: 1000;
+}
+
+.match-scoreboard-team-badge.is-team-a {
+  color: #98fff1;
+  background: rgba(45, 212, 191, 0.14);
+}
+
+.match-scoreboard-team-badge.is-team-b {
+  color: #ffc1c7;
+  background: rgba(255, 70, 85, 0.16);
+}
+
+.match-scoreboard-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  color: #9ea8b8;
+  font-weight: 900;
+}
+
+.match-scoreboard-rank img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.match-scoreboard-acs {
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-weight: 1000;
+  padding: 0.18rem 0.2rem;
+}
+
+.match-scoreboard-value-positive {
+  color: #6ee7a4 !important;
+  font-weight: 950;
+}
+
+.match-scoreboard-value-negative {
+  color: #ff8f98 !important;
+  font-weight: 950;
 }
 
 .match-playback-controls {
@@ -2386,14 +2732,6 @@
 
   .match-scoreboard-header {
     display: none;
-  }
-
-  .match-scoreboard-row {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .match-scoreboard-player {
-    grid-column: 1 / -1;
   }
 
   .match-round-accordion-trigger {
