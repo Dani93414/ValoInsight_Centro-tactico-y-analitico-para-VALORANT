@@ -53,6 +53,13 @@ type CompetitiveTierContent = {
 };
 
 type SideKey = "attack" | "defense";
+type EventFilterKey =
+  | "all"
+  | "kills"
+  | "deaths"
+  | "opening"
+  | "trade"
+  | "objectives";
 
 type WeaponCatalogEntry = {
   id: string;
@@ -285,6 +292,25 @@ function getPlayerDisplay(player?: RawPlayer | null) {
   return player.gameName ?? "Unknown";
 }
 
+function getPlayerShortDisplay(player?: RawPlayer | null) {
+  if (!player) return "Unknown";
+  return player.gameName?.trim() || getPlayerDisplay(player);
+}
+
+function getAgentMeta(
+  player: RawPlayer | null | undefined,
+  agentById: Map<string, AgentContent>,
+  agentNameMap: Record<string, string>,
+) {
+  const agentId = cleanId(player?.characterId);
+  const agent = agentId ? agentById.get(agentId) : undefined;
+  return {
+    agentId,
+    name: agent?.displayName ?? agentNameMap[agentId] ?? "Agente desconocido",
+    icon: agent?.displayIconSmall ?? agent?.displayIcon ?? null,
+  };
+}
+
 function toMapTransform(mapMeta: MapGeoContent | null): MapTransform | null {
   if (
     !mapMeta ||
@@ -354,10 +380,22 @@ export default function MatchDetailModal({
   const { data: mapsData, isLoading: mapsLoading } = useMapasGeo();
   const { data: tiersData, isLoading: tiersLoading } = useCompetitiveTiers();
 
+  const [selectedPlayerState, setSelectedPlayerState] = useState(() => ({
+    matchId,
+    playerId,
+    selectedPlayerId: playerId,
+  }));
+  const selectedPlayerId =
+    selectedPlayerState.matchId === matchId &&
+    selectedPlayerState.playerId === playerId
+      ? selectedPlayerState.selectedPlayerId
+      : playerId;
+  const [selectedRoundNum, setSelectedRoundNum] = useState<number | null>(null);
   const [expandedRounds, setExpandedRounds] = useState<Set<number>>(
     () => new Set(),
   );
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [eventFilter, setEventFilter] = useState<EventFilterKey>("all");
 
   const loading =
     matchLoading ||
@@ -393,6 +431,19 @@ export default function MatchDetailModal({
       if (puuid) map.set(puuid, player);
     }
     return map;
+  }, [players]);
+
+  const playersByTeam = useMemo(() => {
+    const map = new Map<string, RawPlayer[]>();
+    for (const player of players) {
+      const teamId = cleanId(player.teamId) || "Sin equipo";
+      const current = map.get(teamId) ?? [];
+      current.push(player);
+      map.set(teamId, current);
+    }
+    return [...map.entries()].sort(([teamA], [teamB]) =>
+      teamA.localeCompare(teamB),
+    );
   }, [players]);
 
   const teamByPuuid = useMemo(() => {
@@ -460,22 +511,18 @@ export default function MatchDetailModal({
   );
 
   const playerInfo = useMemo(() => {
-    return playersByPuuid.get(playerId) ?? null;
-  }, [playersByPuuid, playerId]);
+    return playersByPuuid.get(selectedPlayerId) ?? null;
+  }, [playersByPuuid, selectedPlayerId]);
 
   const playerTeam = cleanId(playerInfo?.teamId);
   const teamInfo =
     (currentMatch?.teams ?? []).find((team) => team.teamId === playerTeam) ??
     null;
 
-  const playerAgentId = cleanId(playerInfo?.characterId);
-  const playerAgent = playerAgentId ? agentById.get(playerAgentId) : undefined;
-  const playerAgentName =
-    playerAgent?.displayName ??
-    agentNameMap[playerAgentId] ??
-    "Agente desconocido";
-  const playerAgentIcon =
-    playerAgent?.displayIconSmall ?? playerAgent?.displayIcon ?? null;
+  const {
+    name: playerAgentName,
+    icon: playerAgentIcon,
+  } = getAgentMeta(playerInfo, agentById, agentNameMap);
 
   const mapId = cleanId(currentMatch?.matchInfo?.mapId);
   const mapMeta = mapId ? (mapById.get(mapId) ?? null) : null;
@@ -522,7 +569,7 @@ export default function MatchDetailModal({
       const didWin = cleanId(round.winningTeam) === playerTeam;
 
       const playerRoundStats = (round.playerStats ?? []).find(
-        (stat) => cleanId(stat.puuid) === playerId,
+        (stat) => cleanId(stat.puuid) === selectedPlayerId,
       );
 
       const playerScore = toNumber(playerRoundStats?.score);
@@ -569,12 +616,15 @@ export default function MatchDetailModal({
         const killerId = cleanId(kill.killer) || ownerPuuid;
         const victimId = cleanId(kill.victim);
 
-        if (victimId === playerId) {
+        if (victimId === selectedPlayerId) {
           playerDeaths += 1;
         }
 
         const assistants = parseAssistants(kill.assistants);
-        if (killerId !== playerId && assistants.includes(playerId)) {
+        if (
+          killerId !== selectedPlayerId &&
+          assistants.includes(selectedPlayerId)
+        ) {
           playerAssists += 1;
         }
 
@@ -610,8 +660,8 @@ export default function MatchDetailModal({
             ? (weaponData?.displayIcon ?? null)
             : null;
 
-        const isPlayerKill = killerId === playerId;
-        const isPlayerDeath = victimId === playerId;
+        const isPlayerKill = killerId === selectedPlayerId;
+        const isPlayerDeath = victimId === selectedPlayerId;
         const isOpening = Boolean(
           firstKill && firstKill === kill && (isPlayerKill || isPlayerDeath),
         );
@@ -967,7 +1017,7 @@ export default function MatchDetailModal({
     currentMatch,
     playerInfo,
     playerTeam,
-    playerId,
+    selectedPlayerId,
     playersByPuuid,
     teamByPuuid,
     agentById,
@@ -979,10 +1029,47 @@ export default function MatchDetailModal({
     [matchAnalysis],
   );
 
-  const selectedEvent = useMemo(
-    () => allRoundEvents.find((event) => event.id === selectedEventId) ?? null,
-    [allRoundEvents, selectedEventId],
-  );
+  const selectedRound = useMemo(() => {
+    if (!matchAnalysis) return null;
+    if (selectedRoundNum === null) return matchAnalysis.rounds[0] ?? null;
+    return (
+      matchAnalysis.rounds.find((round) => round.roundNum === selectedRoundNum) ??
+      matchAnalysis.rounds[0] ??
+      null
+    );
+  }, [matchAnalysis, selectedRoundNum]);
+
+  const selectedEvent = useMemo(() => {
+    const explicitEvent =
+      allRoundEvents.find((event) => event.id === selectedEventId) ?? null;
+    return explicitEvent ?? selectedRound?.events[0] ?? null;
+  }, [allRoundEvents, selectedEventId, selectedRound]);
+
+  const filteredSelectedRoundEvents = useMemo(() => {
+    const events = selectedRound?.events ?? [];
+    switch (eventFilter) {
+      case "kills":
+        return events.filter(
+          (event) => event.kind === "kill" && event.isPlayerKill,
+        );
+      case "deaths":
+        return events.filter(
+          (event) => event.kind === "kill" && event.isPlayerDeath,
+        );
+      case "opening":
+        return events.filter(
+          (event) => event.kind === "kill" && event.isOpening,
+        );
+      case "trade":
+        return events.filter((event) => event.kind === "kill" && event.isTrade);
+      case "objectives":
+        return events.filter(
+          (event) => event.kind === "plant" || event.kind === "defuse",
+        );
+      default:
+        return events;
+    }
+  }, [eventFilter, selectedRound]);
 
   const eventMapState = useMemo(() => {
     if (!selectedEvent) {
@@ -1027,7 +1114,7 @@ export default function MatchDetailModal({
               ? "ally"
               : "enemy",
         kind: "player",
-        isTarget: puuid === playerId,
+        isTarget: puuid === selectedPlayerId,
       });
     };
 
@@ -1063,7 +1150,7 @@ export default function MatchDetailModal({
                 ? "ally"
                 : "enemy",
           kind: "victim",
-          isTarget: cleanId(selectedEvent.victim) === playerId,
+          isTarget: cleanId(selectedEvent.victim) === selectedPlayerId,
         });
       }
     }
@@ -1098,25 +1185,52 @@ export default function MatchDetailModal({
     mapTransform,
     playersByPuuid,
     playerTeam,
-    playerId,
+    selectedPlayerId,
     agentById,
   ]);
-
-  const secondaryLine = useMemo(() => {
-    const start = formatDateTime(currentMatch?.matchInfo?.gameStartMillis);
-    const mode = cleanId(currentMatch?.matchInfo?.gameMode) || "-";
-    const queue = cleanId(currentMatch?.matchInfo?.queueId) || "-";
-    const duration = toGameDurationLabel(
-      currentMatch?.matchInfo?.gameLengthMillis,
-    );
-    return [start, mode, queue, duration].filter(Boolean).join(" · ");
-  }, [currentMatch]);
 
   const sideBest = useMemo(() => {
     if (!matchAnalysis) return null;
     return [...matchAnalysis.sideSummary]
       .filter((side) => side.rounds > 0)
       .sort((a, b) => b.winRate - a.winRate || b.kda - a.kda)[0];
+  }, [matchAnalysis]);
+
+  const resultState = useMemo(() => {
+    const won = toNumber(teamInfo?.roundsWon);
+    const lost = toNumber(teamInfo?.roundsLost);
+    if (won === lost) return "draw";
+    return won > lost || teamInfo?.won ? "win" : "loss";
+  }, [teamInfo]);
+
+  const impactLevel = useMemo(() => {
+    if (!matchAnalysis) return null;
+    if (
+      matchAnalysis.kd >= 1.2 ||
+      matchAnalysis.winRoundParticipationPct >= 70 ||
+      matchAnalysis.killsPerRound >= 0.85
+    ) {
+      return {
+        label: "Impacto alto",
+        tone: "high",
+        text: "Buen impacto por KD, kills por ronda o participación en rondas ganadas.",
+      };
+    }
+    if (
+      matchAnalysis.kd < 0.8 &&
+      matchAnalysis.winRoundParticipationPct < 45
+    ) {
+      return {
+        label: "Impacto bajo",
+        tone: "low",
+        text: "Impacto limitado por bajo KD y poca participación en rondas ganadas.",
+      };
+    }
+    return {
+      label: "Impacto medio",
+      tone: "medium",
+      text: "Aportación estable, con margen para decidir más rondas ganadas.",
+    };
   }, [matchAnalysis]);
 
   if (!loading && !currentMatch) {
@@ -1153,6 +1267,12 @@ export default function MatchDetailModal({
     );
   }
 
+  const handleRoundSelect = (round: RoundSummary) => {
+    setSelectedRoundNum(round.roundNum);
+    setSelectedEventId(round.events[0]?.id ?? null);
+    setEventFilter("all");
+  };
+
   const handleRoundToggle = (roundNum: number, firstEventId?: string) => {
     setExpandedRounds((previous) => {
       const next = new Set(previous);
@@ -1169,6 +1289,91 @@ export default function MatchDetailModal({
     }
   };
 
+  const handlePlayerSelect = (nextPlayerId: string) => {
+    setSelectedPlayerState({
+      matchId,
+      playerId,
+      selectedPlayerId: nextPlayerId,
+    });
+    setSelectedRoundNum(null);
+    setExpandedRounds(new Set());
+    setSelectedEventId(null);
+    setEventFilter("all");
+  };
+
+  const eventFilterOptions: Array<{ key: EventFilterKey; label: string }> = [
+    { key: "all", label: "Todos" },
+    { key: "kills", label: "Kills del jugador" },
+    { key: "deaths", label: "Muertes del jugador" },
+    { key: "opening", label: "Opening" },
+    { key: "trade", label: "Trade" },
+    { key: "objectives", label: "Objetivos" },
+  ];
+
+  const renderRoundEventButton = (event: RoundEvent) => {
+    const isActive = selectedEventId === event.id;
+
+    if (event.kind === "kill") {
+      return (
+        <button
+          key={event.id}
+          type="button"
+          className={`match-round-event-btn ${isActive ? "is-active" : ""}`}
+          onClick={() => setSelectedEventId(event.id)}
+          aria-pressed={isActive}
+        >
+          <div className="match-round-event-top">
+            <span className="match-round-event-time">
+              {toSecondsLabel(event.timeMs)}
+            </span>
+            <strong>
+              {event.killerName} eliminó a {event.victimName}
+            </strong>
+          </div>
+
+          <div className="match-round-event-meta">
+            {event.weaponIcon && (
+              <img src={event.weaponIcon} alt={event.weaponName} />
+            )}
+            <span>{event.weaponName}</span>
+            {event.isPlayerKill && <span className="meta-pill">Kill</span>}
+            {event.isPlayerDeath && <span className="meta-pill">Muerte</span>}
+            {event.isOpening && <span className="meta-pill">Opening</span>}
+            {event.isTrade && <span className="meta-pill">Trade</span>}
+          </div>
+        </button>
+      );
+    }
+
+    return (
+      <button
+        key={event.id}
+        type="button"
+        className={`match-round-event-btn match-round-event-btn-objective ${isActive ? "is-active" : ""}`}
+        onClick={() => setSelectedEventId(event.id)}
+        aria-pressed={isActive}
+      >
+        <div className="match-round-event-top">
+          <span className="match-round-event-time">
+            {toSecondsLabel(event.timeMs)}
+          </span>
+          <strong>
+            {event.kind === "plant" ? "Plant" : "Defuse"} · {event.actorName}
+          </strong>
+        </div>
+        <div className="match-round-event-meta">
+          <span>
+            {event.site
+              ? `${event.kind === "plant" ? "Spike en" : "Sitio"} ${event.site}`
+              : "Evento de objetivo"}
+          </span>
+        </div>
+      </button>
+    );
+  };
+
+  const showLegacyRoundList = expandedRounds.size < 0;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -1180,12 +1385,53 @@ export default function MatchDetailModal({
         </button>
 
         {loading || !matchAnalysis ? (
-          <div className="loading-card">
-            <div className="loading-spinner" />
-            <h2>Cargando partida</h2>
+          <div
+            className="match-detail-loading-state"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="loading-card">
+              <div className="loading-spinner" />
+              <h2>Cargando partida</h2>
+            </div>
           </div>
         ) : (
           <div className="match-detail-shell">
+            <section className="match-teams-strip" aria-label="Jugadores de la partida">
+              {playersByTeam.map(([teamId, teamPlayers], teamIndex) => (
+                <div key={teamId} className="match-team-roster">
+                  {teamPlayers.map((player) => {
+                    const puuid = cleanId(player.puuid);
+                    const agent = getAgentMeta(player, agentById, agentNameMap);
+                    const isSelected = puuid === selectedPlayerId;
+                    const playerName = getPlayerShortDisplay(player);
+                    return (
+                      <button
+                        key={puuid || `${teamId}-${playerName}`}
+                        type="button"
+                        className={`match-team-player-button ${isSelected ? "is-selected" : ""}`}
+                        onClick={() => puuid && handlePlayerSelect(puuid)}
+                        aria-label={`Ver partida desde la perspectiva de ${playerName} con ${agent.name}`}
+                        aria-pressed={isSelected}
+                      >
+                        {agent.icon ? (
+                          <img src={agent.icon} alt="" />
+                        ) : (
+                          <span className="match-team-agent-fallback">
+                            {agent.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <span>{playerName}</span>
+                      </button>
+                    );
+                  })}
+                  {teamIndex === 0 && playersByTeam.length > 1 && (
+                    <span className="match-team-vs">VS</span>
+                  )}
+                </div>
+              ))}
+            </section>
+
             <header className="match-detail-hero">
               <div className="match-detail-hero-copy">
                 <span className="stats-eyebrow">Detalle de partida</span>
@@ -1201,22 +1447,40 @@ export default function MatchDetailModal({
                   <h2 className="stats-title modal-title-small">{mapName}</h2>
                 </div>
 
-                <p className="stats-subtitle">{secondaryLine}</p>
+                <p className="stats-subtitle">
+                  {getPlayerDisplay(playerInfo)} · {playerAgentName}
+                </p>
 
                 <div className="match-detail-meta-row">
                   <span
-                    className={`meta-pill ${teamInfo?.won ? "match-pill-win" : "match-pill-loss"}`}
+                    className={`meta-pill match-pill-${resultState}`}
                   >
-                    {teamInfo?.won ? "Victoria" : "Derrota"}
+                    {resultState === "draw"
+                      ? "Empate"
+                      : resultState === "win"
+                        ? "Victoria"
+                        : "Derrota"}
                   </span>
                   <span className="meta-pill">
                     {matchAnalysis.totalRounds} rondas
                   </span>
-                  <span className="meta-pill">{playerAgentName}</span>
+                  <span className="meta-pill">
+                    {cleanId(currentMatch?.matchInfo?.queueId) || "Cola desconocida"}
+                  </span>
+                  <span className="meta-pill">
+                    {cleanId(currentMatch?.matchInfo?.gameMode) || "Modo desconocido"}
+                  </span>
+                  <span className="meta-pill">
+                    {toGameDurationLabel(currentMatch?.matchInfo?.gameLengthMillis) ||
+                      "Duración no disponible"}
+                  </span>
+                  <span className="meta-pill">
+                    {formatDateTime(currentMatch?.matchInfo?.gameStartMillis)}
+                  </span>
                 </div>
               </div>
 
-              <div className="match-detail-scoreboard">
+              <div className={`match-result-card result-${resultState}`}>
                 <div className="match-score-main">
                   <span className="match-score-label">Resultado</span>
                   <strong className="match-score-value">
@@ -1226,7 +1490,7 @@ export default function MatchDetailModal({
 
                 <div className="match-score-split">
                   <div>
-                    <span>Tu KDA</span>
+                    <span>K / D / A</span>
                     <strong>
                       {matchAnalysis.kills}/{matchAnalysis.deaths}/
                       {matchAnalysis.assists}
@@ -1237,12 +1501,30 @@ export default function MatchDetailModal({
                     <strong>{formatNumber(matchAnalysis.kd, 2)}</strong>
                   </div>
                   <div>
+                    <span>KDA</span>
+                    <strong>{formatNumber(matchAnalysis.kda, 2)}</strong>
+                  </div>
+                  <div>
                     <span>Score</span>
                     <strong>{formatNumber(matchAnalysis.score)}</strong>
                   </div>
                   <div>
-                    <span>MVP</span>
-                    <strong>{getPlayerDisplay(mvp)}</strong>
+                    <span>Kills/ronda</span>
+                    <strong>{formatNumber(matchAnalysis.killsPerRound, 2)}</strong>
+                  </div>
+                  <div>
+                    <span>HS%</span>
+                    <strong>{formatPercent(matchAnalysis.headshotPct, 1)}</strong>
+                  </div>
+                  <div>
+                    <span>Supervivencia</span>
+                    <strong>{formatPercent(matchAnalysis.survivalPct, 1)}</strong>
+                  </div>
+                  <div>
+                    <span>Participación</span>
+                    <strong>
+                      {formatPercent(matchAnalysis.winRoundParticipationPct, 1)}
+                    </strong>
                   </div>
                 </div>
 
@@ -1255,6 +1537,7 @@ export default function MatchDetailModal({
                     />
                   )}
                   <span>{playerRankName}</span>
+                  <span>MVP partida: {getPlayerDisplay(mvp)}</span>
                 </div>
               </div>
             </header>
@@ -1264,22 +1547,23 @@ export default function MatchDetailModal({
                 <div>
                   <h3 className="panel-title">Timeline de rondas</h3>
                   <p className="panel-subtitle">
-                    Secuencia de rondas con victoria/derrota y rounds con kill.
+                    Secuencia principal de rondas. El detalle se abre justo debajo.
                   </p>
                 </div>
               </div>
 
               <div className="match-round-strip-track">
                 {matchAnalysis.rounds.map((round) => {
-                  const isOpen = expandedRounds.has(round.roundNum);
+                  const isOpen = selectedRound?.roundNum === round.roundNum;
                   return (
                     <button
                       key={`strip-${round.roundNum}`}
                       type="button"
                       className={`match-round-chip ${round.didWin ? "is-win" : "is-loss"} ${isOpen ? "is-open" : ""}`}
-                      onClick={() =>
-                        handleRoundToggle(round.roundNum, round.events[0]?.id)
-                      }
+                      onClick={() => handleRoundSelect(round)}
+                      aria-label={`Abrir ronda ${round.roundNum + 1}, ${round.didWin ? "ganada" : "perdida"}, ${round.playerKills} kills`}
+                      aria-current={isOpen ? "true" : undefined}
+                      aria-pressed={isOpen}
                     >
                       <span>{round.roundNum + 1}</span>
                       {round.playerKills > 0 && (
@@ -1292,18 +1576,113 @@ export default function MatchDetailModal({
                   );
                 })}
               </div>
+
+              {selectedRound && (
+                <article className="match-selected-round-detail">
+                  <div className="match-selected-round-header">
+                    <div>
+                      <h4>{roundLabel(selectedRound.roundNum)}</h4>
+                      <p>
+                        {selectedRound.side === "attack" ? "Ataque" : "Defensa"} ·{" "}
+                        {selectedRound.roundResult}
+                      </p>
+                    </div>
+                    <div className="round-trigger-summary">
+                      <span
+                        className={
+                          selectedRound.didWin ? "text-positive" : "text-negative"
+                        }
+                      >
+                        {selectedRound.didWin ? "Ganada" : "Perdida"}
+                      </span>
+                      <span>{selectedRound.playerKills}K</span>
+                      <span>{selectedRound.playerDeaths}D</span>
+                      <span>{selectedRound.playerAssists}A</span>
+                      {selectedRound.hadPlant && <em>Plant</em>}
+                      {selectedRound.hadDefuse && <em>Defuse</em>}
+                    </div>
+                  </div>
+
+                  <div className="match-round-accordion-body">
+                    <div className="match-round-player-row">
+                      <span>
+                        Score <strong>{formatNumber(selectedRound.playerScore)}</strong>
+                      </span>
+                      <span>
+                        Daño <strong>{formatNumber(selectedRound.playerDamage)}</strong>
+                      </span>
+                      <span>
+                        Gasto <strong>{formatNumber(selectedRound.playerSpent)}</strong>
+                      </span>
+                      <span>
+                        Loadout{" "}
+                        <strong>{formatNumber(selectedRound.playerLoadout)}</strong>
+                      </span>
+                    </div>
+
+                    <div className="match-event-filters" aria-label="Filtros de eventos">
+                      {eventFilterOptions.map((option) => (
+                        <button
+                          key={option.key}
+                          type="button"
+                          className={eventFilter === option.key ? "is-active" : ""}
+                          onClick={() => setEventFilter(option.key)}
+                          aria-pressed={eventFilter === option.key}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="match-round-events">
+                      {filteredSelectedRoundEvents.length === 0 ? (
+                        <div className="empty-chart">
+                          No hay eventos para este filtro en la ronda seleccionada.
+                        </div>
+                      ) : (
+                        filteredSelectedRoundEvents.map(renderRoundEventButton)
+                      )}
+                    </div>
+                  </div>
+                </article>
+              )}
             </section>
 
             <section className="match-impact-layout">
               <article className="match-impact-main">
                 <div className="panel-header">
                   <div>
-                    <h3 className="panel-title">Impacto personal</h3>
+                    <h3 className="panel-title">Impacto del jugador</h3>
                     <p className="panel-subtitle">
                       Rendimiento real del jugador en esta partida.
                     </p>
                   </div>
                 </div>
+
+                {impactLevel && (
+                  <div className="match-impact-reading">
+                    <span className={`impact-level-badge is-${impactLevel.tone}`}>
+                      {impactLevel.label}
+                    </span>
+                    <p>{impactLevel.text}</p>
+                  </div>
+                )}
+
+                {matchAnalysis.bestRound && (
+                  <div className="match-key-round">
+                    <span>
+                      Ronda clave: {roundLabel(matchAnalysis.bestRound.roundNum)} ·{" "}
+                      {matchAnalysis.bestRound.playerKills}K ·{" "}
+                      {formatNumber(matchAnalysis.bestRound.playerScore)} score
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRoundSelect(matchAnalysis.bestRound!)}
+                    >
+                      Ver ronda
+                    </button>
+                  </div>
+                )}
 
                 <div className="match-impact-metrics">
                   <div className="match-impact-metric">
@@ -1378,7 +1757,9 @@ export default function MatchDetailModal({
 
                 <div className="match-insights-list">
                   {matchAnalysis.insights.length === 0 ? (
-                    <div className="empty-chart">Sin insights suficientes.</div>
+                    <div className="empty-chart">
+                      No hay suficientes eventos destacados para generar conclusiones.
+                    </div>
                   ) : (
                     matchAnalysis.insights.map((insight, index) => (
                       <div
@@ -1390,6 +1771,28 @@ export default function MatchDetailModal({
                     ))
                   )}
                 </div>
+
+                {matchAnalysis.bestRound && (
+                  <div className="match-insight-actions">
+                    <button
+                      type="button"
+                      onClick={() => handleRoundSelect(matchAnalysis.bestRound!)}
+                    >
+                      Ver ronda clave
+                    </button>
+                    {allRoundEvents[0] && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedRoundNum(allRoundEvents[0].roundNum);
+                          setSelectedEventId(allRoundEvents[0].id);
+                        }}
+                      >
+                        Ver mapa del primer evento destacado
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 <div className="match-weapon-summary">
                   <h4>Armas por kills</h4>
@@ -1419,7 +1822,7 @@ export default function MatchDetailModal({
             <section className="match-side-comparison-zone">
               <div className="panel-header">
                 <div>
-                  <h3 className="panel-title">Comparativa por bandos</h3>
+                  <h3 className="panel-title">Ataque vs Defensa</h3>
                   <p className="panel-subtitle">
                     Ataque y defensa derivados por orden real de rondas.
                   </p>
@@ -1464,39 +1867,52 @@ export default function MatchDetailModal({
                 ))}
               </div>
 
-              <div className="match-economy-ribbon">
-                <span>
-                  Gasto total:{" "}
+            </section>
+
+            <section className="match-economy-panel">
+              <div className="panel-header">
+                <div>
+                  <h3 className="panel-title">Economía</h3>
+                  <p className="panel-subtitle">
+                    Gasto y valor de equipamiento del jugador seleccionado.
+                  </p>
+                </div>
+              </div>
+
+              <div className="match-economy-cards">
+                <div>
+                  <span>Gasto total</span>
                   <strong>{formatNumber(matchAnalysis.totalSpent)}</strong>
-                </span>
-                <span>
-                  Gasto medio/ronda:{" "}
+                </div>
+                <div>
+                  <span>Gasto medio/ronda</span>
                   <strong>{formatNumber(matchAnalysis.avgSpent)}</strong>
-                </span>
-                <span>
-                  Loadout medio:{" "}
+                </div>
+                <div>
+                  <span>Loadout medio</span>
                   <strong>{formatNumber(matchAnalysis.avgLoadout)}</strong>
-                </span>
-                <span>
-                  Eco rounds ganadas:{" "}
+                </div>
+                <div>
+                  <span>Eco rounds ganadas</span>
                   <strong>
                     {matchAnalysis.ecoWins}/{matchAnalysis.ecoRounds}
                   </strong>
-                </span>
-                <span>
-                  Full buy ganadas:{" "}
+                </div>
+                <div>
+                  <span>Full buy ganadas</span>
                   <strong>
                     {matchAnalysis.fullBuyWins}/{matchAnalysis.fullBuyRounds}
                   </strong>
-                </span>
+                </div>
               </div>
             </section>
 
-            <section className="match-rounds-map-layout">
+            <section className="match-event-map-zone">
+              {showLegacyRoundList && (
               <article className="match-rounds-zone">
                 <div className="panel-header">
                   <div>
-                    <h3 className="panel-title">Rondas (colapsadas)</h3>
+                    <h3 className="panel-title">Detalle de ronda</h3>
                     <p className="panel-subtitle">
                       Abre cada ronda para ver resultado, eventos y tu impacto.
                     </p>
@@ -1599,7 +2015,7 @@ export default function MatchDetailModal({
                                             {toSecondsLabel(event.timeMs)}
                                           </span>
                                           <strong>
-                                            {event.killerName} elimino a{" "}
+                                            {event.killerName} eliminó a{" "}
                                             {event.victimName}
                                           </strong>
                                         </div>
@@ -1614,12 +2030,12 @@ export default function MatchDetailModal({
                                           <span>{event.weaponName}</span>
                                           {event.isPlayerKill && (
                                             <span className="meta-pill">
-                                              Tu kill
+                                              Kill
                                             </span>
                                           )}
                                           {event.isPlayerDeath && (
                                             <span className="meta-pill">
-                                              Tu muerte
+                                              Muerte
                                             </span>
                                           )}
                                           {event.isOpening && (
@@ -1676,13 +2092,16 @@ export default function MatchDetailModal({
                   })}
                 </div>
               </article>
+              )}
 
-              <aside className="match-event-map-zone">
+              <div>
                 <div className="panel-header">
                   <div>
-                    <h3 className="panel-title">Evento en mapa</h3>
+                    <h3 className="panel-title">
+                      Mapa del evento seleccionado
+                    </h3>
                     <p className="panel-subtitle">
-                      Click en un evento para ver posiciones instantaneas.
+                      Click en un evento para ver posiciones instantáneas.
                     </p>
                   </div>
                 </div>
@@ -1742,14 +2161,14 @@ export default function MatchDetailModal({
 
                     {!mapTransform && (
                       <p className="match-event-map-note">
-                        Este mapa no tiene transformacion de coordenadas
+                        Este mapa no tiene transformación de coordenadas
                         disponible.
                       </p>
                     )}
 
                     {mapTransform && eventMapState.markers.length === 0 && (
                       <p className="match-event-map-note">
-                        No hay posiciones validas para este evento en el
+                        No hay posiciones válidas para este evento en el
                         dataset.
                       </p>
                     )}
@@ -1758,7 +2177,7 @@ export default function MatchDetailModal({
                       eventMapState.markers.length > 0 &&
                       !eventMapState.hasSnapshot && (
                         <p className="match-event-map-note">
-                          Se muestra solo la posicion del evento porque no hay
+                          Se muestra solo la posición del evento porque no hay
                           snapshot completo de jugadores.
                         </p>
                       )}
@@ -1774,12 +2193,12 @@ export default function MatchDetailModal({
                         <i className="dot neutral" /> Objetivo
                       </span>
                       <span>
-                        <i className="dot target" /> Tu posicion
+                        <i className="dot target" /> Posición del jugador
                       </span>
                     </div>
                   </>
                 )}
-              </aside>
+              </div>
             </section>
           </div>
         )}

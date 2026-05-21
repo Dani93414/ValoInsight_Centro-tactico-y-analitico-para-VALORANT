@@ -142,9 +142,9 @@ export default function CosmeticosTitulosTarjetas() {
   }, [filteredCards.length, viewMode]);
 
   useEffect(() => {
-    if (!selectedCard) return;
-    window.requestAnimationFrame(() => scrollToElement(detailRef.current));
-  }, [selectedCard]);
+    if (!selectedCardKey) return;
+    window.requestAnimationFrame(() => scrollToElement(cardRefs.current.get(selectedCardKey) ?? null));
+  }, [selectedCardKey]);
 
   const closeSelectedCard = (cardKey?: string) => {
     const targetKey = cardKey ?? selectedCardKey;

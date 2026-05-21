@@ -110,9 +110,9 @@ export default function CosmeticosSprays() {
   }, [filteredSprays.length]);
 
   useEffect(() => {
-    if (!selectedSpray) return;
-    window.requestAnimationFrame(() => scrollToElement(detailRef.current));
-  }, [selectedSpray]);
+    if (!selectedKey) return;
+    window.requestAnimationFrame(() => scrollToElement(cardRefs.current.get(selectedKey) ?? null));
+  }, [selectedKey]);
 
   const closeSelectedSpray = (sprayKey?: string) => {
     const targetKey = sprayKey ?? selectedKey;

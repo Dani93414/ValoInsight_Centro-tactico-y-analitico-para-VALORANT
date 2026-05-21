@@ -98,9 +98,9 @@ export default function Modos() {
   }, [filtered.length]);
 
   useEffect(() => {
-    if (!selected) return;
-    window.requestAnimationFrame(() => scrollToElement(detailRef.current));
-  }, [selected]);
+    if (!selectedKey) return;
+    window.requestAnimationFrame(() => scrollToElement(cardRefs.current.get(selectedKey) ?? null));
+  }, [selectedKey]);
 
   const closeSelectedMode = (modeKey?: string) => {
     const targetKey = modeKey ?? selectedKey;

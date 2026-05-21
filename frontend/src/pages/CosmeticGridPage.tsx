@@ -95,6 +95,7 @@ export default function CosmeticGridPage<T extends NamedContentItem>({
   const [gridColumns, setGridColumns] = useState(1);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const items = useMemo(
     () =>
@@ -146,9 +147,9 @@ export default function CosmeticGridPage<T extends NamedContentItem>({
   }, [filtered.length, inlineDetail]);
 
   useEffect(() => {
-    if (!inlineDetail || !selected) return;
-    window.requestAnimationFrame(() => scrollToElement(detailRef.current));
-  }, [inlineDetail, selected]);
+    if (!inlineDetail || !selectedKey) return;
+    window.requestAnimationFrame(() => scrollToElement(cardRefs.current.get(selectedKey) ?? null));
+  }, [inlineDetail, selectedKey]);
 
   if (query.isLoading) {
     return <ContentLoading title={`Cargando ${title.toLowerCase()}`} />;
@@ -277,6 +278,10 @@ export default function CosmeticGridPage<T extends NamedContentItem>({
                 const card = canOpenDetail ? (
                   <button
                     key={itemKey}
+                    ref={(element) => {
+                      if (element) cardRefs.current.set(itemKey, element);
+                      else cardRefs.current.delete(itemKey);
+                    }}
                     className={`content-card ${cardClassName ?? ""} ${active ? "active" : ""}`.trim()}
                     type="button"
                     onClick={() => setSelected(active ? null : item)}

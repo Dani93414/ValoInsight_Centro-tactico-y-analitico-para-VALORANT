@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { ComparisonTable } from "../../../components/comparison/ComparisonTable";
 import { formatNumber, formatPercent } from "../../../utils/formatters";
 import type { EnrichedWeapon, WeaponComparisonMetric, WeaponPersonalComparison } from "../types";
 import { buildWeaponProfileSummary, formatWeaponCost, formatWeaponValue, STAT_LABELS } from "../weaponUtils";
@@ -94,31 +95,22 @@ function ComparisonPanel({ comparison }: { comparison: WeaponPersonalComparison 
 
   return (
     <>
-      <div className="weapon-personal-comparison-table" role="table" aria-label="Comparativa global vs tu rendimiento">
-        <div className="weapon-personal-comparison-row weapon-personal-comparison-row--head" role="row">
-          <span role="columnheader">Metrica</span>
-          <span role="columnheader">Global</span>
-          <span role="columnheader">Tu</span>
-          <span role="columnheader">Diferencia</span>
-          <span role="columnheader" title="Valor ajustado por muestra para suavizar comparativas con pocos datos">Global norm.</span>
-          <span role="columnheader" title="Tu valor ajustado por muestra para suavizar comparativas con pocos datos">Tu norm.</span>
-          <span role="columnheader" title="Diferencia entre valores normalizados">Diferencia norm.</span>
-        </div>
-        {comparison.metrics.map((metric) => (
-          <div key={metric.key} className="weapon-personal-comparison-row" role="row">
-            <span role="cell">{metric.label}</span>
-            <strong role="cell">{metric.globalLabel}</strong>
-            <strong role="cell">{metric.personalLabel}</strong>
-            <em role="cell" className={`metric-diff metric-diff-${getDiffTone(metric)}`}>
-              {metric.diffLabel}
-            </em>
-            <strong role="cell">{metric.globalNormalizedLabel ?? "-"}</strong>
-            <strong role="cell">{metric.personalNormalizedLabel ?? "-"}</strong>
-            <em role="cell" className={`metric-diff metric-diff-${getNormalizedDiffTone(metric)}`}>
-              {metric.normalizedDiffLabel ?? "-"}
-            </em>
-          </div>
-        ))}
+      <div className="weapon-personal-comparison-table-wrap">
+        <ComparisonTable
+          ariaLabel="Comparativa global vs tu rendimiento"
+          rows={comparison.metrics.map((metric) => ({
+            key: metric.key,
+            label: metric.label,
+            globalLabel: metric.globalLabel,
+            personalLabel: metric.personalLabel,
+            diffLabel: metric.diffLabel,
+            globalNormalizedLabel: metric.globalNormalizedLabel,
+            personalNormalizedLabel: metric.personalNormalizedLabel,
+            normalizedDiffLabel: metric.normalizedDiffLabel,
+            diffTone: getDiffTone(metric),
+            normalizedDiffTone: getNormalizedDiffTone(metric),
+          }))}
+        />
       </div>
     </>
   );
