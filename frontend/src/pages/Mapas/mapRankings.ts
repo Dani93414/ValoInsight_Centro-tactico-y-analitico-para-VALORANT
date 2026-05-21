@@ -24,6 +24,7 @@ export type CompositionMapRow = {
   wins: number;
   roundsWon: number;
   roundsLost: number;
+  hasRoundBreakdown?: boolean;
   winRate?: number;
   score?: number;
   sampleConfidence?: number;
@@ -229,6 +230,7 @@ export function buildBestCompositionsForMap(
       const sampleConfidence = clamp(row.matches / 15);
       return {
         ...row,
+        hasRoundBreakdown: true,
         winRate,
         score: adjustedWinRate * 0.65 + playRate * 0.2 + sampleConfidence * 100 * 0.15,
         sampleConfidence,
@@ -245,6 +247,7 @@ export function buildBestCompositionsFromGlobal(rows: RegionMapCompositionStats[
   return source
     .map((row) => {
       const matches = Number(row.matches ?? 0);
+      const hasRoundBreakdown = row.rounds_won !== undefined || row.rounds_lost !== undefined;
       const adjustedWinRate = bayesianAdjustedRate(row.win_rate, matches, prior, 15) ?? prior;
       const playRate = clamp(matches / maxMatches) * 100;
       const sampleConfidence = clamp(matches / 15);
@@ -255,6 +258,7 @@ export function buildBestCompositionsFromGlobal(rows: RegionMapCompositionStats[
         wins: Number(row.wins ?? 0),
         roundsWon: Number(row.rounds_won ?? row.wins ?? 0),
         roundsLost: Number(row.rounds_lost ?? row.losses ?? 0),
+        hasRoundBreakdown,
         winRate: row.win_rate,
         score: row.score ?? adjustedWinRate * 0.65 + playRate * 0.2 + sampleConfidence * 100 * 0.15,
         sampleConfidence: row.sample_confidence ?? sampleConfidence,

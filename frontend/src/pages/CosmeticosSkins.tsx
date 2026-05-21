@@ -957,12 +957,12 @@ export default function CosmeticosSkins() {
 
   useEffect(() => {
     if (!selectedGroupKey) return;
-    window.requestAnimationFrame(() => scrollToElement(inlineGroupRef.current));
+    window.requestAnimationFrame(() => scrollToElement(groupCardRefs.current.get(selectedGroupKey) ?? null));
   }, [selectedGroupKey]);
 
   useEffect(() => {
     if (!selectedSkinKey) return;
-    window.requestAnimationFrame(() => scrollToElement(detailRef.current));
+    window.requestAnimationFrame(() => scrollToElement(skinCardRefs.current.get(selectedSkinKey) ?? null));
   }, [selectedSkinKey]);
 
   if (skinsQuery.isLoading) return <ContentLoading title="Cargando skins" />;
