@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useMatchById,
   useAgentes,
@@ -67,6 +67,7 @@ type MatchDetailSection =
   | "economy"
   | "team"
   | "map";
+type TeamScoreboardMode = "grouped" | "combined";
 
 type WeaponCatalogEntry = {
   id: string;
@@ -125,6 +126,7 @@ type RoundSummary = {
   playerSpent: number;
   playerLoadout: number;
   playerDamage: number;
+  playerWasTraded: boolean;
   hadPlant: boolean;
   hadDefuse: boolean;
   events: RoundEvent[];
@@ -193,6 +195,44 @@ type MatchAnalysis = {
   fullBuyRounds: number;
   fullBuyWins: number;
   insights: string[];
+};
+
+type AverageTeamRank = {
+  tier: number | null;
+  name: string;
+  icon: string | null;
+};
+
+type PlayerScoreboardStats = {
+  player: RawPlayer;
+  puuid: string;
+  teamId: string;
+  agentName: string;
+  agentIcon?: string | null;
+  rankTier?: number | null;
+  rankName: string;
+  rankIcon?: string | null;
+  kills: number;
+  deaths: number;
+  assists: number;
+  score: number;
+  rounds: number;
+  acs: number;
+  kd: number;
+  plusMinus: number;
+  damageDealt: number;
+  damageReceived: number;
+  damageDelta: number;
+  adr: number;
+  headshots: number;
+  bodyshots: number;
+  legshots: number;
+  hsPct: number;
+  kastRounds: number;
+  kastPct: number;
+  firstKills: number;
+  firstDeaths: number;
+  multikillRounds: number;
 };
 
 const matchDetailSections = [
@@ -335,19 +375,57 @@ function getPlayerShortDisplay(player?: RawPlayer | null) {
   return player.gameName?.trim() || getPlayerDisplay(player);
 }
 
-function getPlayerMatchKda(player: RawPlayer): string {
-  const kills = toNumber(player.stats?.kills);
-  const deaths = toNumber(player.stats?.deaths);
-  const assists = toNumber(player.stats?.assists);
-  return `${kills}/${deaths}/${assists}`;
-}
-
 function getPlayerMatchKd(player: RawPlayer): number {
   return safeDivide(toNumber(player.stats?.kills), Math.max(toNumber(player.stats?.deaths), 1));
 }
 
 function getPlayerMatchAcs(player: RawPlayer): number {
   return safeDivide(toNumber(player.stats?.score), Math.max(toNumber(player.stats?.roundsPlayed), 1));
+}
+
+function getPlayerKills(player: RawPlayer): number {
+  return toNumber(player.stats?.kills);
+}
+
+function getPlayerScore(player: RawPlayer): number {
+  return toNumber(player.stats?.score);
+}
+
+function compareScoreboardPlayers(
+  a: PlayerScoreboardStats,
+  b: PlayerScoreboardStats,
+): number {
+  return (
+    b.acs - a.acs ||
+    b.kd - a.kd ||
+    b.kills - a.kills ||
+    b.score - a.score
+  );
+}
+
+function getAverageTeamRank(
+  players: RawPlayer[],
+  tierByNumber: Map<number, CompetitiveTierContent>,
+): AverageTeamRank {
+  const tiers = players
+    .map((player) => Number(player.competitiveTier))
+    .filter((tier) => Number.isFinite(tier) && tier > 0);
+
+  if (tiers.length === 0) {
+    return { tier: null, name: "Sin rango", icon: null };
+  }
+
+  const tier = Math.round(
+    tiers.reduce((sum, current) => sum + current, 0) / tiers.length,
+  );
+  const tierAsset = tierByNumber.get(tier);
+  return {
+    tier,
+    name: getRankNameFromTier(tier),
+    icon: normalizeCompetitiveTierIconPath(
+      tierAsset?.smallIcon ?? tierAsset?.largeIcon ?? null,
+    ),
+  };
 }
 
 function getAgentMeta(
@@ -855,6 +933,7 @@ export default function MatchDetailModal({
   agentNameMap,
   onClose,
 }: Props) {
+  const matchDetailPanelRef = useRef<HTMLDivElement | null>(null);
   const { data: matchData, isLoading: matchLoading } = useMatchById(matchId);
   const { data: agentsData, isLoading: agentsLoading } = useAgentes();
   const { data: weaponsData, isLoading: weaponsLoading } = useArmas();
@@ -891,11 +970,15 @@ export default function MatchDetailModal({
       section,
     });
   };
+  const [teamScoreboardMode, setTeamScoreboardMode] =
+    useState<TeamScoreboardMode>("grouped");
   const [playbackOpen, setPlaybackOpen] = useState(false);
   const [playbackEvents, setPlaybackEvents] = useState<RoundEvent[]>([]);
   const [playbackIndex, setPlaybackIndex] = useState(0);
   const [playbackPlaying, setPlaybackPlaying] = useState(false);
   const [playbackTitle, setPlaybackTitle] = useState("");
+  const [isMatchDetailOverflowing, setIsMatchDetailOverflowing] =
+    useState(false);
 
   const loading =
     matchLoading ||
@@ -1103,6 +1186,7 @@ export default function MatchDetailModal({
 
       let playerDeaths = 0;
       let playerAssists = 0;
+      let playerWasTraded = false;
       const roundEvents: RoundEvent[] = [];
 
       for (
@@ -1113,9 +1197,26 @@ export default function MatchDetailModal({
         const { kill, ownerPuuid } = timelineKills[killIndex];
         const killerId = cleanId(kill.killer) || ownerPuuid;
         const victimId = cleanId(kill.victim);
+        const timeMs = toNumber(kill.timeSinceRoundStartMillis);
 
         if (victimId === selectedPlayerId) {
           playerDeaths += 1;
+          for (let forward = killIndex + 1; forward < timelineKills.length; forward += 1) {
+            const next = timelineKills[forward].kill;
+            const nextTime = toNumber(next.timeSinceRoundStartMillis);
+            if (nextTime - timeMs > 5000) break;
+
+            const nextKiller = cleanId(next.killer);
+            const nextVictim = cleanId(next.victim);
+            if (
+              nextVictim === killerId &&
+              nextKiller &&
+              teamByPuuid.get(nextKiller) === playerTeam
+            ) {
+              playerWasTraded = true;
+              break;
+            }
+          }
         }
 
         const assistants = parseAssistants(kill.assistants);
@@ -1126,7 +1227,6 @@ export default function MatchDetailModal({
           playerAssists += 1;
         }
 
-        const timeMs = toNumber(kill.timeSinceRoundStartMillis);
         const killer = killerId ? playersByPuuid.get(killerId) : undefined;
         const victim = victimId ? playersByPuuid.get(victimId) : undefined;
 
@@ -1276,6 +1376,7 @@ export default function MatchDetailModal({
         playerSpent,
         playerLoadout,
         playerDamage: playerRoundDamage,
+        playerWasTraded,
         hadPlant: Boolean(planterId),
         hadDefuse: Boolean(defuserId),
         events: roundEvents,
@@ -1323,13 +1424,11 @@ export default function MatchDetailModal({
         round.playerKills > 0 ||
         round.playerAssists > 0 ||
         round.playerDeaths === 0 ||
-        round.events.some(
-          (event) => event.kind === "kill" && event.isTrade,
-        ),
+        round.playerWasTraded,
     ).length;
     const kastPct = safeDivide(kastRounds, Math.max(totalRounds, 1)) * 100;
     const multikillRounds = rounds.filter(
-      (round) => round.playerKills >= 2,
+      (round) => round.playerKills >= 3,
     ).length;
     const maxKillsInRound = rounds.reduce(
       (maxKills, round) => Math.max(maxKills, round.playerKills),
@@ -1685,6 +1784,263 @@ export default function MatchDetailModal({
       .sort((a, b) => b.winRate - a.winRate || b.kda - a.kda)[0];
   }, [matchAnalysis]);
 
+  const playerScoreboardStatsByPuuid = useMemo(() => {
+    const stats = new Map<string, PlayerScoreboardStats>();
+    const totalRounds = currentMatch?.roundResults?.length ?? 0;
+
+    for (const player of players) {
+      const puuid = cleanId(player.puuid);
+      if (!puuid) continue;
+
+      const agent = getAgentMeta(player, agentById, agentNameMap);
+      const rankTier =
+        typeof player.competitiveTier === "number"
+          ? player.competitiveTier
+          : null;
+      const tierAsset =
+        rankTier !== null ? tierByNumber.get(rankTier) : undefined;
+      const rankIcon = normalizeCompetitiveTierIconPath(
+        tierAsset?.smallIcon ??
+          tierAsset?.largeIcon ??
+          player.competitiveTierImage ??
+          null,
+      );
+      const rounds =
+        toNumber(player.stats?.roundsPlayed) ||
+        totalRounds ||
+        1;
+      const kills = getPlayerKills(player);
+      const deaths = toNumber(player.stats?.deaths);
+      const assists = toNumber(player.stats?.assists);
+      const score = getPlayerScore(player);
+
+      stats.set(puuid, {
+        player,
+        puuid,
+        teamId: cleanId(player.teamId) || "Sin equipo",
+        agentName: agent.name,
+        agentIcon: agent.icon,
+        rankTier,
+        rankName: getRankNameFromTier(rankTier),
+        rankIcon,
+        kills,
+        deaths,
+        assists,
+        score,
+        rounds,
+        acs: getPlayerMatchAcs(player),
+        kd: getPlayerMatchKd(player),
+        plusMinus: kills - deaths,
+        damageDealt: 0,
+        damageReceived: 0,
+        damageDelta: 0,
+        adr: 0,
+        headshots: 0,
+        bodyshots: 0,
+        legshots: 0,
+        hsPct: 0,
+        kastRounds: 0,
+        kastPct: 0,
+        firstKills: 0,
+        firstDeaths: 0,
+        multikillRounds: 0,
+      });
+    }
+
+    for (const round of currentMatch?.roundResults ?? []) {
+      const roundPlayerState = new Map<
+        string,
+        { kills: number; assists: number; deaths: number; traded: boolean }
+      >();
+      const getRoundState = (puuid: string) => {
+        const existing = roundPlayerState.get(puuid);
+        if (existing) return existing;
+        const next = { kills: 0, assists: 0, deaths: 0, traded: false };
+        roundPlayerState.set(puuid, next);
+        return next;
+      };
+      for (const puuid of stats.keys()) {
+        getRoundState(puuid);
+      }
+
+      const timelineKills: Array<{ kill: RawKillEvent; ownerPuuid: string }> =
+        [];
+      for (const stat of round.playerStats ?? []) {
+        const ownerPuuid = cleanId(stat.puuid);
+        const ownerStats = ownerPuuid ? stats.get(ownerPuuid) : undefined;
+
+        for (const damageEntry of stat.damage ?? []) {
+          const damage = toNumber(damageEntry.damage);
+          if (ownerStats) {
+            ownerStats.damageDealt += damage;
+            ownerStats.headshots += toNumber(damageEntry.headshots);
+            ownerStats.bodyshots += toNumber(damageEntry.bodyshots);
+            ownerStats.legshots += toNumber(damageEntry.legshots);
+          }
+
+          const receiver = cleanId(damageEntry.receiver);
+          const receiverStats = receiver ? stats.get(receiver) : undefined;
+          if (receiverStats) {
+            receiverStats.damageReceived += damage;
+          }
+        }
+
+        for (const kill of stat.kills ?? []) {
+          timelineKills.push({ kill, ownerPuuid });
+        }
+      }
+
+      timelineKills.sort(
+        (a, b) =>
+          toNumber(a.kill.timeSinceRoundStartMillis) -
+          toNumber(b.kill.timeSinceRoundStartMillis),
+      );
+
+      const firstKill = timelineKills[0]?.kill ?? null;
+
+      for (
+        let killIndex = 0;
+        killIndex < timelineKills.length;
+        killIndex += 1
+      ) {
+        const { kill, ownerPuuid } = timelineKills[killIndex];
+        const killerId = cleanId(kill.killer) || ownerPuuid;
+        const victimId = cleanId(kill.victim);
+        const timeMs = toNumber(kill.timeSinceRoundStartMillis);
+
+        if (killerId && stats.has(killerId)) {
+          getRoundState(killerId).kills += 1;
+          if (firstKill === kill) {
+            const killerStats = stats.get(killerId);
+            if (killerStats) killerStats.firstKills += 1;
+          }
+        }
+
+        if (victimId && stats.has(victimId)) {
+          getRoundState(victimId).deaths += 1;
+          if (firstKill === kill) {
+            const victimStats = stats.get(victimId);
+            if (victimStats) victimStats.firstDeaths += 1;
+          }
+          for (
+            let forward = killIndex + 1;
+            forward < timelineKills.length;
+            forward += 1
+          ) {
+            const next = timelineKills[forward].kill;
+            const nextTime = toNumber(next.timeSinceRoundStartMillis);
+            if (nextTime - timeMs > 5000) break;
+
+            const nextKiller = cleanId(next.killer);
+            const nextVictim = cleanId(next.victim);
+            if (
+              nextVictim === killerId &&
+              nextKiller &&
+              teamByPuuid.get(nextKiller) === teamByPuuid.get(victimId)
+            ) {
+              getRoundState(victimId).traded = true;
+              break;
+            }
+          }
+        }
+
+        for (const assistant of parseAssistants(kill.assistants)) {
+          if (stats.has(assistant)) {
+            getRoundState(assistant).assists += 1;
+          }
+        }
+
+        if (killerId && victimId && stats.has(killerId)) {
+          for (let back = killIndex - 1; back >= 0; back -= 1) {
+            const previous = timelineKills[back].kill;
+            const previousTime = toNumber(previous.timeSinceRoundStartMillis);
+            if (timeMs - previousTime > 5000) break;
+
+            const previousVictim = cleanId(previous.victim);
+            const previousKiller = cleanId(previous.killer);
+            if (!previousVictim || !previousKiller) continue;
+
+            if (
+              teamByPuuid.get(previousVictim) === teamByPuuid.get(killerId) &&
+              previousKiller === victimId
+            ) {
+              break;
+            }
+          }
+        }
+      }
+
+      for (const [puuid, playerRound] of roundPlayerState) {
+        const playerStats = stats.get(puuid);
+        if (!playerStats) continue;
+        if (playerRound.kills >= 3) {
+          playerStats.multikillRounds += 1;
+        }
+        if (
+          playerRound.kills > 0 ||
+          playerRound.assists > 0 ||
+          playerRound.deaths === 0 ||
+          playerRound.traded
+        ) {
+          playerStats.kastRounds += 1;
+        }
+      }
+    }
+
+    for (const playerStats of stats.values()) {
+      playerStats.damageDelta = safeDivide(
+        playerStats.damageDealt - playerStats.damageReceived,
+        playerStats.rounds,
+      );
+      playerStats.adr = safeDivide(playerStats.damageDealt, playerStats.rounds);
+      const totalHits =
+        playerStats.headshots +
+        playerStats.bodyshots +
+        playerStats.legshots;
+      playerStats.hsPct =
+        safeDivide(playerStats.headshots, Math.max(totalHits, 1)) * 100;
+      playerStats.kastPct =
+        safeDivide(playerStats.kastRounds, playerStats.rounds) * 100;
+    }
+
+    return stats;
+  }, [
+    currentMatch,
+    players,
+    agentById,
+    agentNameMap,
+    tierByNumber,
+    teamByPuuid,
+  ]);
+
+  const teamScoreboardGroups = useMemo(() => {
+    return playersByTeam.map(([teamId, teamPlayers], index) => {
+      const teamLabel = `Team ${String.fromCharCode(65 + index)}`;
+      const tone = index === 0 ? "team-a" : "team-b";
+      const rows = teamPlayers
+        .map((player) => {
+          const puuid = cleanId(player.puuid);
+          return puuid ? playerScoreboardStatsByPuuid.get(puuid) : undefined;
+        })
+        .filter((entry): entry is PlayerScoreboardStats => Boolean(entry))
+        .sort(compareScoreboardPlayers);
+
+      return {
+        teamId,
+        teamLabel,
+        tone,
+        averageRank: getAverageTeamRank(teamPlayers, tierByNumber),
+        rows,
+      };
+    });
+  }, [playersByTeam, playerScoreboardStatsByPuuid, tierByNumber]);
+
+  const combinedScoreboardRows = useMemo(
+    () =>
+      [...playerScoreboardStatsByPuuid.values()].sort(compareScoreboardPlayers),
+    [playerScoreboardStatsByPuuid],
+  );
+
   const scoreState = useMemo(
     () => getTeamScoreState(currentMatch, playerTeam),
     [currentMatch, playerTeam],
@@ -1768,11 +2124,51 @@ export default function MatchDetailModal({
     return () => window.clearInterval(interval);
   }, [playbackEvents.length, playbackOpen, playbackPlaying]);
 
+  useEffect(() => {
+    const panel = matchDetailPanelRef.current;
+    if (!panel) return;
+
+    const updateOverflowState = () => {
+      const viewportHeight = window.innerHeight;
+      const panelHeight = panel.scrollHeight;
+      const verticalPadding = 32;
+      setIsMatchDetailOverflowing(
+        panelHeight + verticalPadding > viewportHeight,
+      );
+    };
+
+    updateOverflowState();
+
+    const resizeObserver = new ResizeObserver(updateOverflowState);
+    resizeObserver.observe(panel);
+
+    window.addEventListener("resize", updateOverflowState);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateOverflowState);
+    };
+  }, [
+    loading,
+    matchAnalysis,
+    activeSection,
+    selectedPlayerId,
+    selectedRoundNum,
+    selectedEventId,
+    playbackOpen,
+  ]);
+
   if (!loading && !currentMatch) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div
+        className={`modal-overlay match-detail-modal-overlay ${
+          isMatchDetailOverflowing ? "is-overflowing" : "is-centered"
+        }`}
+        onClick={onClose}
+      >
         <div
-          className="modal-panel modal-panel-lg"
+          ref={matchDetailPanelRef}
+          className="modal-panel modal-panel-lg match-detail-modal-panel"
           onClick={(event) => event.stopPropagation()}
         >
           <button className="modal-close" onClick={onClose}>
@@ -1786,9 +2182,15 @@ export default function MatchDetailModal({
 
   if (!loading && currentMatch && !playerInfo) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
+      <div
+        className={`modal-overlay match-detail-modal-overlay ${
+          isMatchDetailOverflowing ? "is-overflowing" : "is-centered"
+        }`}
+        onClick={onClose}
+      >
         <div
-          className="modal-panel modal-panel-lg"
+          ref={matchDetailPanelRef}
+          className="modal-panel modal-panel-lg match-detail-modal-panel"
           onClick={(event) => event.stopPropagation()}
         >
           <button className="modal-close" onClick={onClose}>
@@ -2072,11 +2474,145 @@ export default function MatchDetailModal({
     );
   };
 
+  const formatSignedNumber = (value: number) =>
+    value > 0 ? `+${formatNumber(value)}` : formatNumber(value);
+
+  const getValueToneClass = (value: number) =>
+    value > 0
+      ? "match-scoreboard-value-positive"
+      : value < 0
+        ? "match-scoreboard-value-negative"
+        : "";
+
+  const getTeamMetaForStats = (stats: PlayerScoreboardStats) =>
+    teamScoreboardGroups.find((group) => group.teamId === stats.teamId) ??
+    teamScoreboardGroups[0];
+
+  const renderScoreboardTable = (
+    rows: PlayerScoreboardStats[],
+    options: { showTeamBadge?: boolean } = {},
+  ) => (
+    <div className="match-scoreboard-table-wrap">
+      <div className="match-scoreboard-table">
+        <div className="match-scoreboard-table-head">
+          <span>Jugador</span>
+          <span>Match Rank</span>
+          <span>ACS</span>
+          <span>K</span>
+          <span>D</span>
+          <span>A</span>
+          <span>+/-</span>
+          <span>K/D</span>
+          <span>DDΔ</span>
+          <span>ADR</span>
+          <span>HS%</span>
+          <span>KAST</span>
+          <span>FK</span>
+          <span>FD</span>
+          <span>MK</span>
+        </div>
+
+        {rows.map((row) => {
+          const teamMeta = getTeamMetaForStats(row);
+          const teamTone = teamMeta?.tone ?? "team-a";
+          const playerName = getPlayerShortDisplay(row.player);
+          const playerTag = row.player.tagLine?.trim();
+          const accountLevel = toNumber(row.player.accountLevel);
+          const isSelected = row.puuid === selectedPlayerId;
+
+          return (
+            <button
+              key={`scoreboard-row-${row.puuid}`}
+              type="button"
+              className={`match-scoreboard-row is-${teamTone} ${isSelected ? "is-selected" : ""}`}
+              onClick={() => handlePlayerSelect(row.puuid)}
+              aria-label={`Ver partida desde la perspectiva de ${playerName}`}
+              title={`Score: ${formatNumber(row.score)}`}
+            >
+              <span className="match-scoreboard-cell-player">
+                {row.agentIcon ? (
+                  <img src={row.agentIcon} alt="" />
+                ) : (
+                  <i>{row.agentName.charAt(0).toUpperCase()}</i>
+                )}
+                <span className="match-scoreboard-player-copy">
+                  <strong>
+                    {playerName}
+                    {playerTag ? <small>#{playerTag}</small> : null}
+                  </strong>
+                  <em>
+                    {accountLevel > 0 ? `Nivel ${accountLevel}` : row.agentName}
+                  </em>
+                </span>
+                {options.showTeamBadge && teamMeta && (
+                  <span className={`match-scoreboard-team-badge is-${teamTone}`}>
+                    {teamMeta.teamLabel}
+                  </span>
+                )}
+              </span>
+
+              <span className="match-scoreboard-rank" title={row.rankName}>
+                {row.rankIcon ? (
+                  <img src={row.rankIcon} alt={row.rankName} />
+                ) : (
+                  "-"
+                )}
+              </span>
+              <span className="match-scoreboard-acs">{formatNumber(row.acs)}</span>
+              <span>{formatNumber(row.kills)}</span>
+              <span>{formatNumber(row.deaths)}</span>
+              <span>{formatNumber(row.assists)}</span>
+              <span className={getValueToneClass(row.plusMinus)}>
+                {formatSignedNumber(row.plusMinus)}
+              </span>
+              <span
+                className={
+                  row.kd >= 1
+                    ? "match-scoreboard-value-positive"
+                    : "match-scoreboard-value-negative"
+                }
+              >
+                {formatNumber(row.kd, 2)}
+              </span>
+              <span className={getValueToneClass(row.damageDelta)}>
+                {row.damageDelta > 0
+                  ? `+${formatNumber(row.damageDelta, 1)}`
+                  : formatNumber(row.damageDelta, 1)}
+              </span>
+              <span>{formatNumber(row.adr, 1)}</span>
+              <span>{formatPercent(row.hsPct, 1)}</span>
+              <span
+                className={
+                  row.kastPct >= 70
+                    ? "match-scoreboard-value-positive"
+                    : row.kastPct < 55
+                      ? "match-scoreboard-value-negative"
+                      : ""
+                }
+              >
+                {formatPercent(row.kastPct, 1)}
+              </span>
+              <span>{formatNumber(row.firstKills)}</span>
+              <span>{formatNumber(row.firstDeaths)}</span>
+              <span>{formatNumber(row.multikillRounds)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className={`modal-overlay match-detail-modal-overlay ${
+        isMatchDetailOverflowing ? "is-overflowing" : "is-centered"
+      }`}
+      onClick={onClose}
+    >
       <div
-        className="modal-panel modal-panel-lg"
+        ref={matchDetailPanelRef}
+        className="modal-panel modal-panel-lg match-detail-modal-panel"
         onClick={(event) => event.stopPropagation()}
       >
         <button className="modal-close" onClick={onClose}>
@@ -2651,50 +3187,79 @@ export default function MatchDetailModal({
                 </div>
               </div>
 
+              <div className="match-scoreboard-controls">
+                <div
+                  className="match-scoreboard-mode-toggle"
+                  aria-label="Modo de visualización del scoreboard"
+                >
+                  <button
+                    type="button"
+                    className={teamScoreboardMode === "grouped" ? "is-active" : ""}
+                    onClick={() => setTeamScoreboardMode("grouped")}
+                    aria-pressed={teamScoreboardMode === "grouped"}
+                  >
+                    Separado por equipos
+                  </button>
+                  <button
+                    type="button"
+                    className={teamScoreboardMode === "combined" ? "is-active" : ""}
+                    onClick={() => setTeamScoreboardMode("combined")}
+                    aria-pressed={teamScoreboardMode === "combined"}
+                  >
+                    Vista global
+                  </button>
+                </div>
+              </div>
+
               <div className="match-scoreboard-teams">
-                {playersByTeam.map(([teamId, teamPlayers]) => (
-                  <div key={`scoreboard-${teamId}`} className="match-scoreboard-team">
-                    <h4>{teamId}</h4>
-                    <div className="match-scoreboard-header">
-                      <span>Jugador</span>
-                      <span>K / D / A</span>
-                      <span>KD</span>
-                      <span>ACS</span>
-                      <span>Score</span>
-                      <span>Rango</span>
-                    </div>
-                    {teamPlayers.map((player) => {
-                      const puuid = cleanId(player.puuid);
-                      const agent = getAgentMeta(player, agentById, agentNameMap);
-                      const rankName = getRankNameFromTier(
-                        player.competitiveTier ?? null,
-                      );
-                      return (
-                        <button
-                          key={`score-${puuid || getPlayerDisplay(player)}`}
-                          type="button"
-                          className={`match-scoreboard-row ${puuid === selectedPlayerId ? "is-selected" : ""}`}
-                          onClick={() => puuid && handlePlayerSelect(puuid)}
-                          aria-label={`Ver partida desde la perspectiva de ${getPlayerShortDisplay(player)}`}
+                {teamScoreboardMode === "grouped" ? (
+                  teamScoreboardGroups.map((group) => (
+                    <div
+                      key={`scoreboard-${group.teamId}`}
+                      className={`match-scoreboard-team-block is-${group.tone}`}
+                    >
+                      <div
+                        className={`match-scoreboard-team-header is-${group.tone}`}
+                      >
+                        <strong>{group.teamLabel}</strong>
+                        <span>Avg. Rank</span>
+                        <span
+                          className="match-scoreboard-rank-summary"
+                          title={group.averageRank.name}
                         >
-                          <span className="match-scoreboard-player">
-                            {agent.icon ? (
-                              <img src={agent.icon} alt="" />
-                            ) : (
-                              <i>{agent.name.charAt(0).toUpperCase()}</i>
-                            )}
-                            <strong>{getPlayerShortDisplay(player)}</strong>
-                          </span>
-                          <span>{getPlayerMatchKda(player)}</span>
-                          <span>{formatNumber(getPlayerMatchKd(player), 2)}</span>
-                          <span>{formatNumber(getPlayerMatchAcs(player))}</span>
-                          <span>{formatNumber(player.stats?.score)}</span>
-                          <span>{rankName}</span>
-                        </button>
-                      );
+                          {group.averageRank.icon ? (
+                            <img
+                              src={group.averageRank.icon}
+                              alt={group.averageRank.name}
+                            />
+                          ) : null}
+                          {group.averageRank.name}
+                        </span>
+                      </div>
+                      {renderScoreboardTable(group.rows)}
+                    </div>
+                  ))
+                ) : (
+                  <div className="match-scoreboard-team-block is-combined">
+                    <div className="match-scoreboard-combined-summary">
+                      {teamScoreboardGroups.map((group) => (
+                        <span key={`combined-rank-${group.teamId}`}>
+                          <strong>{group.teamLabel} Avg. Rank:</strong>{" "}
+                          {group.averageRank.icon ? (
+                            <img
+                              src={group.averageRank.icon}
+                              alt={group.averageRank.name}
+                            />
+                          ) : null}
+                          {group.averageRank.name}
+                        </span>
+                      ))}
+                    </div>
+                    {renderScoreboardTable(combinedScoreboardRows, {
+                      showTeamBadge: true,
                     })}
                   </div>
-                ))}
+                )}
               </div>
             </div>
             </section>
