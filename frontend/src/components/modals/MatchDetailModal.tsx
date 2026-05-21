@@ -57,7 +57,16 @@ type EventFilterKey =
   | "all"
   | "kills"
   | "deaths"
+  | "opening"
+  | "trade"
   | "objectives";
+type MatchDetailSection =
+  | "summary"
+  | "rounds"
+  | "duels"
+  | "economy"
+  | "team"
+  | "map";
 
 type WeaponCatalogEntry = {
   id: string;
@@ -157,9 +166,15 @@ type MatchAnalysis = {
   kd: number;
   kda: number;
   killsPerRound: number;
+  totalDamage: number;
+  adr: number;
+  acs: number;
+  kastPct: number;
   headshotPct: number;
   survivalRounds: number;
   survivalPct: number;
+  multikillRounds: number;
+  maxKillsInRound: number;
   roundsWon: number;
   roundsWonWithImpact: number;
   winRoundParticipationPct: number;
@@ -179,6 +194,18 @@ type MatchAnalysis = {
   fullBuyWins: number;
   insights: string[];
 };
+
+const matchDetailSections = [
+  { key: "summary", label: "Resumen" },
+  { key: "rounds", label: "Rondas" },
+  { key: "duels", label: "Duelos" },
+  { key: "economy", label: "Economía" },
+  { key: "team", label: "Equipo" },
+  { key: "map", label: "Mapa" },
+] as const satisfies ReadonlyArray<{
+  key: MatchDetailSection;
+  label: string;
+}>;
 
 type MapTransform = {
   xMultiplier: number;
@@ -306,6 +333,21 @@ function getPlayerDisplay(player?: RawPlayer | null) {
 function getPlayerShortDisplay(player?: RawPlayer | null) {
   if (!player) return "Unknown";
   return player.gameName?.trim() || getPlayerDisplay(player);
+}
+
+function getPlayerMatchKda(player: RawPlayer): string {
+  const kills = toNumber(player.stats?.kills);
+  const deaths = toNumber(player.stats?.deaths);
+  const assists = toNumber(player.stats?.assists);
+  return `${kills}/${deaths}/${assists}`;
+}
+
+function getPlayerMatchKd(player: RawPlayer): number {
+  return safeDivide(toNumber(player.stats?.kills), Math.max(toNumber(player.stats?.deaths), 1));
+}
+
+function getPlayerMatchAcs(player: RawPlayer): number {
+  return safeDivide(toNumber(player.stats?.score), Math.max(toNumber(player.stats?.roundsPlayed), 1));
 }
 
 function getAgentMeta(
@@ -832,6 +874,23 @@ export default function MatchDetailModal({
   const [selectedRoundNum, setSelectedRoundNum] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [eventFilter, setEventFilter] = useState<EventFilterKey>("all");
+  const [activeSectionState, setActiveSectionState] = useState(() => ({
+    matchId,
+    selectedPlayerId: playerId,
+    section: "summary" as MatchDetailSection,
+  }));
+  const activeSection =
+    activeSectionState.matchId === matchId &&
+    activeSectionState.selectedPlayerId === selectedPlayerId
+      ? activeSectionState.section
+      : "summary";
+  const setActiveSection = (section: MatchDetailSection) => {
+    setActiveSectionState({
+      matchId,
+      selectedPlayerId,
+      section,
+    });
+  };
   const [playbackOpen, setPlaybackOpen] = useState(false);
   const [playbackEvents, setPlaybackEvents] = useState<RoundEvent[]>([]);
   const [playbackIndex, setPlaybackIndex] = useState(0);
@@ -989,6 +1048,7 @@ export default function MatchDetailModal({
     let totalHeadshots = 0;
     let totalBodyshots = 0;
     let totalLegshots = 0;
+    let totalDamage = 0;
     let openingWon = 0;
     let openingLost = 0;
     let tradeKills = 0;
@@ -1022,6 +1082,7 @@ export default function MatchDetailModal({
         totalBodyshots += toNumber(damageEntry.bodyshots);
         totalLegshots += toNumber(damageEntry.legshots);
       }
+      totalDamage += playerRoundDamage;
 
       const timelineKills: Array<{ kill: RawKillEvent; ownerPuuid: string }> =
         [];
@@ -1237,6 +1298,8 @@ export default function MatchDetailModal({
     const kd = safeDivide(kills, Math.max(deaths, 1));
     const kda = safeDivide(kills + assists, Math.max(deaths, 1));
     const killsPerRound = safeDivide(kills, Math.max(totalRounds, 1));
+    const adr = safeDivide(totalDamage, Math.max(totalRounds, 1));
+    const acs = safeDivide(score, Math.max(totalRounds, 1));
 
     const roundsWon = rounds.filter((round) => round.didWin).length;
     const roundsWonWithImpact = rounds.filter(
@@ -1255,6 +1318,23 @@ export default function MatchDetailModal({
     const roundsWithKills = rounds.filter(
       (round) => round.playerKills > 0,
     ).length;
+    const kastRounds = rounds.filter(
+      (round) =>
+        round.playerKills > 0 ||
+        round.playerAssists > 0 ||
+        round.playerDeaths === 0 ||
+        round.events.some(
+          (event) => event.kind === "kill" && event.isTrade,
+        ),
+    ).length;
+    const kastPct = safeDivide(kastRounds, Math.max(totalRounds, 1)) * 100;
+    const multikillRounds = rounds.filter(
+      (round) => round.playerKills >= 2,
+    ).length;
+    const maxKillsInRound = rounds.reduce(
+      (maxKills, round) => Math.max(maxKills, round.playerKills),
+      0,
+    );
 
     const totalHits = totalHeadshots + totalBodyshots + totalLegshots;
     const headshotPct =
@@ -1429,9 +1509,15 @@ export default function MatchDetailModal({
       kd,
       kda,
       killsPerRound,
+      totalDamage,
+      adr,
+      acs,
+      kastPct,
       headshotPct,
       survivalRounds,
       survivalPct,
+      multikillRounds,
+      maxKillsInRound,
       roundsWon,
       roundsWonWithImpact,
       winRoundParticipationPct,
@@ -1488,6 +1574,14 @@ export default function MatchDetailModal({
         return events.filter(
           (event) => event.kind === "kill" && event.isPlayerDeath,
         );
+      case "opening":
+        return events.filter(
+          (event) => event.kind === "kill" && event.isOpening,
+        );
+      case "trade":
+        return events.filter(
+          (event) => event.kind === "kill" && event.isTrade,
+        );
       case "objectives":
         return events.filter(
           (event) => event.kind === "plant" || event.kind === "defuse",
@@ -1496,6 +1590,67 @@ export default function MatchDetailModal({
         return events;
     }
   }, [eventFilter, selectedRound]);
+
+  const sortedAllRoundEvents = useMemo(
+    () =>
+      [...allRoundEvents].sort(
+        (a, b) => a.roundNum - b.roundNum || a.timeMs - b.timeMs,
+      ),
+    [allRoundEvents],
+  );
+
+  const filteredDuelEvents = useMemo(() => {
+    switch (eventFilter) {
+      case "kills":
+        return sortedAllRoundEvents.filter(
+          (event) => event.kind === "kill" && event.isPlayerKill,
+        );
+      case "deaths":
+        return sortedAllRoundEvents.filter(
+          (event) => event.kind === "kill" && event.isPlayerDeath,
+        );
+      case "opening":
+        return sortedAllRoundEvents.filter(
+          (event) => event.kind === "kill" && event.isOpening,
+        );
+      case "trade":
+        return sortedAllRoundEvents.filter(
+          (event) => event.kind === "kill" && event.isTrade,
+        );
+      case "objectives":
+        return sortedAllRoundEvents.filter(
+          (event) => event.kind === "plant" || event.kind === "defuse",
+        );
+      default:
+        return sortedAllRoundEvents;
+    }
+  }, [eventFilter, sortedAllRoundEvents]);
+
+  const selectedDuelEvent = useMemo(() => {
+    const explicitEvent =
+      filteredDuelEvents.find((event) => event.id === selectedEventId) ?? null;
+    return explicitEvent ?? filteredDuelEvents[0] ?? null;
+  }, [filteredDuelEvents, selectedEventId]);
+
+  const duelEventMapState = useMemo(
+    () =>
+      buildEventMapState({
+        event: selectedDuelEvent,
+        mapTransform,
+        playersByPuuid,
+        playerTeam,
+        selectedPlayerId,
+        agentById,
+      }),
+    [
+      selectedDuelEvent,
+      mapTransform,
+      playersByPuuid,
+      playerTeam,
+      selectedPlayerId,
+      agentById,
+    ],
+  );
 
   const selectedEvent = useMemo(() => {
     const explicitEvent =
@@ -1566,6 +1721,39 @@ export default function MatchDetailModal({
     };
   }, [matchAnalysis]);
 
+  const buyTypeSummary = useMemo(() => {
+    const empty = { rounds: 0, wins: 0, winRate: 0 };
+    if (!matchAnalysis) {
+      return {
+        eco: empty,
+        force: empty,
+        fullBuy: empty,
+      };
+    }
+
+    const summarize = (predicate: (round: RoundSummary) => boolean) => {
+      const rounds = matchAnalysis.rounds.filter(predicate);
+      const wins = rounds.filter((round) => round.didWin).length;
+      return {
+        rounds: rounds.length,
+        wins,
+        winRate: safeDivide(wins, Math.max(rounds.length, 1)) * 100,
+      };
+    };
+
+    return {
+      eco: summarize((round) => round.playerSpent <= 2000),
+      force: summarize(
+        (round) => round.playerSpent > 2000 && round.playerSpent < 3900,
+      ),
+      fullBuy: summarize((round) => round.playerSpent >= 3900),
+    };
+  }, [matchAnalysis]);
+
+  const activeSectionLabel =
+    matchDetailSections.find((section) => section.key === activeSection)
+      ?.label ?? "Resumen";
+
   useEffect(() => {
     if (!playbackOpen || !playbackPlaying || playbackEvents.length <= 1) return;
     const interval = window.setInterval(() => {
@@ -1629,6 +1817,7 @@ export default function MatchDetailModal({
     setSelectedRoundNum(null);
     setSelectedEventId(null);
     setEventFilter("all");
+    setActiveSection("summary");
     setPlaybackOpen(false);
     setPlaybackPlaying(false);
   };
@@ -1637,6 +1826,8 @@ export default function MatchDetailModal({
     { key: "all", label: "Todos" },
     { key: "kills", label: "Kills del jugador" },
     { key: "deaths", label: "Muertes del jugador" },
+    { key: "opening", label: "Opening" },
+    { key: "trade", label: "Trade" },
     { key: "objectives", label: "Objetivos" },
   ];
 
@@ -1676,7 +1867,10 @@ export default function MatchDetailModal({
           key={event.id}
           type="button"
           className={`match-round-event-btn ${isActive ? "is-active" : ""}`}
-          onClick={() => setSelectedEventId(event.id)}
+          onClick={() => {
+            setSelectedRoundNum(event.roundNum);
+            setSelectedEventId(event.id);
+          }}
           aria-pressed={isActive}
         >
           <div className="match-round-event-top">
@@ -1723,7 +1917,10 @@ export default function MatchDetailModal({
         key={event.id}
         type="button"
         className={`match-round-event-btn match-round-event-btn-objective ${isActive ? "is-active" : ""}`}
-        onClick={() => setSelectedEventId(event.id)}
+        onClick={() => {
+          setSelectedRoundNum(event.roundNum);
+          setSelectedEventId(event.id);
+        }}
         aria-pressed={isActive}
       >
         <div className="match-round-event-top">
@@ -1758,11 +1955,7 @@ export default function MatchDetailModal({
 
   const openMatchPlayback = () => {
     if (allRoundEvents.length === 0) return;
-    setPlaybackEvents(
-      [...allRoundEvents].sort(
-        (a, b) => a.roundNum - b.roundNum || a.timeMs - b.timeMs,
-      ),
-    );
+    setPlaybackEvents(sortedAllRoundEvents);
     setPlaybackIndex(0);
     setPlaybackTitle("Reproducción de partida");
     setPlaybackPlaying(true);
@@ -2016,19 +2209,19 @@ export default function MatchDetailModal({
                     <strong>{formatNumber(matchAnalysis.score)}</strong>
                   </div>
                   <div>
-                    <span>Kills/ronda</span>
-                    <strong>{formatNumber(matchAnalysis.killsPerRound, 2)}</strong>
+                    <span>ACS</span>
+                    <strong>{formatNumber(matchAnalysis.acs)}</strong>
                   </div>
                   <div>
-                    <span>HS%</span>
-                    <strong>{formatPercent(matchAnalysis.headshotPct, 1)}</strong>
+                    <span>ADR</span>
+                    <strong>{formatNumber(matchAnalysis.adr, 1)}</strong>
                   </div>
                   <div>
                     <span>Supervivencia</span>
                     <strong>{formatPercent(matchAnalysis.survivalPct, 1)}</strong>
                   </div>
                   <div>
-                    <span>Participación</span>
+                    <span>Impacto en wins</span>
                     <strong>
                       {formatPercent(matchAnalysis.winRoundParticipationPct, 1)}
                     </strong>
@@ -2062,7 +2255,123 @@ export default function MatchDetailModal({
               </div>
             </header>
 
-            <section className="match-round-strip">
+            <nav
+              className="match-detail-tabs"
+              aria-label="Secciones del detalle de partida"
+            >
+              {matchDetailSections.map((section) => (
+                <button
+                  key={section.key}
+                  type="button"
+                  className={activeSection === section.key ? "is-active" : ""}
+                  onClick={() => setActiveSection(section.key)}
+                  aria-pressed={activeSection === section.key}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </nav>
+
+            <div className="match-detail-section-body">
+              {activeSection === "summary" && (
+                <section
+                  className="match-summary-section"
+                  role="region"
+                  aria-label={activeSectionLabel}
+                >
+                  {impactLevel && (
+                    <div className="match-summary-hero-card">
+                      <span className={`impact-level-badge is-${impactLevel.tone}`}>
+                        {impactLevel.label}
+                      </span>
+                      <p>{impactLevel.text}</p>
+                      <div className="match-summary-actions">
+                        {matchAnalysis.bestRound && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleRoundSelect(matchAnalysis.bestRound!);
+                              setActiveSection("rounds");
+                            }}
+                          >
+                            Ver ronda clave
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={openMatchPlayback}
+                          disabled={allRoundEvents.length === 0}
+                        >
+                          Reproducir partida
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="match-summary-grid">
+                    <article>
+                      <span>Ronda clave</span>
+                      <strong>
+                        {matchAnalysis.bestRound
+                          ? `${roundLabel(matchAnalysis.bestRound.roundNum)} · ${matchAnalysis.bestRound.playerKills}K`
+                          : "Sin datos"}
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Mejor lado</span>
+                      <strong>
+                        {sideBest
+                          ? `${sideBest.label} · ${formatPercent(sideBest.winRate, 1)}`
+                          : "Sin datos"}
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Arma principal</span>
+                      <strong>
+                        {matchAnalysis.topWeapons[0]
+                          ? `${matchAnalysis.topWeapons[0].name} · ${matchAnalysis.topWeapons[0].kills}K`
+                          : "Sin kills"}
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Duelos iniciales</span>
+                      <strong>
+                        {matchAnalysis.openingWon} ganados /{" "}
+                        {matchAnalysis.openingLost} perdidos
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Trade kills</span>
+                      <strong>{formatNumber(matchAnalysis.tradeKills)}</strong>
+                    </article>
+                    <article>
+                      <span>Economía</span>
+                      <strong>
+                        Eco {matchAnalysis.ecoWins}/{matchAnalysis.ecoRounds} · Full{" "}
+                        {matchAnalysis.fullBuyWins}/{matchAnalysis.fullBuyRounds}
+                      </strong>
+                    </article>
+                    <article>
+                      <span>KAST aprox.</span>
+                      <strong>{formatPercent(matchAnalysis.kastPct, 1)}</strong>
+                    </article>
+                    <article>
+                      <span>Multikills</span>
+                      <strong>
+                        {matchAnalysis.multikillRounds} rondas · máximo{" "}
+                        {matchAnalysis.maxKillsInRound}K
+                      </strong>
+                    </article>
+                  </div>
+                </section>
+              )}
+
+            {activeSection === "rounds" && (
+            <section
+              className="match-round-strip"
+              role="region"
+              aria-label={activeSectionLabel}
+            >
               <div className="panel-header">
                 <div>
                   <h3 className="panel-title">Timeline de rondas</h3>
@@ -2191,179 +2500,98 @@ export default function MatchDetailModal({
                 </article>
               )}
             </section>
+            )}
 
-            <section className="match-impact-layout">
-              <article className="match-impact-main">
+            {activeSection === "duels" && (
+              <section
+                className="match-duels-section"
+                role="region"
+                aria-label={activeSectionLabel}
+              >
                 <div className="panel-header">
                   <div>
-                    <h3 className="panel-title">Impacto del jugador</h3>
+                    <h3 className="panel-title">Duelos y combate</h3>
                     <p className="panel-subtitle">
-                      Rendimiento real del jugador en esta partida.
+                      Eventos de combate de toda la partida desde esta perspectiva.
                     </p>
                   </div>
                 </div>
 
-                {impactLevel && (
-                  <div className="match-impact-reading">
-                    <span className={`impact-level-badge is-${impactLevel.tone}`}>
-                      {impactLevel.label}
-                    </span>
-                    <p>{impactLevel.text}</p>
-                  </div>
-                )}
-
-                {matchAnalysis.bestRound && (
-                  <div className="match-key-round">
-                    <span>
-                      Ronda clave: {roundLabel(matchAnalysis.bestRound.roundNum)} ·{" "}
-                      {matchAnalysis.bestRound.playerKills}K ·{" "}
-                      {formatNumber(matchAnalysis.bestRound.playerScore)} score
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRoundSelect(matchAnalysis.bestRound!)}
-                    >
-                      Ver ronda
-                    </button>
-                  </div>
-                )}
-
-                <div className="match-impact-metrics">
-                  <div className="match-impact-metric">
-                    <span>Kills / ronda</span>
+                <div className="match-duel-stats-grid">
+                  <article>
+                    <span>Opening</span>
                     <strong>
-                      {formatNumber(matchAnalysis.killsPerRound, 2)}
+                      {matchAnalysis.openingWon}W / {matchAnalysis.openingLost}L
                     </strong>
-                  </div>
-                  <div className="match-impact-metric">
-                    <span>Headshot %</span>
+                  </article>
+                  <article>
+                    <span>Kills</span>
+                    <strong>{matchAnalysis.kills}</strong>
+                  </article>
+                  <article>
+                    <span>Muertes</span>
+                    <strong>{matchAnalysis.deaths}</strong>
+                  </article>
+                  <article>
+                    <span>Trade kills</span>
+                    <strong>{matchAnalysis.tradeKills}</strong>
+                  </article>
+                  <article>
+                    <span>Rondas con kill</span>
                     <strong>
-                      {formatPercent(matchAnalysis.headshotPct, 1)}
+                      {matchAnalysis.roundsWithKills}/{matchAnalysis.totalRounds}
                     </strong>
-                  </div>
-                  <div className="match-impact-metric">
+                  </article>
+                  <article>
                     <span>Supervivencia</span>
-                    <strong>
-                      {formatPercent(matchAnalysis.survivalPct, 1)}
-                    </strong>
-                  </div>
-                  <div className="match-impact-metric">
-                    <span>Participación en rondas ganadas</span>
-                    <strong>
-                      {formatPercent(matchAnalysis.winRoundParticipationPct, 1)}
-                    </strong>
-                  </div>
+                    <strong>{formatPercent(matchAnalysis.survivalPct, 1)}</strong>
+                  </article>
                 </div>
 
-                <div className="match-impact-bars">
-                  <div className="impact-bar-row">
-                    <span>
-                      Rondas con kill ({matchAnalysis.roundsWithKills}/
-                      {matchAnalysis.totalRounds})
-                    </span>
-                    <div className="impact-bar-track">
-                      <div
-                        className="impact-bar-fill"
-                        style={{
-                          width: `${safeDivide(matchAnalysis.roundsWithKills, Math.max(matchAnalysis.totalRounds, 1)) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="impact-bar-row">
-                    <span>
-                      Rondas ganadas con impacto (
-                      {matchAnalysis.roundsWonWithImpact}/
-                      {matchAnalysis.roundsWon})
-                    </span>
-                    <div className="impact-bar-track">
-                      <div
-                        className="impact-bar-fill"
-                        style={{
-                          width: `${matchAnalysis.winRoundParticipationPct}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </article>
-
-              <aside className="match-impact-aside">
-                <div className="panel-header">
-                  <div>
-                    <h3 className="panel-title">Momentos clave</h3>
-                    <p className="panel-subtitle">
-                      Insights derivados de eventos reales del match.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="match-insights-list">
-                  {matchAnalysis.insights.length === 0 ? (
-                    <div className="empty-chart">
-                      No hay suficientes eventos destacados para generar conclusiones.
-                    </div>
-                  ) : (
-                    matchAnalysis.insights.map((insight, index) => (
-                      <div
-                        key={`insight-${index}`}
-                        className="match-insight-item"
-                      >
-                        {insight}
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {matchAnalysis.bestRound && (
-                  <div className="match-insight-actions">
+                <div className="match-event-filters" aria-label="Filtros de duelos">
+                  {eventFilterOptions.map((option) => (
                     <button
+                      key={`duel-${option.key}`}
                       type="button"
-                      onClick={() => handleRoundSelect(matchAnalysis.bestRound!)}
+                      className={eventFilter === option.key ? "is-active" : ""}
+                      onClick={() => setEventFilter(option.key)}
+                      aria-pressed={eventFilter === option.key}
                     >
-                      Ver ronda clave
+                      {option.label}
                     </button>
-                    {allRoundEvents[0] && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedRoundNum(allRoundEvents[0].roundNum);
-                          setSelectedEventId(allRoundEvents[0].id);
-                        }}
-                      >
-                        Ver mapa del primer evento destacado
-                      </button>
+                  ))}
+                </div>
+
+                <div className="match-duels-layout">
+                  <div className="match-duels-list">
+                    {filteredDuelEvents.length === 0 ? (
+                      <div className="empty-chart">
+                        No hay eventos para este filtro.
+                      </div>
+                    ) : (
+                      filteredDuelEvents.map(renderRoundEventButton)
                     )}
                   </div>
-                )}
-
-                <div className="match-weapon-summary">
-                  <h4>Armas por kills</h4>
-                  {matchAnalysis.topWeapons.length === 0 ? (
-                    <div className="empty-chart">Sin kills por arma.</div>
-                  ) : (
-                    matchAnalysis.topWeapons.map((weapon) => (
-                      <div key={weapon.id} className="match-weapon-item">
-                        <div className="match-weapon-ident">
-                          {weapon.icon ? (
-                            <img src={weapon.icon} alt={weapon.name} />
-                          ) : (
-                            <span className="match-weapon-fallback">
-                              {weapon.name.charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                          <span>{weapon.name}</span>
-                        </div>
-                        <strong>{weapon.kills} K</strong>
-                      </div>
-                    ))
-                  )}
+                  <aside className="match-selected-round-map">
+                    <MatchEventMapCanvas
+                      mapName={mapName}
+                      mapImageUrl={mapImageUrl}
+                      selectedEvent={selectedDuelEvent}
+                      eventMapState={duelEventMapState}
+                      mapTransform={mapTransform}
+                    />
+                  </aside>
                 </div>
-              </aside>
-            </section>
+              </section>
+            )}
 
-            <section className="match-side-comparison-zone">
+            {activeSection === "team" && (
+            <section
+              className="match-team-section"
+              role="region"
+              aria-label={activeSectionLabel}
+            >
+            <div className="match-side-comparison-zone">
               <div className="panel-header">
                 <div>
                   <h3 className="panel-title">Ataque vs Defensa</h3>
@@ -2411,9 +2639,73 @@ export default function MatchDetailModal({
                 ))}
               </div>
 
-            </section>
+            </div>
 
-            <section className="match-economy-panel">
+            <div className="match-scoreboard-panel">
+              <div className="panel-header">
+                <div>
+                  <h3 className="panel-title">Scoreboard</h3>
+                  <p className="panel-subtitle">
+                    Cambia la perspectiva pulsando cualquier jugador.
+                  </p>
+                </div>
+              </div>
+
+              <div className="match-scoreboard-teams">
+                {playersByTeam.map(([teamId, teamPlayers]) => (
+                  <div key={`scoreboard-${teamId}`} className="match-scoreboard-team">
+                    <h4>{teamId}</h4>
+                    <div className="match-scoreboard-header">
+                      <span>Jugador</span>
+                      <span>K / D / A</span>
+                      <span>KD</span>
+                      <span>ACS</span>
+                      <span>Score</span>
+                      <span>Rango</span>
+                    </div>
+                    {teamPlayers.map((player) => {
+                      const puuid = cleanId(player.puuid);
+                      const agent = getAgentMeta(player, agentById, agentNameMap);
+                      const rankName = getRankNameFromTier(
+                        player.competitiveTier ?? null,
+                      );
+                      return (
+                        <button
+                          key={`score-${puuid || getPlayerDisplay(player)}`}
+                          type="button"
+                          className={`match-scoreboard-row ${puuid === selectedPlayerId ? "is-selected" : ""}`}
+                          onClick={() => puuid && handlePlayerSelect(puuid)}
+                          aria-label={`Ver partida desde la perspectiva de ${getPlayerShortDisplay(player)}`}
+                        >
+                          <span className="match-scoreboard-player">
+                            {agent.icon ? (
+                              <img src={agent.icon} alt="" />
+                            ) : (
+                              <i>{agent.name.charAt(0).toUpperCase()}</i>
+                            )}
+                            <strong>{getPlayerShortDisplay(player)}</strong>
+                          </span>
+                          <span>{getPlayerMatchKda(player)}</span>
+                          <span>{formatNumber(getPlayerMatchKd(player), 2)}</span>
+                          <span>{formatNumber(getPlayerMatchAcs(player))}</span>
+                          <span>{formatNumber(player.stats?.score)}</span>
+                          <span>{rankName}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+            </section>
+            )}
+
+            {activeSection === "economy" && (
+            <section
+              className="match-economy-panel"
+              role="region"
+              aria-label={activeSectionLabel}
+            >
               <div className="panel-header">
                 <div>
                   <h3 className="panel-title">Economía</h3>
@@ -2449,7 +2741,92 @@ export default function MatchDetailModal({
                   </strong>
                 </div>
               </div>
+
+              <div className="match-buy-type-grid">
+                <article>
+                  <span>Eco</span>
+                  <strong>
+                    {buyTypeSummary.eco.wins}/{buyTypeSummary.eco.rounds} ganadas
+                  </strong>
+                  <small>{formatPercent(buyTypeSummary.eco.winRate, 1)}</small>
+                </article>
+                <article>
+                  <span>Force</span>
+                  <strong>
+                    {buyTypeSummary.force.wins}/{buyTypeSummary.force.rounds} ganadas
+                  </strong>
+                  <small>{formatPercent(buyTypeSummary.force.winRate, 1)}</small>
+                </article>
+                <article>
+                  <span>Full buy</span>
+                  <strong>
+                    {buyTypeSummary.fullBuy.wins}/{buyTypeSummary.fullBuy.rounds} ganadas
+                  </strong>
+                  <small>{formatPercent(buyTypeSummary.fullBuy.winRate, 1)}</small>
+                </article>
+              </div>
             </section>
+            )}
+
+            {activeSection === "map" && (
+              <section
+                className="match-map-section"
+                role="region"
+                aria-label={activeSectionLabel}
+              >
+                <aside className="match-map-event-list">
+                  <div className="panel-header">
+                    <div>
+                      <h3 className="panel-title">Eventos de partida</h3>
+                      <p className="panel-subtitle">
+                        {filteredDuelEvents.length} de {sortedAllRoundEvents.length} eventos
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="match-play-button"
+                      onClick={openMatchPlayback}
+                      disabled={allRoundEvents.length === 0}
+                    >
+                      Reproducir partida
+                    </button>
+                  </div>
+
+                  <div className="match-event-filters" aria-label="Filtros del mapa">
+                    {eventFilterOptions.map((option) => (
+                      <button
+                        key={`map-${option.key}`}
+                        type="button"
+                        className={eventFilter === option.key ? "is-active" : ""}
+                        onClick={() => setEventFilter(option.key)}
+                        aria-pressed={eventFilter === option.key}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="match-map-event-scroll">
+                    {filteredDuelEvents.length === 0 ? (
+                      <div className="empty-chart">No hay eventos para este filtro.</div>
+                    ) : (
+                      filteredDuelEvents.map(renderRoundEventButton)
+                    )}
+                  </div>
+                </aside>
+
+                <div className="match-map-main">
+                  <MatchEventMapCanvas
+                    mapName={mapName}
+                    mapImageUrl={mapImageUrl}
+                    selectedEvent={selectedDuelEvent}
+                    eventMapState={duelEventMapState}
+                    mapTransform={mapTransform}
+                  />
+                </div>
+              </section>
+            )}
+            </div>
 
           </div>
         )}
@@ -2533,3 +2910,4 @@ export default function MatchDetailModal({
     </div>
   );
 }
+
