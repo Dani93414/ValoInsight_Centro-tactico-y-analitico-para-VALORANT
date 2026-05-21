@@ -1888,6 +1888,273 @@
   object-fit: contain;
 }
 
+.match-detail-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(13, 16, 22, 0.78);
+  backdrop-filter: blur(14px);
+  scrollbar-width: none;
+}
+
+.match-detail-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.match-detail-tabs button,
+.match-summary-actions button {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dce3ee;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 0.42rem 0.8rem;
+}
+
+.match-detail-tabs button.is-active,
+.match-summary-actions button:hover {
+  border-color: rgba(255, 70, 85, 0.62);
+  background: rgba(255, 70, 85, 0.18);
+  color: #fff2f4;
+}
+
+.match-detail-section-body {
+  min-height: 360px;
+}
+
+.match-summary-section,
+.match-duels-section,
+.match-team-section,
+.match-map-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.match-summary-hero-card,
+.match-duels-section,
+.match-scoreboard-panel,
+.match-map-event-list,
+.match-map-main {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(255, 70, 85, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(23, 27, 34, 0.98), rgba(15, 18, 24, 0.98));
+  padding: 0.95rem;
+}
+
+.match-summary-hero-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.match-summary-hero-card p {
+  flex: 1;
+  margin: 0;
+  color: #c8d1df;
+  line-height: 1.5;
+}
+
+.match-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
+.match-summary-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.match-summary-grid,
+.match-duel-stats-grid,
+.match-buy-type-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.match-summary-grid article,
+.match-duel-stats-grid article,
+.match-buy-type-grid article {
+  min-width: 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 0.8rem;
+}
+
+.match-summary-grid span,
+.match-duel-stats-grid span,
+.match-buy-type-grid span {
+  display: block;
+  margin-bottom: 0.38rem;
+  color: #9ea8b8;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.match-summary-grid strong,
+.match-duel-stats-grid strong,
+.match-buy-type-grid strong {
+  display: block;
+  color: #f4f7fb;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.match-buy-type-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0.75rem;
+}
+
+.match-buy-type-grid small {
+  display: block;
+  margin-top: 0.35rem;
+  color: #aeb8c8;
+  font-weight: 800;
+}
+
+.match-duels-layout,
+.match-map-section {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(420px, 1.1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.match-duels-list,
+.match-map-event-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: min(620px, 58vh);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.match-map-event-list {
+  min-width: 0;
+}
+
+.match-map-main {
+  min-width: 0;
+  position: sticky;
+  top: 4rem;
+}
+
+.match-team-section {
+  gap: 1rem;
+}
+
+.match-scoreboard-teams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.match-scoreboard-team h4 {
+  margin: 0 0 0.55rem;
+  color: #f1f5fb;
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.match-scoreboard-header,
+.match-scoreboard-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.5fr) repeat(5, minmax(70px, 0.7fr));
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.match-scoreboard-header {
+  padding: 0 0.55rem 0.45rem;
+  color: #96a2b4;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.match-scoreboard-row {
+  width: 100%;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #dce3ee;
+  cursor: pointer;
+  padding: 0.52rem 0.55rem;
+  text-align: left;
+}
+
+.match-scoreboard-row + .match-scoreboard-row {
+  margin-top: 0.4rem;
+}
+
+.match-scoreboard-row:hover,
+.match-scoreboard-row.is-selected {
+  border-color: rgba(255, 70, 85, 0.55);
+  background: rgba(255, 70, 85, 0.13);
+}
+
+.match-scoreboard-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.match-scoreboard-player img,
+.match-scoreboard-player i {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.match-scoreboard-player img {
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.match-scoreboard-player i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.match-scoreboard-player strong {
+  overflow: hidden;
+  color: #f1f5fb;
+  font-size: 0.84rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .match-playback-controls {
   min-width: 118px;
   display: flex;
@@ -2018,6 +2285,8 @@
 
   .match-rounds-map-layout,
   .match-impact-layout,
+  .match-duels-layout,
+  .match-map-section,
   .match-selected-round-layout,
   .match-result-card,
   .match-playback-body {
@@ -2035,6 +2304,19 @@
 
   .match-event-map-zone {
     position: static;
+  }
+
+  .match-map-main {
+    position: static;
+  }
+
+  .match-summary-grid,
+  .match-duel-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .match-scoreboard-teams {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2083,15 +2365,35 @@
 
   .match-side-cards,
   .match-impact-metrics,
-  .match-economy-cards {
+  .match-economy-cards,
+  .match-buy-type-grid,
+  .match-summary-grid,
+  .match-duel-stats-grid {
     grid-template-columns: 1fr;
   }
 
   .match-selected-round-header,
   .match-impact-reading,
+  .match-summary-hero-card,
   .match-key-round {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .match-summary-actions {
+    justify-content: flex-start;
+  }
+
+  .match-scoreboard-header {
+    display: none;
+  }
+
+  .match-scoreboard-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .match-scoreboard-player {
+    grid-column: 1 / -1;
   }
 
   .match-round-accordion-trigger {
