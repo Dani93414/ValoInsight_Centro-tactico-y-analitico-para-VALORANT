@@ -2,11 +2,37 @@
 
 html {
   zoom: 0.8;
+  scrollbar-width: thin;
+  scrollbar-color: #ff4655 rgba(6, 8, 12, 0.42);
 }
 
 body {
   margin: 0;
   background: #06080c;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #ff4655 rgba(6, 8, 12, 0.42);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(6, 8, 12, 0.42);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(6, 8, 12, 0.42);
+  border-radius: 999px;
+  background: #ff4655;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #ff2d42;
 }
 
 .loading-screen {

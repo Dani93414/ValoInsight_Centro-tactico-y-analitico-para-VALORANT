@@ -1512,7 +1512,7 @@ export default function Estadisticas() {
 
             {sortedFilteredMatches.length === 0 ? (
               <div className="empty-panel">
-                No hay partidas disponibles para la combinacion de filtros
+                No hay partidas disponibles para la combinación de filtros
                 seleccionada.
               </div>
             ) : historyExpanded ? (
@@ -1548,7 +1548,7 @@ export default function Estadisticas() {
                           )
                         }
                       >
-                        Cargar mas
+                        Cargar más
                       </button>
                     )}
                     {canCollapseHistory && (
@@ -3035,7 +3035,7 @@ export default function Estadisticas() {
             <div className="list-modal-body">
               {filteredMatches.length === 0 ? (
                 <div className="empty-panel">
-                  No hay partidas disponibles para la combinacion de filtros
+                  No hay partidas disponibles para la combinación de filtros
                   seleccionada.
                 </div>
               ) : (
@@ -3074,7 +3074,7 @@ export default function Estadisticas() {
                             )
                           }
                         >
-                          Cargar mas
+                          Cargar más
                         </button>
                       )}
                       {canCollapseHistory && (
