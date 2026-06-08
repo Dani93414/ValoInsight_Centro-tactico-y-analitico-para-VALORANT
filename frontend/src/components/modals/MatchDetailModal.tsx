@@ -1,6 +1,13 @@
 ﻿import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Circle, Clock3, Crosshair, Wrench } from "lucide-react";
+import {
+  Circle,
+  Clock3,
+  Crosshair,
+  Info,
+  Play,
+  Wrench,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   Bar,
@@ -8,6 +15,8 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip as ReTooltip,
   XAxis,
@@ -39,11 +48,28 @@ import type {
   EconomyEfficiency,
   EconomyEfficiencyAnalysis,
 } from "../../utils/analytics/economyDecision";
-import { calculateMatchMomentum } from "../../utils/analytics/momentum";
+import {
+  BALANCED_THRESHOLD,
+  DECISIVE_IMPACT_THRESHOLD,
+  HIGH_IMPACT_THRESHOLD,
+  MEDIUM_IMPACT_THRESHOLD,
+  calculateMatchMomentum,
+} from "../../utils/analytics/momentum";
 import type {
   MatchMomentumResult,
   MomentumInputRound,
 } from "../../utils/analytics/momentum";
+import { calculateRoundPlayerImpacts } from "../../utils/analytics/playerRoundImpact";
+import type {
+  PlayerRoundImpactBreakdown,
+  RoundPlayerImpactResult,
+} from "../../utils/analytics/playerRoundImpact";
+import { analyzeAdvancedMomentum } from "../../utils/analytics/advancedMomentum";
+import type {
+  AdvancedMomentumResult,
+  AdvancedMomentumRound,
+  MomentumEvent,
+} from "../../utils/analytics/advancedMomentum";
 import type { AgentContent } from "../../types/agents";
 import type { Arma } from "../../types/weapons";
 import type {
@@ -52,6 +78,7 @@ import type {
   RawMatchDetail,
   RawPlayer,
   RawPlayerLocation,
+  RawRound,
 } from "../../types/matches";
 import "./DetailModals.css";
 
@@ -95,8 +122,6 @@ type MatchDetailSection =
   | "economy";
 type TeamScoreboardMode = "grouped" | "combined";
 type ScoreboardSideFilter = "all" | "attack" | "defense";
-type DuelMatrixFilter = "all" | "withKills" | "teamA" | "teamB" | "ties";
-
 type WeaponCatalogEntry = {
   id: string;
   displayName: string;
@@ -305,6 +330,20 @@ type PlayerDuelCell = {
   events: RoundEvent[];
 };
 
+type MatchPerspective = {
+  selectedPlayer: RawPlayer;
+  selectedPlayerId: string;
+  selectedTeamId: string;
+  opponentTeamId: string;
+  teamAId: string;
+  teamBId: string;
+  teamALabel: "Team A";
+  teamBLabel: "Team B";
+  selectedPlayerTeamLabel: "Team A" | "Team B";
+  selectedTeamKey: "teamA" | "teamB";
+  opponentTeamKey: "teamA" | "teamB";
+};
+
 const matchDetailSections = [
   { key: "summary", label: "Resumen" },
   { key: "classification", label: "Tabla de clasificación" },
@@ -391,10 +430,20 @@ function toSecondsLabel(ms?: number): string {
 function toGameDurationLabel(ms?: number): string {
   const millis = toNumber(ms);
   if (!millis) return "";
-  const totalSeconds = Math.floor(millis / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  const hours = millis / 3_600_000;
+  const formattedHours = Number.isInteger(hours)
+    ? String(hours)
+    : hours.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `${formattedHours} h`;
+}
+
+function formatQueueLabel(queueId?: string | null): string {
+  const queue = cleanId(queueId).toLowerCase();
+  if (!queue || queue === "standard") return "";
+  if (queue === "competitive") return "Competitivo";
+  if (queue === "unrated") return "No competitivo";
+  if (queue === "swiftplay") return "Swiftplay";
+  return queue.charAt(0).toUpperCase() + queue.slice(1);
 }
 
 function parseAssistants(value: unknown): string[] {
@@ -811,38 +860,2226 @@ function MatchLoadoutTimeline({
   );
 }
 
-function getTeamLabel(
-  teamId: string | null | undefined,
-  teamAId: string,
-  teamBId: string,
-  teamALabel: string,
-  teamBLabel: string,
-): string {
-  if (!teamId) return "Neutral";
-  if (teamId === teamAId) return teamALabel;
-  if (teamId === teamBId) return teamBLabel;
-  return teamId;
+function getStableTeamEntries(currentMatch: RawMatchDetail | null): Array<[string, RawPlayer[]]> {
+  const players = currentMatch?.players ?? [];
+  const grouped = new Map<string, RawPlayer[]>();
+  const order: string[] = [];
+
+  for (const team of currentMatch?.teams ?? []) {
+    const teamId = cleanId(team.teamId);
+    if (teamId && !grouped.has(teamId)) {
+      grouped.set(teamId, []);
+      order.push(teamId);
+    }
+  }
+
+  for (const player of players) {
+    const teamId = cleanId(player.teamId) || "Sin equipo";
+    if (!grouped.has(teamId)) {
+      grouped.set(teamId, []);
+      order.push(teamId);
+    }
+    grouped.get(teamId)?.push(player);
+  }
+
+  return order.map((teamId) => [teamId, grouped.get(teamId) ?? []]);
+}
+
+function buildMatchPerspective(
+  currentMatch: RawMatchDetail | null,
+  selectedPlayerId: string,
+): MatchPerspective | null {
+  const teamEntries = getStableTeamEntries(currentMatch);
+  const teamAId = cleanId(teamEntries[0]?.[0]);
+  const teamBId = cleanId(teamEntries[1]?.[0]);
+  const players = currentMatch?.players ?? [];
+  const selectedPlayer =
+    players.find((player) => cleanId(player.puuid) === selectedPlayerId) ??
+    players.find((player) => cleanId(player.puuid)) ??
+    null;
+  if (!selectedPlayer || !teamAId || !teamBId) return null;
+
+  const resolvedSelectedPlayerId = cleanId(selectedPlayer.puuid);
+  const selectedTeamId = cleanId(selectedPlayer.teamId);
+  const selectedTeamKey = selectedTeamId === teamBId ? "teamB" : "teamA";
+  const opponentTeamKey = selectedTeamKey === "teamA" ? "teamB" : "teamA";
+  const opponentTeamId = opponentTeamKey === "teamA" ? teamAId : teamBId;
+
+  return {
+    selectedPlayer,
+    selectedPlayerId: resolvedSelectedPlayerId,
+    selectedTeamId,
+    opponentTeamId,
+    teamAId,
+    teamBId,
+    teamALabel: "Team A",
+    teamBLabel: "Team B",
+    selectedPlayerTeamLabel: selectedTeamKey === "teamA" ? "Team A" : "Team B",
+    selectedTeamKey,
+    opponentTeamKey,
+  };
+}
+
+type RoundMomentumImpactLevel = "low" | "medium" | "high" | "decisive";
+type RoundMomentumDominance = "selected" | "opponent" | "neutral";
+type RoundMomentumReason =
+  | "economy"
+  | "individual_play"
+  | "first_blood"
+  | "streak"
+  | "side_switch"
+  | "objective"
+  | "multikill"
+  | "clutch"
+  | "carry_drop"
+  | "activation"
+  | "normal";
+type RoundMomentumTone = "positive" | "negative" | "neutral";
+type RoundMomentumTicketEvent = {
+  id: string;
+  label: string;
+  detail: string;
+  teamLabel: "Tu equipo" | "Rival";
+  contribution: number;
+  isContext?: boolean;
+};
+type RoundMomentumTicketPlayer = {
+  playerId: string;
+  playerName: string;
+  agentName?: string;
+  agentIcon?: string | null;
+  teamLabel: "Tu equipo" | "Rival";
+  contribution: number;
+  breakdown: Array<{ label: string; value: number }>;
+};
+
+type RoundMomentumViewModel = {
+  roundNumber: number;
+  winningTeamId: string;
+  isSelectedTeamWin: boolean;
+  momentumBefore: number;
+  momentumAfter: number;
+  roundImpact: number;
+  impactLevel: RoundMomentumImpactLevel;
+  dominanceBefore: RoundMomentumDominance;
+  dominanceAfter: RoundMomentumDominance;
+  selectedTeamEconomy?: string;
+  opponentTeamEconomy?: string;
+  selectedTeamLoadout?: number;
+  opponentTeamLoadout?: number;
+  loadoutDiff?: number;
+  mainReason: RoundMomentumReason;
+  eventIcon?: "economy" | "clutch" | "multikill" | "first_blood" | "defuse" | "side_switch" | "up" | "down";
+  eventPerspective: "Tu equipo" | "Rival" | "Ronda";
+  eventTitle: string;
+  eventDescription: string;
+  roundType: string;
+  shortComment: string;
+  consequence: string;
+  secondaryEvents: Array<{ type: MomentumEvent["type"]; label: string }>;
+  ticketEvents: RoundMomentumTicketEvent[];
+  ticketPlayers: RoundMomentumTicketPlayer[];
+  confidenceLabel: string;
+  evidences: string[];
+  learning?: string;
+  beforeItems: Array<{ label: string; value: string; tone?: RoundMomentumTone }>;
+  duringItems: Array<{ label: string; value: string; tone?: RoundMomentumTone }>;
+  afterItems: Array<{ label: string; value: string; tone?: RoundMomentumTone }>;
+  selectedPlayerContribution: {
+    title: string;
+    description: string;
+    tone: RoundMomentumTone;
+    stats?: Array<{ label: string; value: string }>;
+  };
+  confidence: "high" | "medium" | "low";
+  confidenceReason?: string;
+  sourceEvent?: MomentumEvent;
+  isKeyRound: boolean;
+  winnerLabel: string;
+  winMethod?: string;
+};
+
+function dominanceFromMomentum(value: number): RoundMomentumDominance {
+  if (value >= BALANCED_THRESHOLD) return "selected";
+  if (value <= -BALANCED_THRESHOLD) return "opponent";
+  return "neutral";
+}
+
+function dominanceLabel(dominance: RoundMomentumDominance): string {
+  if (dominance === "selected") return "Tu equipo";
+  if (dominance === "opponent") return "Rival";
+  return "Equilibrio";
+}
+
+function impactLevelFromValue(value: number): RoundMomentumImpactLevel {
+  const abs = Math.abs(value);
+  if (abs >= DECISIVE_IMPACT_THRESHOLD) return "decisive";
+  if (abs >= HIGH_IMPACT_THRESHOLD) return "high";
+  if (abs >= MEDIUM_IMPACT_THRESHOLD) return "medium";
+  return "low";
+}
+
+function impactLevelLabel(level: RoundMomentumImpactLevel): string {
+  if (level === "decisive") return "Decisivo";
+  if (level === "high") return "Alto";
+  if (level === "medium") return "Medio";
+  return "Bajo";
+}
+
+function formatMomentumDelta(value: number): string {
+  if (Math.abs(value) < 0.05) return "sin cambio claro";
+  return value > 0
+    ? `+${formatNumber(value, 1)} para tu equipo`
+    : `${formatNumber(value, 1)} hacia el rival`;
+}
+
+function getRoundWinMethod(roundResult?: string, roundCeremony?: string): string | undefined {
+  const text = `${roundResult ?? ""} ${roundCeremony ?? ""}`.toLowerCase();
+  if (text.includes("defuse") || text.includes("defused")) return "Defuse";
+  if (text.includes("detonate") || text.includes("spike")) return "Spike";
+  if (text.includes("time") || text.includes("expired")) return "Tiempo";
+  if (text.includes("elim") || text.includes("kill") || text.includes("ace")) return "Eliminación";
+  return cleanId(roundResult) || cleanId(roundCeremony) || undefined;
+}
+
+function getTeamLoadoutForRound(
+  round: RawRound,
+  teamId: string,
+  playerTeamByPuuid: Map<string, string>,
+) {
+  let loadout = 0;
+  let spent = 0;
+  let remaining = 0;
+  for (const stat of round.playerStats ?? []) {
+    const puuid = cleanId(stat.puuid);
+    if (!puuid || playerTeamByPuuid.get(puuid) !== teamId) continue;
+    loadout += toNumber(stat.economy?.loadoutValue);
+    spent += toNumber(stat.economy?.spent);
+    remaining += toNumber(stat.economy?.remaining);
+  }
+  return { loadout, spent, remaining, economy: classifyTeamEconomy(loadout || spent) };
+}
+
+function getMomentumEventReason(event?: MomentumEvent): RoundMomentumReason | null {
+  if (!event) return null;
+  if (["ECO_WIN", "SEMIECO_WIN_VS_FULL", "FULL_LOSS_VS_ECO", "ECONOMIC_SWING", "COSTLY_WIN"].includes(event.type)) return "economy";
+  if (["CLUTCH_INFERRED"].includes(event.type)) return "clutch";
+  if (["ACE", "MULTIKILL"].includes(event.type)) return "multikill";
+  if (event.type === "FIRST_BLOOD_SWING") return "first_blood";
+  if (["STREAK_BREAKER", "STREAK_START", "COMEBACK_SIGNAL"].includes(event.type)) return "streak";
+  if (event.type === "SIDE_SWITCH_DOMINANCE") return "side_switch";
+  if (event.type === "OBJECTIVE_CONTROL" || event.type === "EXTREME_DEFUSE") return "objective";
+  if (event.type === "CARRY_DROP") return "carry_drop";
+  if (event.type === "PLAYER_ACTIVATION") return "activation";
+  return "individual_play";
+}
+
+const momentumEventPriority: Record<MomentumEvent["type"], number> = {
+  CLUTCH_INFERRED: 100,
+  EXTREME_DEFUSE: 95,
+  ACE: 90,
+  ECO_WIN: 85,
+  SEMIECO_WIN_VS_FULL: 82,
+  MATCH_POINT_SAVED: 80,
+  OVERTIME_TURN: 79,
+  COMEBACK_SIGNAL: 75,
+  SIDE_SWITCH_DOMINANCE: 72,
+  STREAK_BREAKER: 68,
+  MULTIKILL: 65,
+  FIRST_BLOOD_SWING: 58,
+  PLAYER_ACTIVATION: 54,
+  DUEL_REVERSAL: 50,
+  CARRY_DROP: 48,
+  OBJECTIVE_CONTROL: 45,
+  TRADE_SWING: 42,
+  STREAK_START: 40,
+  MATCH_POINT_REACHED: 38,
+  FULL_LOSS_VS_ECO: 35,
+  ECONOMIC_SWING: 34,
+  COSTLY_WIN: 30,
+};
+
+function getEventPerspective(event: MomentumEvent, selectedTeamId: string) {
+  const eventDescribesDisadvantagedTeam = ["FULL_LOSS_VS_ECO", "CARRY_DROP"].includes(
+    event.type,
+  );
+  const eventTeamIsSelected = event.teamId === selectedTeamId;
+  const advantageIsForSelected = eventDescribesDisadvantagedTeam
+    ? !eventTeamIsSelected
+    : eventTeamIsSelected;
+  return advantageIsForSelected ? "Tu equipo" : "Rival";
+}
+
+function getEventDisplayTitle(event: MomentumEvent): string {
+  const actor = event.agentName ?? event.playerName;
+  let title: string;
+  switch (event.type) {
+    case "CLUTCH_INFERRED":
+      title = actor ? `${event.title.split("·").at(-1)?.trim()} de ${actor}` : event.title;
+      break;
+    case "ACE":
+      title = actor ? `Ace de ${actor}` : "Ace";
+      break;
+    case "MULTIKILL":
+      title = actor ? `Multikill de ${actor}` : "Multikill";
+      break;
+    case "EXTREME_DEFUSE":
+      title = actor ? `Defuse extremo de ${actor}` : "Defuse extremo";
+      break;
+    case "ECO_WIN":
+    case "SEMIECO_WIN_VS_FULL":
+      title = "Victoria con economía inferior";
+      break;
+    case "FULL_LOSS_VS_ECO":
+      title = "Aprovechó una FULL rival";
+      break;
+    case "STREAK_BREAKER":
+      title = "Ruptura de racha rival";
+      break;
+    case "COMEBACK_SIGNAL":
+      title = "Inicio de remontada";
+      break;
+    case "FIRST_BLOOD_SWING":
+      title = "Las primeras bajas dieron la iniciativa";
+      break;
+    case "SIDE_SWITCH_DOMINANCE":
+      title = "Dominio después del cambio de lado";
+      break;
+    case "PLAYER_ACTIVATION":
+      title = actor ? `${actor} elevó su impacto` : "Un jugador elevó su impacto";
+      break;
+    case "CARRY_DROP":
+      title = actor
+        ? `Aprovechó la caída de impacto de ${actor}`
+        : "Aprovechó la caída de impacto del líder rival";
+      break;
+    case "DUEL_REVERSAL":
+      title = actor ? `${actor} invirtió un duelo repetido` : "Inversión de duelo";
+      break;
+    case "OBJECTIVE_CONTROL":
+      title = actor ? `Defuse de ${actor}` : "Victoria por defuse";
+      break;
+    default:
+      title = event.title.replace(/^.*?·\s*/, "");
+  }
+  return title;
+}
+
+function getEventDisplayDescription(event: MomentumEvent) {
+  if (event.type === "FULL_LOSS_VS_ECO") {
+    return "El equipo contrario perdió una FULL contra una compra inferior.";
+  }
+  if (event.type === "CARRY_DROP") {
+    const actor = event.agentName ?? event.playerName ?? "El líder rival";
+    return `${actor} perdió influencia y permitió que el equipo indicado ganara ventaja en el tramo.`;
+  }
+  return event.description;
+}
+
+function signedTicketContribution(
+  amount: number,
+  beneficiaryTeamId: string,
+  selectedTeamId: string,
+) {
+  return beneficiaryTeamId === selectedTeamId ? Math.abs(amount) : -Math.abs(amount);
+}
+
+function getMomentumTicketSemanticFamily(
+  event: Pick<RoundMomentumTicketEvent, "id" | "label">,
+): string | null {
+  const id = event.id.toLowerCase();
+  const label = event.label.toLowerCase();
+  if (
+    id.includes("streak-break") ||
+    id.includes("streak-ended") ||
+    id.includes("streak_breaker") ||
+    label.includes("ruptura de racha") ||
+    label.includes("racha rival terminada")
+  ) {
+    return "streak-break";
+  }
+  if (
+    id.includes("critical-round") ||
+    id.includes("critical_round") ||
+    id.includes("match-point-saved") ||
+    id.includes("match_point_saved") ||
+    label.includes("ronda crítica") ||
+    label.includes("match point")
+  ) {
+    return "critical-round";
+  }
+  return null;
+}
+
+function consolidateRoundTicketEvents(
+  events: RoundMomentumTicketEvent[],
+): RoundMomentumTicketEvent[] {
+  const byId = new Map(events.map((event) => [event.id, event]));
+  const kept = new Map(events.map((event) => [event.id, event]));
+  const keepOnly = (ids: string[], preferredIds: string[]) => {
+    const present = ids.filter((id) => byId.has(id));
+    if (present.length <= 1) return;
+    const preferred =
+      preferredIds.find((id) => byId.has(id)) ?? present[0];
+    for (const id of present) {
+      if (id !== preferred) kept.delete(id);
+    }
+  };
+
+  keepOnly(
+    [
+      "opening-triple",
+      "opening-double",
+      "first-blood",
+      "opening-converted",
+      "triple-opening-lost",
+      "double-opening-lost",
+      "opening-not-converted",
+      "second-kill-recovered",
+      "opening-traded",
+    ],
+    [
+      "triple-opening-lost",
+      "double-opening-lost",
+      "second-kill-recovered",
+      "opening-not-converted",
+      "opening-triple",
+      "opening-double",
+      "opening-traded",
+      "first-blood",
+      "opening-converted",
+    ],
+  );
+  keepOnly(
+    ["flawless-round", "near-flawless-round", "efficient-win", "costly-round"],
+    ["flawless-round", "near-flawless-round", "costly-round", "efficient-win"],
+  );
+  keepOnly(
+    ["match-point-saved", "overtime-entry", "critical-round-won"],
+    ["match-point-saved", "overtime-entry", "critical-round-won"],
+  );
+  keepOnly(
+    ["full-wasted", "large-loadout-upset"],
+    ["full-wasted", "large-loadout-upset"],
+  );
+
+  const objectiveIds = [...kept.keys()].filter(
+    (id) =>
+      [
+        "spike-detonated",
+        "plant-defense",
+        "plant-lost",
+        "defuse-without-postplant-kills",
+        "defuse-enemies-alive",
+        "defuse-number-disadvantage",
+      ].includes(id) ||
+      id.includes("EXTREME_DEFUSE") ||
+      id.includes("OBJECTIVE_CONTROL"),
+  );
+  if (objectiveIds.length > 1) {
+    const priority = [
+      "defuse-number-disadvantage",
+      ...objectiveIds.filter((id) => id.includes("EXTREME_DEFUSE")),
+      "defuse-without-postplant-kills",
+      "defuse-enemies-alive",
+      ...objectiveIds.filter((id) => id.includes("OBJECTIVE_CONTROL")),
+      "plant-lost",
+      "spike-detonated",
+      "plant-defense",
+    ];
+    const primaryId = priority.find((id) => kept.has(id)) ?? objectiveIds[0];
+    const primary = kept.get(primaryId);
+    if (primary) {
+      const details = objectiveIds
+        .map((id) => kept.get(id))
+        .filter(
+          (event): event is RoundMomentumTicketEvent =>
+            Boolean(event && event.id !== primaryId),
+        )
+        .map((event) => event.detail);
+      kept.set(primaryId, {
+        ...primary,
+        detail: [primary.detail, ...details].join(" "),
+        contribution: Math.max(
+          ...objectiveIds.map(
+            (id) => Math.abs(kept.get(id)?.contribution ?? 0),
+          ),
+        ) * Math.sign(primary.contribution || 1),
+      });
+    }
+    for (const id of objectiveIds) {
+      if (id !== primaryId) kept.delete(id);
+    }
+  }
+
+  const advancedStreak = [...kept.keys()].find((id) =>
+    id.includes("STREAK_BREAKER"),
+  );
+  if (advancedStreak) kept.delete("streak-ended");
+  if ([...kept.keys()].some((id) => id.startsWith("trade-chain-"))) {
+    kept.delete("opening-traded");
+    for (const id of [...kept.keys()]) {
+      if (id.startsWith("trades-")) kept.delete(id);
+    }
+  }
+
+  for (const [id, event] of kept) {
+    if (
+      id.includes("FIRST_BLOOD_SWING") ||
+      [
+        "opening-streak",
+        "recurring-opening-player",
+        "recurring-opening-victim",
+        "opening-conversion",
+        "poor-opening-conversion",
+        "winning-streak",
+        "economy-recovery",
+        "critical-round-won",
+        "confirmed-domain-change",
+        "failed-domain-change",
+        "round-without-trades",
+        "collective-impact",
+        "single-player-dependence",
+      ].includes(id)
+    ) {
+      kept.set(id, { ...event, contribution: 0, isContext: true });
+    }
+  }
+
+  return [...kept.values()];
+}
+
+function normalizeTicketContributions({
+  events,
+  players,
+  target,
+}: {
+  events: RoundMomentumTicketEvent[];
+  players: RoundMomentumTicketPlayer[];
+  target: number;
+}) {
+  if (
+    Math.abs(target) >= 0.05 &&
+    !events.some(
+      (event) =>
+        !event.isContext &&
+        Math.sign(event.contribution) === Math.sign(target),
+    ) &&
+    !players.some(
+      (player) => Math.sign(player.contribution) === Math.sign(target),
+    )
+  ) {
+    events = [
+      ...events,
+      {
+        id: "round-result-balance",
+        label: "Resultado de la ronda",
+        detail: "Ajuste base que representa el resultado competitivo de la ronda.",
+        teamLabel: target > 0 ? "Tu equipo" : "Rival",
+        contribution: target,
+      },
+    ];
+  }
+  const actionableEvents = events.filter((event) => !event.isContext);
+  const hasEventSignal = actionableEvents.some(
+    (event) => Math.sign(event.contribution) === Math.sign(target),
+  );
+  const hasPlayerSignal = players.some(
+    (player) => Math.sign(player.contribution) === Math.sign(target),
+  );
+  const eventShare = hasEventSignal && hasPlayerSignal ? 0.45 : hasEventSignal ? 1 : 0;
+  const playerShare = hasPlayerSignal ? 1 - eventShare : 0;
+
+  const normalizeValues = <T extends { contribution: number }>(
+    items: T[],
+    share: number,
+  ) => {
+    if (Math.abs(target) < 0.05 || share === 0) {
+      return items.map((item) => ({ ...item, contribution: 0 }));
+    }
+    const direction = Math.sign(target);
+    const aligned = items.filter(
+      (item) => Math.sign(item.contribution) === direction,
+    );
+    const opposing = items.filter(
+      (item) =>
+        item.contribution !== 0 &&
+        Math.sign(item.contribution) !== direction,
+    );
+    const alignedRaw = aligned.reduce(
+      (sum, item) => sum + Math.abs(item.contribution),
+      0,
+    );
+    if (alignedRaw === 0) {
+      return items.map((item) => ({ ...item, contribution: 0 }));
+    }
+    const shareTarget = target * share;
+    const opposingRaw = opposing.reduce(
+      (sum, item) => sum + Math.abs(item.contribution),
+      0,
+    );
+    const opposingBudget = Math.min(
+      opposingRaw,
+      Math.abs(shareTarget) * 0.25,
+    );
+    const opposingScale =
+      opposingRaw > 0 ? opposingBudget / opposingRaw : 0;
+    const opposingTotal = -direction * opposingBudget;
+    const alignedTarget = shareTarget - opposingTotal;
+    const alignedScale = Math.abs(alignedTarget) / alignedRaw;
+    return items.map((item) => {
+      if (item.contribution === 0) return item;
+      const alignedItem = Math.sign(item.contribution) === direction;
+      return {
+        ...item,
+        contribution:
+          item.contribution * (alignedItem ? alignedScale : opposingScale),
+      };
+    });
+  };
+
+  const normalizedEvents = normalizeValues(events, eventShare).map((event) => ({
+    ...event,
+    contribution: Math.round(event.contribution * 100) / 100,
+  }));
+  const normalizedPlayers = normalizeValues(players, playerShare).map(
+    (player) => {
+      const original = players.find(
+        (candidate) => candidate.playerId === player.playerId,
+      );
+      const roundedContribution = Math.round(player.contribution * 100) / 100;
+      const rawBreakdown = original?.breakdown ?? [];
+      const direction = Math.sign(roundedContribution);
+      const alignedRaw = rawBreakdown
+        .filter((item) => Math.sign(item.value) === direction)
+        .reduce((sum, item) => sum + Math.abs(item.value), 0);
+      const opposingRaw = rawBreakdown
+        .filter(
+          (item) => item.value !== 0 && Math.sign(item.value) !== direction,
+        )
+        .reduce((sum, item) => sum + Math.abs(item.value), 0);
+      const opposingBudget =
+        direction === 0
+          ? 0
+          : Math.min(opposingRaw, Math.abs(roundedContribution) * 0.25);
+      const opposingScale =
+        opposingRaw > 0 ? opposingBudget / opposingRaw : 0;
+      const alignedTarget =
+        Math.abs(roundedContribution) + opposingBudget;
+      const alignedScale =
+        alignedRaw > 0 ? alignedTarget / alignedRaw : 0;
+      const breakdown = rawBreakdown.map((item) => ({
+        ...item,
+        value:
+          Math.round(
+            item.value *
+              (Math.sign(item.value) === direction
+                ? alignedScale
+                : opposingScale) *
+              100,
+          ) / 100,
+      }));
+      const breakdownTotal = breakdown.reduce(
+        (sum, item) => sum + item.value,
+        0,
+      );
+      const breakdownResidual =
+        Math.round((roundedContribution - breakdownTotal) * 100) / 100;
+      if (breakdown[0] && Math.abs(breakdownResidual) >= 0.01) {
+        breakdown[0].value =
+          Math.round((breakdown[0].value + breakdownResidual) * 100) / 100;
+      }
+      return {
+        ...player,
+        teamLabel:
+          roundedContribution > 0
+            ? ("Tu equipo" as const)
+            : roundedContribution < 0
+              ? ("Rival" as const)
+              : player.teamLabel,
+        contribution: roundedContribution,
+        breakdown,
+      };
+    },
+  );
+
+  const roundedTarget = Math.round(target * 100) / 100;
+  const currentTotal =
+    normalizedEvents.reduce((sum, event) => sum + event.contribution, 0) +
+    normalizedPlayers.reduce((sum, player) => sum + player.contribution, 0);
+  const residual = Math.round((roundedTarget - currentTotal) * 100) / 100;
+  if (Math.abs(residual) >= 0.01) {
+    const eventRecipient = normalizedEvents
+      .filter((event) => !event.isContext)
+      .sort(
+        (a, b) =>
+          Math.abs(b.contribution) - Math.abs(a.contribution),
+      )[0];
+    if (eventRecipient) {
+      eventRecipient.contribution =
+        Math.round((eventRecipient.contribution + residual) * 100) / 100;
+    } else {
+      const playerRecipient = [...normalizedPlayers].sort(
+        (a, b) =>
+          Math.abs(b.contribution) - Math.abs(a.contribution),
+      )[0];
+      if (playerRecipient) {
+        playerRecipient.contribution =
+          Math.round((playerRecipient.contribution + residual) * 100) / 100;
+        if (playerRecipient.breakdown[0]) {
+          playerRecipient.breakdown[0].value =
+            Math.round(
+              (playerRecipient.breakdown[0].value + residual) * 100,
+            ) / 100;
+        }
+      }
+    }
+  }
+
+  return {
+    events: normalizedEvents,
+    players: normalizedPlayers,
+  };
+}
+
+function buildRoundMomentumTicketEvents({
+  round,
+  allRounds,
+  events,
+  players,
+  selectedTeamId,
+  currentMomentum,
+}: {
+  round: AdvancedMomentumRound;
+  allRounds: AdvancedMomentumRound[];
+  events: MomentumEvent[];
+  players: AdvancedMomentumResult["playerImpacts"][number]["players"];
+  selectedTeamId: string;
+  currentMomentum?: MatchMomentumResult["rounds"][number];
+}): RoundMomentumTicketEvent[] {
+  const ticket = new Map<string, RoundMomentumTicketEvent>();
+  const playersById = new Map(players.map((player) => [player.playerId, player]));
+  const playerTeam = (playerId?: string) => playersById.get(playerId ?? "")?.teamId ?? "";
+  const teamLabel = (teamId: string): "Tu equipo" | "Rival" =>
+    teamId === selectedTeamId ? "Tu equipo" : "Rival";
+  const add = (
+    id: string,
+    label: string,
+    detail: string,
+    beneficiaryTeamId: string,
+    contribution: number,
+    isContext = false,
+  ) => {
+    if (!beneficiaryTeamId || ticket.has(id)) return;
+    ticket.set(id, {
+      id,
+      label,
+      detail,
+      teamLabel: teamLabel(beneficiaryTeamId),
+      contribution: signedTicketContribution(
+        contribution,
+        beneficiaryTeamId,
+        selectedTeamId,
+      ),
+      isContext,
+    });
+  };
+
+  const kills = [...round.kills].sort((a, b) => a.timeMs - b.timeMs);
+  const firstKillTeam = playerTeam(kills[0]?.killerId);
+  const secondKillTeam = playerTeam(kills[1]?.killerId);
+  const thirdKillTeam = playerTeam(kills[2]?.killerId);
+  const firstThreeTeams = kills.slice(0, 3).map((kill) => playerTeam(kill.killerId));
+  const openingTrade = kills[0]
+    ? kills.find(
+        (kill) =>
+          kill.timeMs > kills[0].timeMs &&
+          kill.victimId === kills[0].killerId &&
+          playerTeam(kill.killerId) === playerTeam(kills[0].victimId) &&
+          kill.timeMs - kills[0].timeMs <= 7_000,
+      )
+    : undefined;
+  if (firstKillTeam) {
+    const openingWasConverted = round.winnerTeamId === firstKillTeam;
+    const hadTripleOpening =
+      firstKillTeam === secondKillTeam && firstKillTeam === thirdKillTeam;
+    const hadDoubleOpening = firstKillTeam === secondKillTeam;
+    if (
+      hadTripleOpening &&
+      openingWasConverted
+    ) {
+      add(
+        "opening-triple",
+        "Tres primeras bajas",
+        "El equipo consiguió las tres primeras eliminaciones de la ronda.",
+        firstKillTeam,
+        0.9,
+      );
+    } else if (hadDoubleOpening && openingWasConverted) {
+      add(
+        "opening-double",
+        "Primera y segunda baja",
+        "El equipo consiguió las dos primeras eliminaciones de la ronda.",
+        firstKillTeam,
+        0.7,
+      );
+    } else if (!hadDoubleOpening) {
+      add(
+        "first-blood",
+        "Primera baja de la ronda",
+        "La apertura se determina por el menor timestamp de baja.",
+        firstKillTeam,
+        0.45,
+      );
+    }
+    if (round.winnerTeamId === firstKillTeam) {
+      add(
+        "opening-converted",
+        "Ventaja inicial convertida",
+        "El equipo que consiguió la primera baja terminó ganando la ronda.",
+        round.winnerTeamId,
+        0.35,
+      );
+    } else if (round.winnerTeamId) {
+      if (hadTripleOpening) {
+        add(
+          "triple-opening-lost",
+          "Ventaja triple desperdiciada",
+          "El equipo rival consiguió las tres primeras bajas, pero perdió la ronda.",
+          round.winnerTeamId,
+          1.05,
+        );
+      } else if (hadDoubleOpening) {
+        add(
+          "double-opening-lost",
+          "Ventaja doble desperdiciada",
+          "El equipo rival consiguió las dos primeras bajas, pero perdió la ronda.",
+          round.winnerTeamId,
+          0.85,
+        );
+      } else {
+        add(
+          "opening-not-converted",
+          "Apertura sin convertir",
+          "El equipo recibió la primera baja y aun así remontó la ronda.",
+          round.winnerTeamId,
+          0.65,
+        );
+      }
+    }
+    if (
+      firstThreeTeams.length >= 3 &&
+      firstThreeTeams[0] !== firstThreeTeams[1] &&
+      firstThreeTeams[1] === firstThreeTeams[2]
+    ) {
+      add(
+        "second-kill-recovered",
+        "Segunda baja recuperada",
+        "El equipo perdió la apertura y respondió consiguiendo las dos bajas siguientes.",
+        firstThreeTeams[1],
+        0.65,
+      );
+    }
+    if (openingTrade) {
+      const elapsed = openingTrade.timeMs - kills[0].timeMs;
+      add(
+        "opening-traded",
+        elapsed <= 3_000 ? "Apertura tradeada de inmediato" : "Apertura tradeada",
+        `La primera baja fue respondida en ${(elapsed / 1000).toFixed(1)} segundos.`,
+        playerTeam(openingTrade.killerId),
+        elapsed <= 3_000 ? 0.45 : 0.3,
+      );
+    }
+  }
+
+  const aliveByTeam = new Map<string, Set<string>>();
+  for (const player of players) {
+    if (!player.teamId) continue;
+    const alive = aliveByTeam.get(player.teamId) ?? new Set<string>();
+    alive.add(player.playerId);
+    aliveByTeam.set(player.teamId, alive);
+  }
+  let maximumWinnerDisadvantage = 0;
+  let comebackComposition: { winnerAlive: number; rivalAlive: number } | null = null;
+  for (const kill of kills) {
+    const victimTeam = playerTeam(kill.victimId);
+    aliveByTeam.get(victimTeam)?.delete(kill.victimId);
+    if (!round.winnerTeamId) continue;
+    const rivalTeamId =
+      round.winnerTeamId === round.teamAId ? round.teamBId : round.teamAId;
+    const winnerAlive = aliveByTeam.get(round.winnerTeamId)?.size ?? 0;
+    const rivalAlive = aliveByTeam.get(rivalTeamId)?.size ?? 0;
+    const disadvantage = rivalAlive - winnerAlive;
+    if (disadvantage > maximumWinnerDisadvantage) {
+      maximumWinnerDisadvantage = disadvantage;
+      comebackComposition = { winnerAlive, rivalAlive };
+    }
+  }
+  if (
+    maximumWinnerDisadvantage > 0 &&
+    round.winnerTeamId &&
+    comebackComposition &&
+    comebackComposition.winnerAlive >= 2
+  ) {
+    add(
+      "number-disadvantage-win",
+      `Remontada ${comebackComposition.winnerAlive}v${comebackComposition.rivalAlive}`,
+      "El equipo ganó después de quedar en una desventaja numérica colectiva.",
+      round.winnerTeamId,
+      0.55 + maximumWinnerDisadvantage * 0.25,
+    );
+  } else if (
+    maximumWinnerDisadvantage > 0 &&
+    round.winnerTeamId &&
+    comebackComposition?.winnerAlive === 1
+  ) {
+    const survivor = [...(aliveByTeam.get(round.winnerTeamId) ?? [])][0];
+    const player = playersById.get(survivor);
+    add(
+      "individual-clutch-comeback",
+      `Clutch individual 1v${comebackComposition.rivalAlive}`,
+      `${player?.agentName ?? player?.playerName ?? "Un jugador"} resolvió la desventaja final en solitario.`,
+      round.winnerTeamId,
+      0.65 + maximumWinnerDisadvantage * 0.25,
+    );
+  }
+
+  if (round.winnerTeamId) {
+    const winnerDeaths = kills.filter(
+      (kill) => playerTeam(kill.victimId) === round.winnerTeamId,
+    ).length;
+    if (winnerDeaths === 0 && kills.length > 0) {
+      add(
+        "flawless-round",
+        "Ronda perfecta",
+        "El equipo ganó sin perder ningún jugador.",
+        round.winnerTeamId,
+        0.5,
+      );
+    } else if (winnerDeaths === 1) {
+      add(
+        "near-flawless-round",
+        "Ronda casi perfecta",
+        "El equipo ganó perdiendo únicamente un jugador.",
+        round.winnerTeamId,
+        0.32,
+      );
+    } else if (winnerDeaths >= 4) {
+      add(
+        "costly-round",
+        "Ronda costosa",
+        "El equipo ganó, pero perdió cuatro o más jugadores.",
+        round.winnerTeamId,
+        0.18,
+      );
+    }
+    if (winnerDeaths <= 1) {
+      add(
+        "efficient-win",
+        "Victoria eficiente",
+        `El equipo conservó ${5 - winnerDeaths} jugadores al cerrar la ronda.`,
+        round.winnerTeamId,
+        winnerDeaths === 0 ? 0.42 : 0.28,
+      );
+    }
+  }
+
+  for (const teamId of [round.teamAId, round.teamBId]) {
+    const teamKills = kills.filter((kill) => playerTeam(kill.killerId) === teamId);
+    if (
+      teamKills.length >= 5 &&
+      teamKills[4].timeMs - teamKills[0].timeMs <= 15_000
+    ) {
+      add(
+        `rapid-elimination-${teamId}`,
+        "Eliminación completa rápida",
+        `El equipo consiguió cinco bajas en ${(
+          (teamKills[4].timeMs - teamKills[0].timeMs) /
+          1000
+        ).toFixed(1)} segundos.`,
+        teamId,
+        0.65,
+      );
+    }
+  }
+
+  if (round.bombPlanter) {
+    const planterTeam = playerTeam(round.bombPlanter);
+    const resultText = `${round.roundResult ?? ""} ${round.roundCeremony ?? ""}`.toLowerCase();
+    const isDefuse =
+      Boolean(round.bombDefuser) ||
+      resultText.includes("defuse") ||
+      resultText.includes("defused");
+    const isDetonation =
+      resultText.includes("detonate") ||
+      resultText.includes("detonated") ||
+      resultText.includes("bomb") ||
+      resultText.includes("spike");
+    if (planterTeam && planterTeam === round.winnerTeamId) {
+      add(
+        isDetonation ? "spike-detonated" : "plant-defense",
+        isDetonation ? "Spike detonada" : "Defensa del plant",
+        isDetonation
+          ? "El equipo plantó y ganó mediante la detonación de la spike."
+          : "El equipo plantó y defendió el postplant hasta ganar.",
+        planterTeam,
+        isDetonation ? 0.4 : 0.3,
+      );
+    } else if (planterTeam && round.winnerTeamId) {
+      add(
+        "plant-lost",
+        "Plant perdido",
+        "El equipo ganó después de que el rival plantara la spike.",
+        round.winnerTeamId,
+        0.4,
+      );
+    }
+    if (isDefuse && round.winnerTeamId) {
+      const killsAfterPlant = kills.filter(
+        (kill) => kill.timeMs > (round.plantRoundTime ?? 0),
+      );
+      if (killsAfterPlant.length === 0) {
+        add(
+          "defuse-without-postplant-kills",
+          "Defuse sin bajas posteriores al plant",
+          "La recuperación del objetivo se completó sin eliminaciones después del plant.",
+          round.winnerTeamId,
+          0.5,
+        );
+      }
+    }
+  }
+
+  if (round.bombDefuser && round.defuseRoundTime && round.winnerTeamId) {
+    const aliveAtDefuse = new Map<string, Set<string>>();
+    for (const player of players) {
+      if (!player.teamId) continue;
+      const alive = aliveAtDefuse.get(player.teamId) ?? new Set<string>();
+      alive.add(player.playerId);
+      aliveAtDefuse.set(player.teamId, alive);
+    }
+    for (const kill of kills.filter((kill) => kill.timeMs <= (round.defuseRoundTime ?? 0))) {
+      aliveAtDefuse.get(playerTeam(kill.victimId))?.delete(kill.victimId);
+    }
+    const rivalTeamId =
+      round.winnerTeamId === round.teamAId ? round.teamBId : round.teamAId;
+    const winnerAlive = aliveAtDefuse.get(round.winnerTeamId)?.size ?? 0;
+    const enemiesAlive = aliveAtDefuse.get(rivalTeamId)?.size ?? 0;
+    if (enemiesAlive > 0) {
+      add(
+        "defuse-enemies-alive",
+        "Defuse con enemigos vivos",
+        `El defuse terminó con ${enemiesAlive} rival${enemiesAlive === 1 ? "" : "es"} todavía con vida.`,
+        round.winnerTeamId,
+        0.4 + Math.min(0.3, enemiesAlive * 0.1),
+      );
+    }
+    if (enemiesAlive > winnerAlive) {
+      add(
+        "defuse-number-disadvantage",
+        `Defuse en desventaja ${winnerAlive}v${enemiesAlive}`,
+        "El equipo completó el defuse teniendo menos jugadores vivos que el rival.",
+        round.winnerTeamId,
+        0.8,
+      );
+    }
+  }
+
+  const roundResultText = `${round.roundResult ?? ""} ${round.roundCeremony ?? ""}`.toLowerCase();
+  if (
+    round.winnerTeamId &&
+    (roundResultText.includes("time") ||
+      roundResultText.includes("timeout") ||
+      roundResultText.includes("expired"))
+  ) {
+    add(
+      "time-win",
+      "Victoria por tiempo",
+      "El equipo defensor ganó al agotarse el tiempo de la ronda.",
+      round.winnerTeamId,
+      0.3,
+    );
+  }
+
+  const tradeCounts = new Map<string, number>();
+  for (const kill of kills) {
+    const killerTeam = playerTeam(kill.killerId);
+    const tradedDeath = [...kills]
+      .reverse()
+      .find(
+        (candidate) =>
+          candidate.killerId === kill.victimId &&
+          playerTeam(candidate.victimId) === killerTeam &&
+          candidate.timeMs < kill.timeMs &&
+          kill.timeMs - candidate.timeMs <= 7_000,
+      );
+    if (tradedDeath && killerTeam) {
+      tradeCounts.set(killerTeam, (tradeCounts.get(killerTeam) ?? 0) + 1);
+    }
+  }
+  for (const [teamId, count] of tradeCounts) {
+    if (count >= 2) {
+      add(
+        `trade-chain-${teamId}`,
+        "Cadena de trades",
+        `El equipo encadenó ${count} respuestas a bajas rivales en menos de siete segundos.`,
+        teamId,
+        Math.min(0.75, count * 0.25),
+      );
+    } else if (!openingTrade || playerTeam(openingTrade.killerId) !== teamId) {
+      add(
+        `trades-${teamId}`,
+        "Trade útil",
+        "Una baja rival fue respondida en un máximo de siete segundos.",
+        teamId,
+        0.2,
+      );
+    }
+  }
+  if (kills.length >= 4 && tradeCounts.size === 0 && round.winnerTeamId) {
+    add(
+      "round-without-trades",
+      "Ronda sin trades",
+      "Hubo varias eliminaciones, pero ninguna fue respondida en menos de siete segundos.",
+      round.winnerTeamId,
+      0.2,
+    );
+  }
+
+  const orderedRounds = [...allRounds].sort(
+    (a, b) => a.roundNumber - b.roundNumber,
+  );
+  const currentRoundIndex = orderedRounds.findIndex(
+    (candidate) => candidate.roundNumber === round.roundNumber,
+  );
+  const previousRound = orderedRounds[currentRoundIndex - 1];
+  const firstKillData = (candidate: AdvancedMomentumRound) => {
+    const first = [...candidate.kills].sort((a, b) => a.timeMs - b.timeMs)[0];
+    return {
+      teamId: playerTeam(first?.killerId),
+      killerId: first?.killerId ?? "",
+      victimId: first?.victimId ?? "",
+    };
+  };
+
+  if (firstKillTeam && currentRoundIndex >= 0) {
+    let teamOpeningStreak = 0;
+    let playerOpeningStreak = 0;
+    let victimOpeningStreak = 0;
+    const openingPlayerId = kills[0]?.killerId ?? "";
+    const openingVictimId = kills[0]?.victimId ?? "";
+    for (let index = currentRoundIndex; index >= 0; index -= 1) {
+      const opening = firstKillData(orderedRounds[index]);
+      if (opening.teamId === firstKillTeam) teamOpeningStreak += 1;
+      else break;
+    }
+    for (let index = currentRoundIndex; index >= 0; index -= 1) {
+      const opening = firstKillData(orderedRounds[index]);
+      if (opening.killerId === openingPlayerId) playerOpeningStreak += 1;
+      else break;
+    }
+    for (let index = currentRoundIndex; index >= 0; index -= 1) {
+      const opening = firstKillData(orderedRounds[index]);
+      if (opening.victimId === openingVictimId) victimOpeningStreak += 1;
+      else break;
+    }
+    if (teamOpeningStreak >= 3) {
+      add(
+        "opening-streak",
+        `Racha de ${teamOpeningStreak} aperturas`,
+        "El equipo consiguió la primera baja en varias rondas consecutivas.",
+        firstKillTeam,
+        Math.min(1, 0.35 + teamOpeningStreak * 0.1),
+      );
+    }
+    if (playerOpeningStreak >= 3) {
+      const player = playersById.get(openingPlayerId);
+      add(
+        "recurring-opening-player",
+        "Jugador de apertura recurrente",
+        `${player?.agentName ?? player?.playerName ?? "Un jugador"} consiguió la primera baja en ${playerOpeningStreak} rondas seguidas.`,
+        firstKillTeam,
+        0.45,
+      );
+    }
+    if (victimOpeningStreak >= 3) {
+      const victim = playersById.get(openingVictimId);
+      add(
+        "recurring-opening-victim",
+        "Víctima inicial recurrente",
+        `${victim?.agentName ?? victim?.playerName ?? "Un jugador"} sufrió la primera muerte en ${victimOpeningStreak} rondas seguidas.`,
+        firstKillTeam,
+        0.4,
+      );
+    }
+
+    const openingWindow = orderedRounds
+      .slice(Math.max(0, currentRoundIndex - 5), currentRoundIndex + 1)
+      .map((candidate) => ({
+        round: candidate,
+        opening: firstKillData(candidate),
+      }))
+      .filter((entry) => entry.opening.teamId === firstKillTeam);
+    if (openingWindow.length >= 3) {
+      const converted = openingWindow.filter(
+        (entry) => entry.round.winnerTeamId === firstKillTeam,
+      ).length;
+      const conversionRate = converted / openingWindow.length;
+      if (conversionRate >= 0.75) {
+        add(
+          "opening-conversion",
+          "Alta conversión de aperturas",
+          `El equipo convirtió ${converted} de ${openingWindow.length} primeras bajas en victoria.`,
+          firstKillTeam,
+          0.45,
+        );
+      } else if (conversionRate <= 0.4) {
+        const beneficiary =
+          firstKillTeam === round.teamAId ? round.teamBId : round.teamAId;
+        add(
+          "poor-opening-conversion",
+          "Mala conversión de aperturas",
+          `El rival solo convirtió ${converted} de ${openingWindow.length} primeras bajas en victoria.`,
+          beneficiary,
+          0.4,
+        );
+      }
+    }
+  }
+
+  if (round.winnerTeamId && currentRoundIndex >= 0) {
+    let winningStreak = 0;
+    for (let index = currentRoundIndex; index >= 0; index -= 1) {
+      if (orderedRounds[index].winnerTeamId === round.winnerTeamId) {
+        winningStreak += 1;
+      } else {
+        break;
+      }
+    }
+    if (winningStreak >= 2) {
+      add(
+        "winning-streak",
+        `Racha de ${winningStreak} victorias`,
+        "El equipo encadenó varias rondas ganadas consecutivas.",
+        round.winnerTeamId,
+        Math.min(0.8, 0.15 + winningStreak * 0.1),
+      );
+    }
+    const rivalTeamId =
+      round.winnerTeamId === round.teamAId ? round.teamBId : round.teamAId;
+    let brokenStreak = 0;
+    for (let index = currentRoundIndex - 1; index >= 0; index -= 1) {
+      if (orderedRounds[index].winnerTeamId === rivalTeamId) brokenStreak += 1;
+      else break;
+    }
+    if (
+      brokenStreak >= 2 &&
+      !events.some((event) => event.type === "STREAK_BREAKER")
+    ) {
+      add(
+        "streak-ended",
+        "Racha rival terminada",
+        `El equipo detuvo una secuencia rival de ${brokenStreak} victorias.`,
+        round.winnerTeamId,
+        Math.min(0.7, 0.25 + brokenStreak * 0.1),
+      );
+    }
+  }
+
+  const loadoutFor = (candidate: AdvancedMomentumRound, teamId: string) =>
+    teamId === candidate.teamAId
+      ? candidate.teamALoadout
+      : candidate.teamBLoadout;
+  if (round.winnerTeamId) {
+    const rivalTeamId =
+      round.winnerTeamId === round.teamAId ? round.teamBId : round.teamAId;
+    const winnerLoadout = loadoutFor(round, round.winnerTeamId);
+    const rivalLoadout = loadoutFor(round, rivalTeamId);
+    const loadoutGap = rivalLoadout - winnerLoadout;
+    if (
+      winnerLoadout > 0 &&
+      rivalLoadout > 0 &&
+      loadoutGap >= 2_500 &&
+      classifyTeamEconomy(rivalLoadout) !== "FULL" &&
+      !events.some((event) => ["ECO_WIN", "SEMIECO_WIN_VS_FULL"].includes(event.type))
+    ) {
+      add(
+        "large-loadout-upset",
+        "Victoria con gran desventaja de loadout",
+        `El ganador comenzó con ${formatNumber(loadoutGap)} menos de equipamiento.`,
+        round.winnerTeamId,
+        Math.min(1, 0.4 + loadoutGap / 20_000),
+      );
+    }
+    if (
+      winnerLoadout > 0 &&
+      loadoutGap >= 2_500 &&
+      classifyTeamEconomy(rivalLoadout) === "FULL" &&
+      !events.some((event) => event.type === "FULL_LOSS_VS_ECO")
+    ) {
+      add(
+        "full-wasted",
+        "FULL desperdiciada",
+        "El rival perdió pese a comenzar con una ventaja importante de loadout.",
+        round.winnerTeamId,
+        0.55,
+      );
+    }
+    if (previousRound) {
+      const previousEconomy = classifyTeamEconomy(
+        loadoutFor(previousRound, round.winnerTeamId),
+      );
+      const currentEconomy = classifyTeamEconomy(winnerLoadout);
+      const economyRank = { ECO: 0, SEMIECO: 1, FULL: 2 };
+      if (
+        winnerLoadout > 0 &&
+        loadoutFor(previousRound, round.winnerTeamId) > 0 &&
+        economyRank[currentEconomy] > economyRank[previousEconomy]
+      ) {
+        add(
+          "economy-recovery",
+          "Recuperación económica",
+          `El equipo pasó de ${previousEconomy} a ${currentEconomy} y ganó la ronda.`,
+          round.winnerTeamId,
+          0.28,
+        );
+      }
+    }
+  }
+
+  if (round.winnerTeamId) {
+    const scoreBefore = round.scoreBefore ?? {};
+    const scoreAfter = round.scoreAfter ?? {};
+    const rivalTeamId =
+      round.winnerTeamId === round.teamAId ? round.teamBId : round.teamAId;
+    const ownBefore = scoreBefore[round.winnerTeamId] ?? 0;
+    const rivalBefore = scoreBefore[rivalTeamId] ?? 0;
+    if (round.roundNumber >= 25 || Math.max(ownBefore, rivalBefore) >= 11) {
+      add(
+        "critical-round-won",
+        "Ronda crítica ganada",
+        round.roundNumber >= 25
+          ? "El equipo ganó una ronda de overtime."
+          : "El equipo ganó una ronda cercana al punto de mapa.",
+        round.winnerTeamId,
+        round.roundNumber >= 25 ? 0.65 : 0.4,
+      );
+    }
+    if (rivalBefore >= 12) {
+      add(
+        "match-point-saved",
+        "Match point salvado",
+        "El rival podía cerrar el mapa, pero el equipo mantuvo viva la partida.",
+        round.winnerTeamId,
+        0.75,
+      );
+    }
+    if (
+      (scoreAfter[round.teamAId] ?? 0) === 12 &&
+      (scoreAfter[round.teamBId] ?? 0) === 12
+    ) {
+      add(
+        "overtime-entry",
+        "Entrada en overtime",
+        "La victoria dejó el marcador empatado 12-12.",
+        round.winnerTeamId,
+        0.6,
+      );
+    }
+
+    const winnerKills = kills.filter(
+      (kill) => playerTeam(kill.killerId) === round.winnerTeamId,
+    ).length;
+    const rivalKills = kills.filter(
+      (kill) => playerTeam(kill.killerId) === rivalTeamId,
+    ).length;
+    if (winnerKills < rivalKills) {
+      add(
+        "win-with-fewer-kills",
+        "Victoria con menos bajas",
+        `El ganador consiguió ${winnerKills} bajas frente a ${rivalKills} del rival y resolvió la ronda por objetivo o tiempo.`,
+        round.winnerTeamId,
+        0.4,
+      );
+    }
+  }
+
+  for (const teamId of [round.teamAId, round.teamBId]) {
+    const teamPlayers = players.filter((player) => player.teamId === teamId);
+    const multiKillPlayers = teamPlayers.filter((player) => player.kills >= 2);
+    if (multiKillPlayers.length >= 2) {
+      add(
+        `distributed-multikill-${teamId}`,
+        "Multikill repartida",
+        `${multiKillPlayers.length} jugadores del equipo consiguieron al menos dos bajas.`,
+        teamId,
+        0.45,
+      );
+    }
+
+    const teamDamage = teamPlayers.reduce(
+      (sum, player) => sum + player.damage,
+      0,
+    );
+    const damageContributors = teamPlayers.filter(
+      (player) => player.damage >= 100,
+    ).length;
+    if (
+      teamDamage >= 500 &&
+      damageContributors >= 3 &&
+      !teamPlayers.some((player) => player.kills >= 3)
+    ) {
+      add(
+        `collective-damage-${teamId}`,
+        "Daño colectivo alto",
+        `${damageContributors} jugadores aportaron al menos 100 de daño, con ${formatNumber(teamDamage)} en total.`,
+        teamId,
+        0.4,
+      );
+    }
+
+    const positivePlayers = teamPlayers.filter(
+      (player) => player.totalImpact > 0,
+    );
+    const teamPositiveImpact = positivePlayers.reduce(
+      (sum, player) => sum + player.totalImpact,
+      0,
+    );
+    const topImpact = Math.max(
+      0,
+      ...positivePlayers.map((player) => player.totalImpact),
+    );
+    if (
+      positivePlayers.length >= 3 &&
+      teamPositiveImpact > 0 &&
+      topImpact / teamPositiveImpact <= 0.42
+    ) {
+      add(
+        `collective-impact-${teamId}`,
+        "Impacto colectivo",
+        "La contribución estuvo repartida entre al menos tres jugadores.",
+        teamId,
+        0.35,
+      );
+    } else if (
+      teamPositiveImpact >= 1 &&
+      topImpact / teamPositiveImpact >= 0.65
+    ) {
+      const leader = positivePlayers.find(
+        (player) => player.totalImpact === topImpact,
+      );
+      add(
+        `single-player-dependence-${teamId}`,
+        "Dependencia de un jugador",
+        `${leader?.agentName ?? leader?.playerName ?? "Un jugador"} concentró ${formatPercent((topImpact / teamPositiveImpact) * 100, 0)} del impacto positivo del equipo.`,
+        teamId,
+        0.3,
+      );
+    }
+
+    for (const player of teamPlayers) {
+      const hasObjectiveOrSupport = player.milestones.some((milestone) =>
+        [
+          "assists",
+          "plant",
+          "plant_win",
+          "defuse",
+          "defuse_win",
+          "immediate_trade",
+          "useful_trade",
+          "damage",
+        ].includes(milestone.type),
+      );
+      if (
+        player.kills === 0 &&
+        player.totalImpact >= 0.75 &&
+        hasObjectiveOrSupport
+      ) {
+        add(
+          `zero-kill-decisive-${player.playerId}`,
+          "Jugador sin bajas pero decisivo",
+          `${player.agentName ?? player.playerName ?? "Un jugador"} alcanzó ${formatNumber(player.totalImpact, 2)} de impacto mediante apoyo, daño u objetivo.`,
+          teamId,
+          0.45,
+        );
+      }
+      if (player.kills >= 5 && round.winnerTeamId !== teamId) {
+        const beneficiary =
+          teamId === round.teamAId ? round.teamBId : round.teamAId;
+        add(
+          `lost-ace-${player.playerId}`,
+          "Ace rival sin convertir",
+          `${player.agentName ?? player.playerName ?? "Un jugador rival"} registró cinco bajas, pero su equipo perdió la ronda.`,
+          beneficiary,
+          0.65,
+        );
+      }
+    }
+  }
+
+  const nextRounds = orderedRounds.slice(
+    currentRoundIndex + 1,
+    currentRoundIndex + 4,
+  );
+  const nextWins = round.winnerTeamId
+    ? nextRounds.filter(
+        (candidate) => candidate.winnerTeamId === round.winnerTeamId,
+      ).length
+    : 0;
+  const hasLargeCurrentEvent =
+    events.some(
+      (event) =>
+        event.isHighlight ||
+        event.isTurningPoint ||
+        event.totalImpactScore >= 1.5,
+    ) || players.some((player) => player.totalImpact >= 1.5);
+  if (
+    round.winnerTeamId &&
+    currentMomentum?.tags.includes("Cambio de dominio") &&
+    nextWins >= 2
+  ) {
+    add(
+      "confirmed-domain-change",
+      "Cambio de dominio confirmado",
+      "El cambio de control fue seguido por al menos dos victorias en las tres rondas posteriores.",
+      round.winnerTeamId,
+      0.7,
+    );
+  } else if (
+    round.winnerTeamId &&
+    hasLargeCurrentEvent &&
+    nextRounds.length >= 2 &&
+    nextWins <= 1
+  ) {
+    add(
+      "failed-domain-change",
+      "Cambio de dominio no consolidado",
+      "La ronda produjo una señal fuerte, pero el equipo no mantuvo la ventaja en el tramo posterior.",
+      round.winnerTeamId === round.teamAId ? round.teamBId : round.teamAId,
+      0.35,
+    );
+  }
+
+  const individualEventTypes: MomentumEvent["type"][] = [
+    "CLUTCH_INFERRED",
+    "ACE",
+    "MULTIKILL",
+    "PLAYER_ACTIVATION",
+    "CARRY_DROP",
+    "DUEL_REVERSAL",
+  ];
+  for (const event of events) {
+    if (individualEventTypes.includes(event.type)) continue;
+    if (event.type === "FIRST_BLOOD_SWING") continue;
+    if (
+      event.type === "FULL_LOSS_VS_ECO" &&
+      events.some((candidate) =>
+        ["ECO_WIN", "SEMIECO_WIN_VS_FULL"].includes(candidate.type),
+      )
+    ) {
+      continue;
+    }
+    if (
+      event.type === "OBJECTIVE_CONTROL" &&
+      events.some((candidate) => candidate.type === "EXTREME_DEFUSE")
+    ) {
+      continue;
+    }
+    const disadvantaged = ["FULL_LOSS_VS_ECO", "CARRY_DROP"].includes(event.type);
+    const beneficiaryTeamId = disadvantaged
+      ? event.teamId === round.teamAId
+        ? round.teamBId
+        : round.teamAId
+      : event.teamId;
+    add(
+      `advanced-${event.id}`,
+      getEventDisplayTitle(event),
+      getEventDisplayDescription(event),
+      beneficiaryTeamId,
+      Math.max(0.1, event.totalImpactScore),
+      [
+        "STREAK_BREAKER",
+        "COMEBACK_SIGNAL",
+        "SIDE_SWITCH_DOMINANCE",
+      ].includes(event.type),
+    );
+  }
+
+  return consolidateRoundTicketEvents([...ticket.values()]).sort(
+    (a, b) =>
+      Number(a.isContext) - Number(b.isContext) ||
+      Math.abs(b.contribution) - Math.abs(a.contribution) ||
+      a.label.localeCompare(b.label),
+  );
+}
+
+function buildRoundMomentumTicketPlayers(
+  players: AdvancedMomentumResult["playerImpacts"][number]["players"],
+  selectedTeamId: string,
+): RoundMomentumTicketPlayer[] {
+  const representedByGeneralEvent = new Set([
+    "first_blood",
+    "double_kill",
+    "triple_kill",
+    "quad_kill",
+    "ace",
+    "rapid_double",
+    "rapid_triple",
+    "plant",
+    "plant_win",
+    "plant_survival",
+    "defuse",
+    "defuse_win",
+    "defuse_under_one",
+    "extreme_defuse",
+    "eco_kill",
+    "semi_eco_kill",
+    "critical_action",
+    "side_switch_action",
+  ]);
+  return players
+    .map((player) => {
+      const residualMilestones = player.milestones.filter(
+        (milestone) =>
+          !representedByGeneralEvent.has(milestone.type) &&
+          !milestone.type.startsWith("clutch_"),
+      );
+      const residualImpact = residualMilestones.reduce(
+        (sum, milestone) => sum + milestone.value,
+        0,
+      );
+      return {
+        playerId: player.playerId,
+        playerName: player.playerName ?? "Jugador",
+        agentName: player.agentName,
+        agentIcon: player.agentIcon,
+        teamLabel:
+          player.teamId === selectedTeamId
+            ? ("Tu equipo" as const)
+            : ("Rival" as const),
+        contribution:
+          player.teamId === selectedTeamId
+            ? residualImpact
+            : -residualImpact,
+        breakdown: residualMilestones
+        .map((milestone) => ({
+          label: milestone.label,
+          value:
+            player.teamId === selectedTeamId
+              ? milestone.value
+              : -milestone.value,
+        }))
+        .sort((a, b) => Math.abs(b.value) - Math.abs(a.value)),
+      };
+    })
+    .sort(
+      (a, b) =>
+        Math.abs(b.contribution) - Math.abs(a.contribution) ||
+        a.playerName.localeCompare(b.playerName),
+    );
+}
+
+function eventsAreRedundant(primary: MomentumEvent, candidate: MomentumEvent): boolean {
+  if (primary.id === candidate.id) return true;
+  if (
+    primary.type === "CLUTCH_INFERRED" &&
+    ["ACE", "MULTIKILL"].includes(candidate.type) &&
+    primary.playerId === candidate.playerId
+  ) {
+    return true;
+  }
+  if (
+    primary.type === "EXTREME_DEFUSE" &&
+    candidate.type === "OBJECTIVE_CONTROL"
+  ) {
+    return true;
+  }
+  if (
+    ["ECO_WIN", "SEMIECO_WIN_VS_FULL"].includes(primary.type) &&
+    candidate.type === "FULL_LOSS_VS_ECO"
+  ) {
+    return true;
+  }
+  return getMomentumEventReason(primary) === getMomentumEventReason(candidate);
+}
+
+function selectRoundNarrativeEvents(
+  events: MomentumEvent[],
+  winningTeamId: string,
+) {
+  const relevant = events
+    .filter(
+      (event) =>
+        event.isTurningPoint ||
+        event.isHighlight ||
+        event.totalImpactScore >= 0.7,
+    )
+    .sort(
+      (a, b) =>
+        Number(b.isTurningPoint) - Number(a.isTurningPoint) ||
+        Number(b.teamId === winningTeamId) - Number(a.teamId === winningTeamId) ||
+        momentumEventPriority[b.type] - momentumEventPriority[a.type] ||
+        b.totalImpactScore - a.totalImpactScore,
+    );
+  const primary = relevant[0];
+  const secondary = primary
+    ? relevant
+        .filter((event) => !eventsAreRedundant(primary, event))
+        .slice(0, 3)
+    : [];
+  return { primary, secondary };
+}
+
+function getEventConsequence(
+  event: MomentumEvent | undefined,
+  currentMomentum: MatchMomentumResult["rounds"][number] | undefined,
+  selectedTeamId: string,
+) {
+  if (!event) {
+    return currentMomentum?.isSwingRound
+      ? "La ronda produjo un cambio visible en la curva de control."
+      : "La ronda modificó el control reciente, pero no dejó una consecuencia sostenida.";
+  }
+  if (event.isTurningPoint && currentMomentum?.tags.includes("Cambio de dominio")) {
+    const controller =
+      currentMomentum.dominantTeamId === selectedTeamId
+        ? "Tu equipo"
+        : currentMomentum.dominantTeamId
+          ? "Rival"
+          : null;
+    return controller
+      ? `${controller} pasó a controlar la partida después de esta ronda.`
+      : "La ronda desplazó el control, pero la partida quedó cerca del equilibrio.";
+  }
+  if (event.isTurningPoint) {
+    return "El tramo posterior confirmó la acción como punto de inflexión.";
+  }
+  if (Math.abs(event.postEventMomentumDelta) >= 1) {
+    return event.postEventMomentumDelta > 0
+      ? "El control aumentó de forma observable en las rondas posteriores."
+      : "La acción fue destacada, pero su ventaja no se mantuvo en las rondas posteriores.";
+  }
+  return "Fue una acción relevante, aunque no generó un cambio sostenido de dominio.";
+}
+
+function getConfidenceLabel(event?: MomentumEvent) {
+  if (!event) return "Estimación";
+  if (event.confidence === "high") return "Confirmado";
+  if (event.confidence === "medium") return event.missingData?.length ? "Inferido" : "Patrón";
+  return "Estimación";
+}
+
+function getConfidenceReason(event?: MomentumEvent) {
+  if (!event) {
+    return "Estimación basada en resultado, economía disponible y curva de control.";
+  }
+  if (event.confidence === "high") {
+    return "Confirmado con datos directos de la ronda: resultado, kills, economía u objetivo.";
+  }
+  if (event.missingData?.length) {
+    return `Inferido mediante señales parciales. Falta: ${event.missingData.join(" ")}`;
+  }
+  if (event.confidence === "medium") {
+    return "Patrón detectado comparando varias rondas antes y después del evento.";
+  }
+  return "Estimación de baja confianza; se muestra como contexto y no como hecho decisivo.";
+}
+
+function getRoundReasonLabel(reason: RoundMomentumReason): string {
+  const labels: Record<RoundMomentumReason, string> = {
+    economy: "Economía",
+    individual_play: "Jugada individual",
+    first_blood: "Primera baja",
+    streak: "Racha",
+    side_switch: "Cambio de lado",
+    objective: "Objetivo",
+    multikill: "Multikill",
+    clutch: "Clutch",
+    carry_drop: "Caída de impacto",
+    activation: "Activación",
+    normal: "Ronda de control",
+  };
+  return labels[reason];
+}
+
+function getRoundEventIcon(reason: RoundMomentumReason): RoundMomentumViewModel["eventIcon"] {
+  if (reason === "economy") return "economy";
+  if (reason === "clutch") return "clutch";
+  if (reason === "multikill") return "multikill";
+  if (reason === "first_blood") return "first_blood";
+  if (reason === "side_switch") return "side_switch";
+  if (reason === "objective") return "defuse";
+  if (reason === "activation") return "up";
+  if (reason === "carry_drop") return "down";
+  return undefined;
+}
+
+function inferSelectedPlayerContribution({
+  round,
+  selectedPlayer,
+  selectedTeamId,
+  opponentTeamId,
+  playerImpact,
+  roundMvp,
+}: {
+  round: RawRound;
+  selectedPlayer: RawPlayer;
+  selectedTeamId: string;
+  opponentTeamId: string;
+  playerImpact?: PlayerRoundImpactBreakdown;
+  roundMvp?: PlayerRoundImpactBreakdown;
+}): RoundMomentumViewModel["selectedPlayerContribution"] {
+  const selectedPlayerId = cleanId(selectedPlayer.puuid);
+  const selectedStats = (round.playerStats ?? []).find(
+    (stat) => cleanId(stat.puuid) === selectedPlayerId,
+  );
+  const kills = selectedStats?.kills?.length ?? 0;
+  const damage = (selectedStats?.damage ?? []).reduce(
+    (sum, entry) => sum + toNumber(entry.damage),
+    0,
+  );
+  const allKills = (round.playerStats ?? [])
+    .flatMap((stat) => stat.kills ?? [])
+    .filter((kill) => cleanId(kill.killer) && cleanId(kill.victim))
+    .sort((a, b) => toNumber(a.timeSinceRoundStartMillis) - toNumber(b.timeSinceRoundStartMillis));
+  const firstKill = allKills[0] ?? null;
+  const selectedFirstKill = cleanId(firstKill?.killer) === selectedPlayerId;
+  const selectedFirstDeath = cleanId(firstKill?.victim) === selectedPlayerId;
+  const stats = [
+    { label: "Bajas", value: String(kills) },
+    { label: "Daño", value: formatNumber(damage) },
+    { label: "Impacto", value: formatNumber(playerImpact?.totalImpact ?? 0, 2) },
+    { label: "Loadout", value: formatNumber(toNumber(selectedStats?.economy?.loadoutValue)) },
+  ];
+  const primaryMilestone = playerImpact?.milestones.find(
+    (milestone) => milestone.value > 0,
+  );
+  const selectedIsMvp = roundMvp?.playerId === selectedPlayerId;
+  const otherMvpName =
+    roundMvp && !selectedIsMvp
+      ? roundMvp.playerName ?? "otro jugador"
+      : null;
+
+  if (primaryMilestone?.type.startsWith("clutch_")) {
+    return {
+      title: "Clutch inferido",
+      description: `${primaryMilestone.label}. Fue la acción individual principal de tu ronda${selectedIsMvp ? " y te convirtió en MVP" : ""}.`,
+      tone: "positive",
+      stats,
+    };
+  }
+  if (["ace", "quad_kill", "triple_kill"].includes(primaryMilestone?.type ?? "")) {
+    return {
+      title: primaryMilestone?.label ?? "Multikill",
+      description: `Tu ${primaryMilestone?.label.toLowerCase()} fue tu contribución principal${selectedIsMvp ? " y te convirtió en MVP de la ronda" : ""}.`,
+      tone: "positive",
+      stats,
+    };
+  }
+  if (["extreme_defuse", "defuse_under_one", "defuse"].includes(primaryMilestone?.type ?? "")) {
+    return {
+      title: primaryMilestone?.label ?? "Defuse",
+      description: "Tu acción sobre el objetivo fue la contribución individual más relevante de tu ronda.",
+      tone: "positive",
+      stats,
+    };
+  }
+  if (["plant", "plant_win"].includes(primaryMilestone?.type ?? "")) {
+    return {
+      title: "Plant decisivo",
+      description: "Tu plant aportó control objetivo verificable a la ronda.",
+      tone: "positive",
+      stats,
+    };
+  }
+  if (primaryMilestone?.type === "first_blood" || selectedFirstKill) {
+    return {
+      title: "Primera baja favorable",
+      description: "Conseguiste la primera baja y abriste la ronda para tu equipo.",
+      tone: "positive",
+      stats,
+    };
+  }
+  if (primaryMilestone?.type.includes("trade")) {
+    return {
+      title: primaryMilestone.label,
+      description: "Recuperaste una baja aliada dentro de una ventana temporal útil.",
+      tone: "positive",
+      stats,
+    };
+  }
+  if (kills > 0 || damage >= 100) {
+    return {
+      title: kills > 0 ? "Impacto directo" : "Daño relevante",
+      description: otherMvpName
+        ? `La ronda se inclinó por la actuación de ${otherMvpName}, mientras tu impacto fue ${playerImpact && playerImpact.totalImpact >= 0.75 ? "secundario" : "limitado"}.`
+        : `Aportaste ${kills > 0 ? `${kills} ${kills === 1 ? "baja" : "bajas"}` : `${formatNumber(damage)} de daño`}, con impacto ${formatNumber(playerImpact?.totalImpact ?? 0, 2)}.`,
+      tone: cleanId(round.winningTeam) === selectedTeamId ? "positive" : "neutral",
+      stats,
+    };
+  }
+  if (selectedFirstDeath) {
+    return {
+      title: "Primera muerte del equipo",
+      description: otherMvpName
+        ? `${otherMvpName} fue el jugador más influyente; tu primera muerte redujo tu contribución en esta ronda.`
+        : "Fuiste la primera muerte y no se detectó una contribución positiva posterior que la compensara.",
+      tone: "negative",
+      stats,
+    };
+  }
+  return {
+    title: "Sin acción directa detectada",
+    description: otherMvpName
+      ? `La ronda se inclinó por la actuación de ${otherMvpName}, mientras tu impacto fue limitado.`
+      : "No se detectó una acción directa del jugador seleccionado en el cambio de momentum de esta ronda.",
+    tone: cleanId(round.winningTeam) === opponentTeamId ? "negative" : "neutral",
+    stats,
+  };
+}
+
+function buildRoundMomentumViewModels({
+  match,
+  advancedMomentumAnalysis,
+  selectedPlayer,
+  selectedTeamId,
+  opponentTeamId,
+  teamAId,
+}: {
+  match: RawMatchDetail | null;
+  advancedMomentumAnalysis: AdvancedMomentumResult | null;
+  selectedPlayer: RawPlayer | null;
+  selectedTeamId: string;
+  opponentTeamId: string;
+  teamAId: string;
+}): RoundMomentumViewModel[] {
+  if (!match || !selectedPlayer || !advancedMomentumAnalysis?.existingMomentum) return [];
+
+  const momentum = advancedMomentumAnalysis.existingMomentum;
+  const eventsByRound = new Map<number, MomentumEvent[]>();
+  for (const event of advancedMomentumAnalysis.events) {
+    const list = eventsByRound.get(event.roundNumber) ?? [];
+    list.push(event);
+    eventsByRound.set(event.roundNumber, list);
+  }
+
+  const playerTeamByPuuid = new Map<string, string>();
+  for (const player of match.players ?? []) {
+    const puuid = cleanId(player.puuid);
+    const teamId = cleanId(player.teamId);
+    if (puuid && teamId) playerTeamByPuuid.set(puuid, teamId);
+  }
+
+  const orientValue = (value: number) => (selectedTeamId === teamAId ? value : -value);
+  const momentumByRound = new Map(momentum.rounds.map((round) => [round.roundNumber, round]));
+  const playerImpactsByRound = new Map<number, RoundPlayerImpactResult>(
+    advancedMomentumAnalysis.playerImpacts.map((round) => [round.roundNumber, round]),
+  );
+  const advancedRoundsByNumber = new Map(
+    advancedMomentumAnalysis.rounds.map((round) => [round.roundNumber, round]),
+  );
+
+  return (match.roundResults ?? []).map((round, index) => {
+    const roundNumber = Number.isFinite(round.roundNum) ? Number(round.roundNum) + 1 : index + 1;
+    const currentMomentum = momentumByRound.get(roundNumber);
+    const roundPlayerImpact = playerImpactsByRound.get(roundNumber);
+    const advancedRound = advancedRoundsByNumber.get(roundNumber);
+    const roundEvents = eventsByRound.get(roundNumber) ?? [];
+    const selectedPlayerImpact = roundPlayerImpact?.players.find(
+      (player) => player.playerId === cleanId(selectedPlayer.puuid),
+    );
+    const previousMomentum = momentumByRound.get(roundNumber - 1);
+    const momentumBefore = previousMomentum ? orientValue(previousMomentum.momentumDiff) : 0;
+    const momentumAfter = currentMomentum ? orientValue(currentMomentum.momentumDiff) : momentumBefore;
+    const rawRoundImpact = Number.isFinite(currentMomentum?.roundImpact)
+      ? orientValue(currentMomentum?.roundImpact ?? 0)
+      : 0;
+    const selectedEconomy = getTeamLoadoutForRound(round, selectedTeamId, playerTeamByPuuid);
+    const opponentEconomy = getTeamLoadoutForRound(round, opponentTeamId, playerTeamByPuuid);
+    const winningTeamId = cleanId(round.winningTeam);
+    const { primary: sourceEvent, secondary: secondaryEvents } =
+      selectRoundNarrativeEvents(
+        roundEvents,
+        winningTeamId,
+      );
+    const isSelectedTeamWin = winningTeamId === selectedTeamId;
+    const roundPerspective = isSelectedTeamWin
+      ? "Tu equipo"
+      : winningTeamId
+        ? "Rival"
+        : "Ronda";
+    const eventReason = getMomentumEventReason(sourceEvent);
+    const economyUpset =
+      selectedEconomy.economy === "FULL" &&
+      opponentEconomy.economy !== "FULL" &&
+      !isSelectedTeamWin;
+    const mainReason =
+      eventReason ??
+      (economyUpset ? "economy" : currentMomentum?.isStreakBreaker ? "streak" : roundNumber === 13 ? "side_switch" : "normal");
+    const impactLevel = impactLevelFromValue(rawRoundImpact);
+    const eventPerspective = sourceEvent
+      ? getEventPerspective(sourceEvent, selectedTeamId)
+      : roundPerspective;
+    const eventTitle = sourceEvent
+      ? getEventDisplayTitle(sourceEvent)
+      : getRoundReasonLabel(mainReason);
+    const eventDescription =
+      (sourceEvent
+        ? getEventDisplayDescription(sourceEvent)
+        : null) ??
+      (isSelectedTeamWin
+        ? "Ganó la ronda y reforzó su control competitivo reciente."
+        : "Ganó la ronda y desplazó el control competitivo a su favor.");
+    const roundType =
+      sourceEvent?.isTurningPoint
+        ? "La ronda que cambió la partida"
+        : mainReason === "economy"
+          ? "Swing económico"
+          : mainReason === "clutch"
+            ? "Clutch inferido"
+            : mainReason === "multikill"
+              ? "Multikill"
+              : mainReason === "streak"
+                ? "Ruptura de racha"
+                : mainReason === "side_switch"
+                  ? "Cambio de lado"
+                  : Math.abs(rawRoundImpact) < 0.4
+                    ? "Ronda equilibrada"
+                    : isSelectedTeamWin
+                      ? "Recuperación"
+                      : "Dominio rival";
+    const evidences = [
+      ...(sourceEvent?.factualEvidence ?? []),
+      economyUpset
+        ? `Tu equipo tenía ${selectedEconomy.economy} contra ${opponentEconomy.economy}.`
+        : "",
+      Math.abs(selectedEconomy.loadout - opponentEconomy.loadout) >= 2500
+        ? `Diferencia de loadout: ${formatNumber(selectedEconomy.loadout - opponentEconomy.loadout)} desde tu equipo.`
+        : "",
+      currentMomentum?.isStreakBreaker ? "Rompió una racha previa." : "",
+    ].filter(Boolean).slice(0, 3);
+    const safeEvidences =
+      evidences.length > 0
+        ? evidences
+        : ["No se detectaron eventos extraordinarios; el impacto procede principalmente del resultado de la ronda."];
+    const shortComment =
+      sourceEvent
+        ? sourceEvent.description
+        : mainReason === "economy" && economyUpset
+        ? `Tu equipo perdió una ${selectedEconomy.economy} contra una ${opponentEconomy.economy} rival. Fue una ronda de impacto ${impactLevelLabel(impactLevel).toLowerCase()} que desplazó el momentum hacia el rival.`
+        : roundNumber === 13
+            ? "Esta ronda marca el inicio del nuevo lado. El tramo posterior indica si el cambio modificó el dominio de la partida."
+            : isSelectedTeamWin
+              ? `Tu equipo ganó la ronda y ${rawRoundImpact >= 0 ? "empujó el dominio a favor" : "redujo el dominio rival"}. ${Math.abs(rawRoundImpact) >= 1 ? "Fue un cambio observable en la curva." : "No fue el punto de inflexión principal."}`
+              : `El rival ganó la ronda y ${rawRoundImpact < 0 ? "aumentó su dominio" : "mantuvo la partida cerca del equilibrio"}. No se afirma causalidad psicológica, solo cambio competitivo observable.`;
+    const learning =
+      mainReason === "economy"
+        ? "Revisa las rondas donde juegas con ventaja de compra; suelen ser oportunidades de alto valor."
+        : mainReason === "clutch"
+          ? "Revisa cómo se cierran las ventajas numéricas cuando el rival convierte situaciones difíciles."
+          : mainReason === "first_blood"
+            ? "Revisa la entrada o el posicionamiento inicial: la primera baja condicionó el control."
+            : impactLevel === "low"
+              ? "Ronda de impacto bajo. No requiere revisión específica más allá del resultado."
+              : "Identifica qué cambió antes y después de esta ronda para repetir o evitar el patrón.";
+    const contextualTicketEvents =
+      advancedRound && roundPlayerImpact
+        ? buildRoundMomentumTicketEvents({
+            round: advancedRound,
+            allRounds: advancedMomentumAnalysis.rounds,
+            events: roundEvents,
+            players: roundPlayerImpact.players,
+            selectedTeamId,
+            currentMomentum,
+          }).filter((event) => event.isContext)
+        : [];
+    const rawTicketPlayers = roundPlayerImpact
+      ? buildRoundMomentumTicketPlayers(roundPlayerImpact.players, selectedTeamId)
+      : [];
+    const orientAccountingValue = (value: number) =>
+      selectedTeamId === teamAId ? value : -value;
+    const playerAccountingContribution = orientAccountingValue(
+      currentMomentum?.contributions.find(
+        (contribution) => contribution.kind === "players",
+      )?.value ?? 0,
+    );
+    const normalizedPlayers = normalizeTicketContributions({
+      events: [],
+      players: rawTicketPlayers,
+      target: playerAccountingContribution,
+    }).players;
+    const accountingEvents: RoundMomentumTicketEvent[] = (
+      currentMomentum?.contributions ?? []
+    )
+      .filter((contribution) => contribution.kind !== "players")
+      .map((contribution) => {
+        const contributionValue = orientAccountingValue(contribution.value);
+        return {
+          id: `accounting-${contribution.id}`,
+          label: contribution.label,
+          detail: contribution.detail,
+          teamLabel:
+            contributionValue >= 0
+              ? ("Tu equipo" as const)
+              : ("Rival" as const),
+          contribution: contributionValue,
+        };
+      });
+    const accountingLabels = new Set(
+      accountingEvents.map((event) => event.label.toLowerCase()),
+    );
+    const accountingFamilies = new Set(
+      accountingEvents
+        .map(getMomentumTicketSemanticFamily)
+        .filter((family): family is string => Boolean(family)),
+    );
+    const ticketEvents = [
+      ...accountingEvents,
+      ...contextualTicketEvents.filter(
+        (event) => {
+          const semanticFamily = getMomentumTicketSemanticFamily(event);
+          return (
+            !accountingLabels.has(event.label.toLowerCase()) &&
+            (!semanticFamily || !accountingFamilies.has(semanticFamily))
+          );
+        },
+      ),
+    ].sort(
+      (a, b) =>
+        Number(b.id === "accounting-carryover") -
+          Number(a.id === "accounting-carryover") ||
+        Number(a.isContext) - Number(b.isContext) ||
+        Math.abs(b.contribution) - Math.abs(a.contribution),
+    );
+    const ticketPlayers = normalizedPlayers.sort(
+      (a, b) =>
+        Math.abs(b.contribution) - Math.abs(a.contribution) ||
+        a.playerName.localeCompare(b.playerName),
+    );
+
+    return {
+      roundNumber,
+      winningTeamId,
+      isSelectedTeamWin,
+      momentumBefore,
+      momentumAfter,
+      roundImpact: rawRoundImpact,
+      impactLevel,
+      dominanceBefore: dominanceFromMomentum(momentumBefore),
+      dominanceAfter: dominanceFromMomentum(momentumAfter),
+      selectedTeamEconomy: selectedEconomy.economy,
+      opponentTeamEconomy: opponentEconomy.economy,
+      selectedTeamLoadout: selectedEconomy.loadout,
+      opponentTeamLoadout: opponentEconomy.loadout,
+      loadoutDiff: selectedEconomy.loadout - opponentEconomy.loadout,
+      mainReason,
+      eventIcon: getRoundEventIcon(mainReason),
+      eventPerspective,
+      eventTitle,
+      eventDescription,
+      roundType,
+      shortComment,
+      consequence: getEventConsequence(
+        sourceEvent,
+        currentMomentum,
+        selectedTeamId,
+      ),
+      secondaryEvents: secondaryEvents.map((event) => ({
+        type: event.type,
+        label: `${getEventPerspective(event, selectedTeamId)} · ${getEventDisplayTitle(event)}`,
+      })),
+      ticketEvents,
+      ticketPlayers,
+      confidenceLabel: getConfidenceLabel(sourceEvent),
+      evidences: safeEvidences,
+      learning,
+      beforeItems: [
+        { label: "Dominio", value: dominanceLabel(dominanceFromMomentum(momentumBefore)), tone: dominanceFromMomentum(momentumBefore) === "selected" ? "positive" : dominanceFromMomentum(momentumBefore) === "opponent" ? "negative" : "neutral" },
+        { label: "Momentum", value: formatNumber(momentumBefore, 1) },
+        { label: "Economía", value: `Tu equipo ${selectedEconomy.economy}` },
+      ],
+      duringItems: [
+        { label: "Compras", value: `${selectedEconomy.economy} vs ${opponentEconomy.economy}` },
+        { label: "Eventos", value: `${ticketEvents.length} registrados` },
+        { label: "Resultado", value: isSelectedTeamWin ? "Gana tu equipo" : "Gana el rival", tone: isSelectedTeamWin ? "positive" : "negative" },
+      ],
+      afterItems: [
+        { label: "Dominio", value: dominanceLabel(dominanceFromMomentum(momentumAfter)), tone: dominanceFromMomentum(momentumAfter) === "selected" ? "positive" : dominanceFromMomentum(momentumAfter) === "opponent" ? "negative" : "neutral" },
+        { label: "Momentum", value: formatNumber(momentumAfter, 1) },
+        { label: "Cambio", value: formatMomentumDelta(rawRoundImpact), tone: rawRoundImpact > 0 ? "positive" : rawRoundImpact < 0 ? "negative" : "neutral" },
+      ],
+      selectedPlayerContribution: inferSelectedPlayerContribution({
+        round,
+        selectedPlayer,
+        selectedTeamId,
+        opponentTeamId,
+        playerImpact: selectedPlayerImpact,
+        roundMvp: roundPlayerImpact?.mvp,
+      }),
+      confidence: sourceEvent?.confidence ?? (currentMomentum ? "medium" : "low"),
+      confidenceReason: getConfidenceReason(sourceEvent),
+      sourceEvent,
+      isKeyRound: Boolean(sourceEvent?.isTurningPoint || currentMomentum?.isSwingRound),
+      winnerLabel: isSelectedTeamWin ? "Tu equipo" : winningTeamId ? "Rival" : "Sin ganador",
+      winMethod: getRoundWinMethod(round.roundResult, round.roundCeremony),
+    };
+  });
 }
 
 function MatchMomentumPanel({
   momentum,
+  advancedMomentum,
+  match,
+  selectedPlayer,
   teamAId,
-  teamBId,
-  teamALabel,
-  teamBLabel,
+  selectedTeamId,
+  opponentTeamId,
+  mode = "summary",
+  selectedRoundNumber,
 }: {
   momentum: MatchMomentumResult | null;
+  advancedMomentum: AdvancedMomentumResult | null;
+  match: RawMatchDetail | null;
+  selectedPlayer: RawPlayer | null;
   teamAId: string;
-  teamBId: string;
-  teamALabel: string;
-  teamBLabel: string;
+  selectedTeamId: string;
+  opponentTeamId: string;
+  mode?: "summary" | "explorer";
+  selectedRoundNumber?: number;
 }) {
+  const roundViewModels = useMemo(
+    () =>
+      buildRoundMomentumViewModels({
+        match,
+        advancedMomentumAnalysis: advancedMomentum,
+        selectedPlayer,
+        selectedTeamId,
+        opponentTeamId,
+        teamAId,
+      }),
+    [advancedMomentum, match, opponentTeamId, selectedPlayer, selectedTeamId, teamAId],
+  );
+  const defaultSelectedRound = useMemo(() => {
+    const primary =
+      roundViewModels.find((round) => round.sourceEvent?.isTurningPoint) ??
+      roundViewModels.find((round) => round.isKeyRound) ??
+      roundViewModels.find((round) => round.sourceEvent) ??
+      roundViewModels[0];
+    return primary?.roundNumber ?? 1;
+  }, [roundViewModels]);
+  const [internalSelectedRoundNumber, setInternalSelectedRoundNumber] = useState(defaultSelectedRound);
+
+  useEffect(() => {
+    setInternalSelectedRoundNumber(defaultSelectedRound);
+  }, [defaultSelectedRound]);
+  const activeRoundNumber = selectedRoundNumber ?? internalSelectedRoundNumber;
+
   if (!momentum || momentum.rounds.length === 0) {
     return (
       <section className="match-analytics-panel match-momentum-panel">
         <div className="panel-header">
           <div>
-            <h3 className="panel-title">Momentum de la partida</h3>
+            <h3 className="panel-title">Historia del momentum</h3>
             <p className="panel-subtitle">
               No hay rondas suficientes para calcular cambios de dominio.
             </p>
@@ -852,129 +3089,375 @@ function MatchMomentumPanel({
     );
   }
 
-  const chartData = momentum.rounds.map((round) => ({
-    round: round.roundNumber,
-    diff: round.momentumDiff,
-    swing: round.isSwingRound ? round.momentumDiff : null,
-  }));
-  const keyMoments = [
-    ...momentum.domainChanges.map((change) => ({
-      roundNumber: change.roundNumber,
-      label: "Cambio de dominio",
-      detail: change.reason,
-    })),
-    ...momentum.rounds
-      .filter((round) => round.isStreakBreaker)
-      .map((round) => ({
-        roundNumber: round.roundNumber,
-        label: "Ruptura de racha",
-        detail: round.explanation,
-      })),
-    ...momentum.rounds
-      .filter((round) => round.tags.includes("Victoria con economía inferior"))
-      .map((round) => ({
-        roundNumber: round.roundNumber,
-        label: "Victoria con economía inferior",
-        detail: round.explanation,
-      })),
-  ]
-    .sort((a, b) => a.roundNumber - b.roundNumber)
-    .slice(0, 6);
+  const orientValue = (value: number) =>
+    selectedTeamId === teamAId ? value : -value;
+  const selectedRound =
+    roundViewModels.find((round) => round.roundNumber === activeRoundNumber) ??
+    roundViewModels[0];
+  const selectedControlPercentage =
+    selectedTeamId === teamAId
+      ? momentum.summary.teamAControlPercentage
+      : momentum.summary.teamBControlPercentage;
+  const opponentControlPercentage =
+    opponentTeamId === teamAId
+      ? momentum.summary.teamAControlPercentage
+      : momentum.summary.teamBControlPercentage;
+  const neutralControlPercentage = Math.max(
+    0,
+    100 - selectedControlPercentage - opponentControlPercentage,
+  );
+  const chartData = momentum.rounds.map((round) => {
+    const diff = orientValue(round.momentumDiff);
+    const vm = roundViewModels.find((entry) => entry.roundNumber === round.roundNumber);
+    return {
+      round: round.roundNumber,
+      diff,
+      positiveDiff: diff >= 0.4 ? diff : null,
+      negativeDiff: diff <= -0.4 ? diff : null,
+      neutralDiff: Math.abs(diff) < 0.4 ? diff : null,
+      impact: vm?.roundImpact ?? 0,
+      impactLabel: vm ? formatMomentumDelta(vm.roundImpact) : "sin cambio claro",
+      eventTitle: vm?.eventTitle ?? "Ronda normal",
+      eventPerspective: vm?.eventPerspective ?? "Ronda",
+      impactLevel: vm ? impactLevelLabel(vm.impactLevel) : "Bajo",
+      dominance: vm ? dominanceLabel(vm.dominanceAfter) : diff > 0 ? "Tu equipo" : diff < 0 ? "Rival" : "Equilibrio",
+      isSelected: round.roundNumber === selectedRound?.roundNumber,
+      isKeyRound: Boolean(vm?.isKeyRound),
+      swing: round.isSwingRound ? diff : null,
+      event: advancedMomentum?.events.some(
+        (event) => event.roundNumber === round.roundNumber && event.totalImpactScore >= 1.5,
+      )
+        ? diff
+        : null,
+    };
+  });
+  const domainChartData = chartData.flatMap((point, index) => {
+    const plottedPoint = {
+      ...point,
+      chartRound: point.round,
+      positiveDomain: point.diff >= 0 ? point.diff : null,
+      negativeDomain: point.diff <= 0 ? point.diff : null,
+      actualDomain: point.diff,
+      isSynthetic: false,
+    };
+    const nextPoint = chartData[index + 1];
+    if (
+      !nextPoint ||
+      point.diff === 0 ||
+      nextPoint.diff === 0 ||
+      Math.sign(point.diff) === Math.sign(nextPoint.diff)
+    ) {
+      return [plottedPoint];
+    }
+
+    const zeroProgress =
+      Math.abs(point.diff) / (Math.abs(point.diff) + Math.abs(nextPoint.diff));
+    const crossingRound = point.round + zeroProgress * (nextPoint.round - point.round);
+    return [
+      plottedPoint,
+      {
+        ...point,
+        round: crossingRound,
+        chartRound: crossingRound,
+        diff: 0,
+        positiveDomain: 0,
+        negativeDomain: 0,
+        actualDomain: null,
+        event: null,
+        eventTitle: "",
+        impactLevel: "",
+        isSynthetic: true,
+      },
+    ];
+  });
+  const finalDominance =
+    selectedControlPercentage === opponentControlPercentage
+      ? "Equilibrado"
+      : selectedControlPercentage > opponentControlPercentage
+        ? "Tu equipo"
+        : "Rival";
+  const keyRoundLabel = selectedRound?.isKeyRound
+    ? `Ronda ${selectedRound.roundNumber}`
+    : "Sin punto único";
+  const sideSwitchRound = roundViewModels.find((round) => round.roundNumber === 13);
+  const overtimeRound = roundViewModels.find((round) => round.roundNumber >= 25);
+  const domainLimit = Math.max(
+    2.5,
+    ...chartData.map((entry) => Math.abs(entry.diff)),
+  );
 
   return (
     <section className="match-analytics-panel match-momentum-panel">
-      <div className="panel-header">
-        <div>
-          <h3 className="panel-title">Momentum de la partida</h3>
-          <p className="panel-subtitle">
-            Tendencia ronda a ronda con suavizado y señales económicas.
-          </p>
-        </div>
-      </div>
+      {mode === "summary" ? (
+        <>
+          <div className="panel-header">
+            <div>
+              <h3 className="panel-title">HISTORIA DEL MOMENTUM</h3>
+              <p className="panel-subtitle">
+                Cómo cambió el dominio y qué rondas marcaron la diferencia.
+              </p>
+            </div>
+          </div>
 
-      <div className="match-momentum-summary-grid">
-        <article>
-          <span>Dominio principal</span>
-          <strong>
-            {getTeamLabel(
-              momentum.globalDominantTeamId,
-              teamAId,
-              teamBId,
-              teamALabel,
-              teamBLabel,
-            )}
-          </strong>
-        </article>
-        <article>
-          <span>Cambios de dominio</span>
-          <strong>{formatNumber(momentum.summary.totalDomainChanges)}</strong>
-        </article>
-        <article>
-          <span>Ronda de mayor impacto</span>
-          <strong>
-            {momentum.biggestSwingRound
-              ? roundLabel(momentum.biggestSwingRound.roundNumber - 1)
-              : "Sin datos"}
-          </strong>
-        </article>
-        <article>
-          <span>Control de Team A</span>
-          <strong>{formatPercent(momentum.summary.teamAControlPercentage, 0)}</strong>
-        </article>
-        <article>
-          <span>Control de Team B</span>
-          <strong>{formatPercent(momentum.summary.teamBControlPercentage, 0)}</strong>
-        </article>
-      </div>
-
-      <div className="match-momentum-chart">
-        <ResponsiveContainer width="100%" height={230}>
-          <LineChart data={chartData}>
-            <CartesianGrid stroke="rgba(255,255,255,0.07)" vertical={false} />
-            <XAxis dataKey="round" stroke="#9ea8b8" tickLine={false} axisLine={false} />
-            <YAxis stroke="#9ea8b8" tickLine={false} axisLine={false} />
-            <ReTooltip
-              contentStyle={{
-                background: "#11151c",
-                border: "1px solid rgba(255,70,85,0.35)",
-                borderRadius: 10,
-                color: "#f4f7fb",
-              }}
-              labelFormatter={(label) => `Ronda ${label}`}
-            />
-            <Line
-              type="monotone"
-              dataKey="diff"
-              name="Momentum"
-              stroke="#46c878"
-              strokeWidth={3}
-              dot={{ r: 3, fill: "#151a22", stroke: "#46c878" }}
-            />
-            <Line
-              type="monotone"
-              dataKey="swing"
-              name="Swing rounds"
-              stroke="#ff4655"
-              strokeWidth={0}
-              dot={{ r: 5, fill: "#ff4655", stroke: "#ffd7dc" }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="match-key-moments">
-        <h4>Momentos clave</h4>
-        {keyMoments.length === 0 ? (
-          <div className="empty-chart">No se detectaron swings destacados.</div>
-        ) : (
-          keyMoments.map((moment) => (
-            <article key={`${moment.label}-${moment.roundNumber}-${moment.detail}`}>
-              <strong>{roundLabel(moment.roundNumber - 1)}: {moment.label}</strong>
-              <span>{moment.detail}</span>
+          <div className="match-momentum-summary-grid">
+            <article>
+              <span>Dominio final</span>
+              <strong>{finalDominance}</strong>
+              <small>Dominó el tramo decisivo</small>
             </article>
-          ))
-        )}
-      </div>
+            <article>
+              <span>Ronda clave</span>
+              <strong>{keyRoundLabel}</strong>
+              <small>{selectedRound?.roundType ?? "Sin evento claro"}</small>
+            </article>
+            <article>
+              <span>Cambios de dominio</span>
+              <strong>{formatNumber(momentum.summary.totalDomainChanges)}</strong>
+              <small>veces que cambió el control</small>
+            </article>
+            <article className="match-momentum-balance-card">
+              <span>Balance visual</span>
+              <div className="match-momentum-balance-bar" aria-label={`Tu equipo ${selectedControlPercentage}%, rival ${opponentControlPercentage}%, neutral ${neutralControlPercentage}%`}>
+                <i className="is-positive" style={{ width: `${selectedControlPercentage}%` }} />
+                <i className="is-negative" style={{ width: `${opponentControlPercentage}%` }} />
+                {neutralControlPercentage > 0 ? <i className="is-neutral" style={{ width: `${neutralControlPercentage}%` }} /> : null}
+              </div>
+              <small>Tu equipo {formatPercent(selectedControlPercentage, 0)} · Rival {formatPercent(opponentControlPercentage, 0)}</small>
+            </article>
+          </div>
+
+          <div className="match-momentum-chart match-momentum-domain-chart">
+            <header className="match-momentum-chart-header">
+              <div>
+                <h4>Evolución del dominio</h4>
+                <span>Por encima de cero domina tu equipo; por debajo domina el rival.</span>
+              </div>
+            </header>
+            <ResponsiveContainer width="100%" height={230}>
+              <LineChart data={domainChartData}>
+                <ReferenceArea y1={0} y2={domainLimit} fill="rgba(70,200,120,0.08)" />
+                <ReferenceArea y1={-domainLimit} y2={0} fill="rgba(255,70,85,0.08)" />
+                <ReferenceLine y={0} stroke="rgba(255,255,255,0.35)" strokeDasharray="4 4" />
+                {selectedRound ? <ReferenceLine x={selectedRound.roundNumber} stroke="#f3c567" strokeWidth={2} /> : null}
+                {sideSwitchRound ? <ReferenceLine x={sideSwitchRound.roundNumber} stroke="rgba(243,197,103,0.45)" strokeDasharray="3 3" /> : null}
+                {overtimeRound ? <ReferenceLine x={overtimeRound.roundNumber} stroke="rgba(255,255,255,0.25)" strokeDasharray="2 4" /> : null}
+                <CartesianGrid stroke="rgba(255,255,255,0.07)" vertical={false} />
+                <XAxis
+                  dataKey="chartRound"
+                  type="number"
+                  domain={["dataMin", "dataMax"]}
+                  ticks={chartData.map((point) => point.round)}
+                  stroke="#9ea8b8"
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis stroke="#9ea8b8" tickLine={false} axisLine={false} domain={[-domainLimit, domainLimit]} />
+                <ReTooltip
+                  content={({ active, payload }) => {
+                    const point = payload?.[0]?.payload as
+                      | (typeof domainChartData)[number]
+                      | undefined;
+                    if (!active || !point || point.isSynthetic) return null;
+                    const beneficiary =
+                      point.impact > 0
+                        ? "Tu equipo"
+                        : point.impact < 0
+                          ? "Rival"
+                          : point.eventPerspective;
+                    return (
+                      <div className="match-domain-tooltip">
+                        <strong>Ronda {point.round}</strong>
+                        <span>Momentum: {formatNumber(point.diff, 1)}</span>
+                        <span>Equipo beneficiado: {beneficiary}</span>
+                        <span>Motivo: {point.eventTitle}</span>
+                        <span>Impacto: {formatMomentumDelta(point.impact)}</span>
+                      </div>
+                    );
+                  }}
+                />
+                <Line
+                  type="linear"
+                  dataKey="positiveDomain"
+                  name="Momentum"
+                  stroke="#46c878"
+                  strokeWidth={3}
+                  dot={false}
+                  activeDot={{ r: 4, fill: "#151a22", stroke: "#ffffff" }}
+                  connectNulls={false}
+                />
+                <Line
+                  type="linear"
+                  dataKey="negativeDomain"
+                  name="Momentum"
+                  stroke="#ff4655"
+                  strokeWidth={3}
+                  dot={false}
+                  activeDot={{ r: 4, fill: "#151a22", stroke: "#ffffff" }}
+                  connectNulls={false}
+                />
+                <Line
+                  type="linear"
+                  dataKey="actualDomain"
+                  name="Ronda"
+                  stroke="transparent"
+                  strokeWidth={0}
+                  dot={{ r: 3, fill: "#151a22", stroke: "#ffffff", strokeWidth: 1.5 }}
+                  activeDot={{ r: 5, fill: "#151a22", stroke: "#ffffff", strokeWidth: 2 }}
+                  tooltipType="none"
+                />
+                <Line
+                  type="linear"
+                  dataKey="event"
+                  name="Evento decisivo"
+                  stroke="#f3c567"
+                  strokeWidth={0}
+                  dot={{ r: 5, fill: "#f3c567", stroke: "#ffffff" }}
+                  tooltipType="none"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+        </>
+      ) : (
+        <>
+          <div className="panel-header">
+            <div>
+              <h3 className="panel-title">EXPLORADOR DE MOMENTUM</h3>
+              <p className="panel-subtitle">
+                Revisa el impacto y el contexto de cada ronda.
+              </p>
+            </div>
+          </div>
+
+      {selectedRound ? (
+        <article className="match-selected-momentum-round">
+          <header className="match-selected-momentum-header">
+            <h4>Ronda {selectedRound.roundNumber}</h4>
+          </header>
+
+          <div className="match-momentum-round-layout">
+            <div className="match-momentum-round-flow">
+              {[
+                ["ANTES", selectedRound.beforeItems],
+                ["DURANTE", selectedRound.duringItems],
+                ["DESPUÉS", selectedRound.afterItems],
+              ].map(([title, items]) => (
+                <section key={`momentum-flow-${title}`}>
+                  <h5>{title as string}</h5>
+                  {(items as RoundMomentumViewModel["beforeItems"]).map((item) => (
+                    <div key={`${title}-${item.label}`}>
+                      <span>{item.label}</span>
+                      <strong className={item.tone ? `is-${item.tone}` : ""}>
+                        {item.value}
+                      </strong>
+                    </div>
+                  ))}
+                </section>
+              ))}
+            </div>
+
+            <section className="match-momentum-ticket">
+              <header>
+                <div>
+                  <span>Desglose de la ronda</span>
+                  <h5>Ticket de momentum</h5>
+                </div>
+                <strong>
+                  Momentum final {formatNumber(selectedRound.momentumAfter, 1)}
+                </strong>
+              </header>
+
+              <div className="match-momentum-ticket-section">
+                <h6>Eventos generales</h6>
+                {selectedRound.ticketEvents.length > 0 ? (
+                  selectedRound.ticketEvents.map((event) => (
+                    <article key={event.id}>
+                      <div>
+                        <strong>{event.label}</strong>
+                        <span>{event.teamLabel} · {event.detail}</span>
+                      </div>
+                      {event.isContext ? (
+                        <em className="match-momentum-ticket-context">Contexto</em>
+                      ) : (
+                        <b className={event.contribution >= 0 ? "is-positive" : "is-negative"}>
+                          {event.contribution > 0 ? "+" : ""}
+                          {formatNumber(event.contribution, 2)}
+                        </b>
+                      )}
+                    </article>
+                  ))
+                ) : (
+                  <p>Sin eventos generales registrables en esta ronda.</p>
+                )}
+              </div>
+
+              <div className="match-momentum-ticket-section">
+                <h6>Impacto por agente</h6>
+                {selectedRound.ticketPlayers.map((player) => (
+                  <article key={`ticket-player-${player.playerId}`}>
+                    <div className="match-momentum-ticket-player">
+                      {player.agentIcon ? (
+                        <img src={player.agentIcon} alt="" />
+                      ) : (
+                        <span className="match-momentum-ticket-agent-fallback">
+                          {(player.agentName ?? player.playerName).charAt(0)}
+                        </span>
+                      )}
+                      <div>
+                        <strong>{player.agentName ?? player.playerName}</strong>
+                        <span>{player.playerName} · {player.teamLabel}</span>
+                      </div>
+                      <div
+                        className="match-momentum-ticket-info"
+                        tabIndex={0}
+                        aria-label={`Ver desglose de impacto de ${player.playerName}`}
+                      >
+                        <Info aria-hidden="true" />
+                        <div role="tooltip">
+                          <strong>Descomposición</strong>
+                          {player.breakdown.length > 0 ? (
+                            player.breakdown.map((item, itemIndex) => (
+                              <span key={`${player.playerId}-${item.label}-${itemIndex}`}>
+                                {item.label}
+                                <b className={item.value >= 0 ? "is-positive" : "is-negative"}>
+                                  {item.value > 0 ? "+" : ""}
+                                  {formatNumber(item.value, 2)}
+                                </b>
+                              </span>
+                            ))
+                          ) : (
+                            <span>Sin acciones con impacto registrable.</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <b className={player.contribution >= 0 ? "is-positive" : "is-negative"}>
+                      {player.contribution > 0 ? "+" : ""}
+                      {formatNumber(player.contribution, 2)}
+                    </b>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <section className={`match-player-round-role is-${selectedRound.selectedPlayerContribution.tone}`}>
+            <h5>Tu papel en esta ronda</h5>
+            <strong>{selectedRound.selectedPlayerContribution.title}</strong>
+            <p>{selectedRound.selectedPlayerContribution.description}</p>
+            <div>
+              {selectedRound.selectedPlayerContribution.stats?.map((stat) => (
+                <span key={`player-role-${stat.label}`}>
+                  {stat.label} <strong>{stat.value}</strong>
+                </span>
+              ))}
+            </div>
+          </section>
+        </article>
+      ) : null}
+        </>
+      )}
     </section>
   );
 }
@@ -999,11 +3482,13 @@ function EconomyOptimalPanel({
   momentum,
   teamALabel,
   teamBLabel,
+  selectedTeamKey,
 }: {
   analysis: EconomyEfficiencyAnalysis | null;
   momentum: MatchMomentumResult | null;
   teamALabel: string;
   teamBLabel: string;
+  selectedTeamKey: "teamA" | "teamB";
 }) {
   if (!analysis || analysis.rounds.length === 0) {
     return (
@@ -1028,20 +3513,23 @@ function EconomyOptimalPanel({
     teamA: round.teamA.efficiencyScore,
     teamB: round.teamB.efficiencyScore,
   }));
-  const flattenedRows = analysis.rounds.flatMap((round) => [
+  const teamRows = (round: EconomyEfficiencyAnalysis["rounds"][number]) => [
     {
+      key: "teamA" as const,
       roundNumber: round.roundNumber,
-      team: teamALabel,
+      team: `${teamALabel}${selectedTeamKey === "teamA" ? " · Equipo seleccionado" : " · Rival"}`,
       data: round.teamA,
       momentum: momentumByRound.get(round.roundNumber),
     },
     {
+      key: "teamB" as const,
       roundNumber: round.roundNumber,
-      team: teamBLabel,
+      team: `${teamBLabel}${selectedTeamKey === "teamB" ? " · Equipo seleccionado" : " · Rival"}`,
       data: round.teamB,
       momentum: momentumByRound.get(round.roundNumber),
     },
-  ]);
+  ].sort((a, b) => (a.key === selectedTeamKey ? -1 : b.key === selectedTeamKey ? 1 : 0));
+  const flattenedRows = analysis.rounds.flatMap(teamRows);
   const biggestError = [
     analysis.summary.teamAMostInefficientRound,
     analysis.summary.teamBMostInefficientRound,
@@ -1062,20 +3550,42 @@ function EconomyOptimalPanel({
 
       <div className="match-economy-optimal-summary">
         <article>
-          <span>Eficiencia {teamALabel}</span>
-          <strong>{formatPercent(analysis.summary.teamAAverageEfficiency, 0)}</strong>
+          <span>Eficiencia equipo seleccionado</span>
+          <strong>
+            {formatPercent(
+              selectedTeamKey === "teamA"
+                ? analysis.summary.teamAAverageEfficiency
+                : analysis.summary.teamBAverageEfficiency,
+              0,
+            )}
+          </strong>
         </article>
         <article>
-          <span>Eficiencia {teamBLabel}</span>
-          <strong>{formatPercent(analysis.summary.teamBAverageEfficiency, 0)}</strong>
+          <span>Eficiencia rival</span>
+          <strong>
+            {formatPercent(
+              selectedTeamKey === "teamA"
+                ? analysis.summary.teamBAverageEfficiency
+                : analysis.summary.teamAAverageEfficiency,
+              0,
+            )}
+          </strong>
         </article>
         <article>
-          <span>Óptima {teamALabel}</span>
-          <strong>{analysis.summary.teamAOptimalRounds}</strong>
+          <span>Óptima equipo seleccionado</span>
+          <strong>
+            {selectedTeamKey === "teamA"
+              ? analysis.summary.teamAOptimalRounds
+              : analysis.summary.teamBOptimalRounds}
+          </strong>
         </article>
         <article>
-          <span>Óptima {teamBLabel}</span>
-          <strong>{analysis.summary.teamBOptimalRounds}</strong>
+          <span>Óptima rival</span>
+          <strong>
+            {selectedTeamKey === "teamA"
+              ? analysis.summary.teamBOptimalRounds
+              : analysis.summary.teamAOptimalRounds}
+          </strong>
         </article>
         <article>
           <span>Mayor error económico</span>
@@ -1106,8 +3616,22 @@ function EconomyOptimalPanel({
               }}
               labelFormatter={(label) => `Ronda ${label}`}
             />
-            <Line type="monotone" dataKey="teamA" name={teamALabel} stroke="#46c878" strokeWidth={3} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="teamB" name={teamBLabel} stroke="#ff4655" strokeWidth={3} dot={{ r: 3 }} />
+            <Line
+              type="monotone"
+              dataKey="teamA"
+              name={teamALabel}
+              stroke={selectedTeamKey === "teamA" ? "#46c878" : "#ff4655"}
+              strokeWidth={selectedTeamKey === "teamA" ? 3 : 2}
+              dot={{ r: selectedTeamKey === "teamA" ? 3 : 2 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="teamB"
+              name={teamBLabel}
+              stroke={selectedTeamKey === "teamB" ? "#46c878" : "#ff4655"}
+              strokeWidth={selectedTeamKey === "teamB" ? 3 : 2}
+              dot={{ r: selectedTeamKey === "teamB" ? 3 : 2 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -1443,11 +3967,13 @@ function MatchRoundResultTimeline({
   playersByTeam,
   currentMatch,
   bestRoundNum,
+  importantEventsByRound,
 }: {
   rounds: RoundSummary[];
   playersByTeam: Array<[string, RawPlayer[]]>;
   currentMatch: RawMatchDetail | null;
   bestRoundNum?: number | null;
+  importantEventsByRound?: Map<number, MomentumEvent[]>;
 }) {
   const teams = playersByTeam.slice(0, 2).map(([teamId], index) => ({
     teamId,
@@ -1467,40 +3993,45 @@ function MatchRoundResultTimeline({
     <section className="match-summary-round-timeline" aria-label="Resultado por ronda">
       {teams.map((team) => (
         <div key={`summary-team-${team.teamId}`} className="match-summary-round-row">
-          <div className="match-summary-round-team-label">{team.label}</div>
-          <div className="match-summary-round-score">{team.score}</div>
-          <div className="match-summary-round-track">
-            {rounds.map((round) => {
-              const isWin = round.winningTeam === team.teamId;
-              const condition = getRoundWinCondition(round);
-              const RoundIcon = isWin ? getRoundWinIcon(condition) : Circle;
-              const isBestRound = round.roundNum === bestRoundNum;
-              return (
-                <span
-                  key={`summary-${team.teamId}-${round.roundNum}`}
-                  className={`match-summary-round-cell ${isWin ? "is-win" : "is-loss"} ${
-                    isBestRound ? "is-best-round" : ""
-                  }`}
-                  title={`${roundLabel(round.roundNum)} · ${
-                    isWin ? "ganada" : "perdida"
-                  }`}
-                >
-                  {isWin ? <RoundIcon aria-hidden="true" size={15} strokeWidth={2.4} /> : <span aria-hidden="true" />}
-                </span>
-              );
-            })}
+          <div className="match-summary-round-line">
+            <div className="match-summary-round-team-label">{team.label}</div>
+            <div className="match-summary-round-score">{team.score}</div>
+            <div className="match-summary-round-track">
+              {rounds.map((round) => {
+                const isWin = round.winningTeam === team.teamId;
+                const condition = getRoundWinCondition(round);
+                const RoundIcon = isWin ? getRoundWinIcon(condition) : Circle;
+                const isBestRound = round.roundNum === bestRoundNum;
+                const roundEvents = importantEventsByRound?.get(round.roundNum + 1) ?? [];
+                return (
+                  <span
+                    key={`summary-${team.teamId}-${round.roundNum}`}
+                    className={`match-summary-round-cell ${isWin ? "is-win" : "is-loss"} ${
+                      isBestRound ? "is-best-round" : ""
+                    } ${roundEvents.length > 0 ? "has-momentum-event" : ""}`}
+                    title={`${roundLabel(round.roundNum)} · ${
+                      isWin ? "ganada" : "perdida"
+                    }${roundEvents[0] ? ` · ${roundEvents[0].title}` : ""}`}
+                  >
+                    {isWin ? <RoundIcon aria-hidden="true" size={15} strokeWidth={2.4} /> : <span aria-hidden="true" />}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
       ))}
       <div className="match-summary-round-numbers" aria-hidden="true">
-        <span />
-        <span />
-        <div className="match-summary-round-track">
-          {rounds.map((round) => (
-            <small key={`summary-number-${round.roundNum}`}>
-              {round.roundNum + 1}
-            </small>
-          ))}
+        <div className="match-summary-round-line">
+          <span />
+          <span />
+          <div className="match-summary-round-track">
+            {rounds.map((round) => (
+              <small key={`summary-number-${round.roundNum}`}>
+                {round.roundNum + 1}
+              </small>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -1905,18 +4436,15 @@ export default function MatchDetailModal({
   const [eventFilter, setEventFilter] = useState<EventFilterKey>("all");
   const [activeSectionState, setActiveSectionState] = useState(() => ({
     matchId,
-    selectedPlayerId: playerId,
     section: "summary" as MatchDetailSection,
   }));
   const activeSection =
-    activeSectionState.matchId === matchId &&
-    activeSectionState.selectedPlayerId === selectedPlayerId
+    activeSectionState.matchId === matchId
       ? activeSectionState.section
       : "summary";
   const setActiveSection = (section: MatchDetailSection) => {
     setActiveSectionState({
       matchId,
-      selectedPlayerId,
       section,
     });
   };
@@ -1925,8 +4453,6 @@ export default function MatchDetailModal({
   const [scoreboardSideFilter, setScoreboardSideFilter] =
     useState<ScoreboardSideFilter>("all");
   const [selectedDuelKey, setSelectedDuelKey] = useState<string | null>(null);
-  const [duelMatrixFilter, setDuelMatrixFilter] =
-    useState<DuelMatrixFilter>("all");
   const [playbackOpen, setPlaybackOpen] = useState(false);
   const [playbackEvents, setPlaybackEvents] = useState<RoundEvent[]>([]);
   const [playbackIndex, setPlaybackIndex] = useState(0);
@@ -1987,17 +4513,8 @@ export default function MatchDetailModal({
   }, [players]);
 
   const playersByTeam = useMemo(() => {
-    const map = new Map<string, RawPlayer[]>();
-    for (const player of players) {
-      const teamId = cleanId(player.teamId) || "Sin equipo";
-      const current = map.get(teamId) ?? [];
-      current.push(player);
-      map.set(teamId, current);
-    }
-    return [...map.entries()].sort(([teamA], [teamB]) =>
-      teamA.localeCompare(teamB),
-    );
-  }, [players]);
+    return getStableTeamEntries(currentMatch);
+  }, [currentMatch]);
 
   const teamByPuuid = useMemo(() => {
     const map = new Map<string, string>();
@@ -2063,16 +4580,20 @@ export default function MatchDetailModal({
     [currentMatch],
   );
 
-  const playerInfo = useMemo(() => {
-    return playersByPuuid.get(selectedPlayerId) ?? null;
-  }, [playersByPuuid, selectedPlayerId]);
+  const perspective = useMemo(
+    () => buildMatchPerspective(currentMatch, selectedPlayerId),
+    [currentMatch, selectedPlayerId],
+  );
 
-  const playerTeam = cleanId(playerInfo?.teamId);
+  const effectiveSelectedPlayerId =
+    perspective?.selectedPlayerId || selectedPlayerId;
+  const playerInfo = perspective?.selectedPlayer ?? null;
+
+  const playerTeam = perspective?.selectedTeamId ?? cleanId(playerInfo?.teamId);
   const {
     name: playerAgentName,
     icon: playerAgentIcon,
   } = getAgentMeta(playerInfo, agentById, agentNameMap);
-  const { icon: mvpAgentIcon } = getAgentMeta(mvp, agentById, agentNameMap);
 
   const mapId = cleanId(currentMatch?.matchInfo?.mapId);
   const mapMeta = mapId ? (mapById.get(mapId) ?? null) : null;
@@ -2081,6 +4602,8 @@ export default function MatchDetailModal({
     mapMeta?.displayIcon?.trim() ||
     (mapId ? `/content/maps/${mapId}/displayIcon.png` : "");
   const mapTransform = useMemo(() => toMapTransform(mapMeta), [mapMeta]);
+  const queueLabel = formatQueueLabel(currentMatch?.matchInfo?.queueId);
+  const gameModeLabel = formatQueueLabel(currentMatch?.matchInfo?.gameMode);
 
   const playerTier = playerInfo?.competitiveTier;
   const tierAsset =
@@ -2120,7 +4643,7 @@ export default function MatchDetailModal({
       const didWin = cleanId(round.winningTeam) === playerTeam;
 
       const playerRoundStats = (round.playerStats ?? []).find(
-        (stat) => cleanId(stat.puuid) === selectedPlayerId,
+        (stat) => cleanId(stat.puuid) === effectiveSelectedPlayerId,
       );
 
       const playerScore = toNumber(playerRoundStats?.score);
@@ -2183,7 +4706,7 @@ export default function MatchDetailModal({
         const victimId = cleanId(kill.victim);
         const timeMs = toNumber(kill.timeSinceRoundStartMillis);
 
-        if (victimId === selectedPlayerId) {
+        if (victimId === effectiveSelectedPlayerId) {
           playerDeaths += 1;
           for (let forward = killIndex + 1; forward < timelineKills.length; forward += 1) {
             const next = timelineKills[forward].kill;
@@ -2205,8 +4728,8 @@ export default function MatchDetailModal({
 
         const assistants = parseAssistants(kill.assistants);
         if (
-          killerId !== selectedPlayerId &&
-          assistants.includes(selectedPlayerId)
+          killerId !== effectiveSelectedPlayerId &&
+          assistants.includes(effectiveSelectedPlayerId)
         ) {
           playerAssists += 1;
         }
@@ -2242,8 +4765,8 @@ export default function MatchDetailModal({
             ? (weaponData?.displayIcon ?? null)
             : null;
 
-        const isPlayerKill = killerId === selectedPlayerId;
-        const isPlayerDeath = victimId === selectedPlayerId;
+        const isPlayerKill = killerId === effectiveSelectedPlayerId;
+        const isPlayerDeath = victimId === effectiveSelectedPlayerId;
         const isOpening = Boolean(
           firstKill && firstKill === kill && (isPlayerKill || isPlayerDeath),
         );
@@ -2617,7 +5140,7 @@ export default function MatchDetailModal({
     currentMatch,
     playerInfo,
     playerTeam,
-    selectedPlayerId,
+    effectiveSelectedPlayerId,
     playersByPuuid,
     teamByPuuid,
     agentById,
@@ -2689,7 +5212,7 @@ export default function MatchDetailModal({
         mapTransform,
         playersByPuuid,
         playerTeam,
-        selectedPlayerId,
+        selectedPlayerId: effectiveSelectedPlayerId,
         agentById,
       }),
     [
@@ -2697,7 +5220,7 @@ export default function MatchDetailModal({
       mapTransform,
       playersByPuuid,
       playerTeam,
-      selectedPlayerId,
+      effectiveSelectedPlayerId,
       agentById,
     ],
   );
@@ -2777,17 +5300,27 @@ export default function MatchDetailModal({
     [currentMatch, playersByTeam],
   );
 
-  const teamAId = cleanId(playersByTeam[0]?.[0]);
-  const teamBId = cleanId(playersByTeam[1]?.[0]);
-  const teamALabel = teamAId === playerTeam ? "Tu equipo" : "Team A";
-  const teamBLabel = teamBId === playerTeam ? "Tu equipo" : "Team B";
+  const teamAId = perspective?.teamAId ?? cleanId(playersByTeam[0]?.[0]);
+  const teamBId = perspective?.teamBId ?? cleanId(playersByTeam[1]?.[0]);
+  const teamALabel = perspective?.teamALabel ?? "Team A";
+  const teamBLabel = perspective?.teamBLabel ?? "Team B";
+  const selectedTeamKey = perspective?.selectedTeamKey ?? "teamA";
+  const opponentTeamId = perspective?.opponentTeamId ?? (selectedTeamKey === "teamA" ? teamBId : teamAId);
 
   const teamEconomySummaries = useMemo(() => {
     return [
-      summarizeTeamEconomy(roundTeamLoadoutTimeline, "teamA", teamALabel),
-      summarizeTeamEconomy(roundTeamLoadoutTimeline, "teamB", teamBLabel),
+      summarizeTeamEconomy(
+        roundTeamLoadoutTimeline,
+        "teamA",
+        `${teamALabel}${selectedTeamKey === "teamA" ? " · Equipo seleccionado" : " · Rival"}`,
+      ),
+      summarizeTeamEconomy(
+        roundTeamLoadoutTimeline,
+        "teamB",
+        `${teamBLabel}${selectedTeamKey === "teamB" ? " · Equipo seleccionado" : " · Rival"}`,
+      ),
     ];
-  }, [roundTeamLoadoutTimeline, teamALabel, teamBLabel]);
+  }, [roundTeamLoadoutTimeline, teamALabel, teamBLabel, selectedTeamKey]);
 
   const momentumAnalysis = useMemo<MatchMomentumResult | null>(() => {
     if (!currentMatch || !teamAId || !teamBId) return null;
@@ -2808,28 +5341,99 @@ export default function MatchDetailModal({
         if (winningTeam === teamAId) teamAScore += 1;
         if (winningTeam === teamBId) teamBScore += 1;
 
-        let teamAKills = 0;
-        let teamBKills = 0;
+        const impactPlayers = players
+          .filter(
+            (player) =>
+              !player.isObserver &&
+              [teamAId, teamBId].includes(cleanId(player.teamId)),
+          )
+          .map((player) => ({
+            id: cleanId(player.puuid),
+            teamId: cleanId(player.teamId),
+            playerName: getPlayerShortDisplay(player),
+          }))
+          .filter((player) => player.id && player.teamId);
+        const impactKills = (round.playerStats ?? [])
+          .flatMap((stat) => {
+            const ownerId = cleanId(stat.puuid);
+            return (stat.kills ?? []).map((kill) => ({
+              killerId: cleanId(kill.killer) || ownerId,
+              victimId: cleanId(kill.victim),
+              timeMs: toNumber(kill.timeSinceRoundStartMillis),
+              assistants: parseAssistants(kill.assistants),
+            }));
+          })
+          .filter((kill) => kill.killerId && kill.victimId)
+          .sort((a, b) => a.timeMs - b.timeMs);
+        const firstKill = impactKills[0];
+        const impactStats = new Map(
+          impactPlayers.map((player) => [
+            player.id,
+            {
+              playerId: player.id,
+              kills: 0,
+              assists: 0,
+              deaths: 0,
+              damage: 0,
+              firstKill: false,
+              firstDeath: false,
+            },
+          ]),
+        );
         for (const stat of round.playerStats ?? []) {
-          for (const kill of stat.kills ?? []) {
-            const killerTeam = teamByPuuid.get(cleanId(kill.killer));
-            if (killerTeam === teamAId) teamAKills += 1;
-            if (killerTeam === teamBId) teamBKills += 1;
+          const entry = impactStats.get(cleanId(stat.puuid));
+          if (!entry) continue;
+          entry.kills = (stat.kills ?? []).length;
+          entry.damage = (stat.damage ?? []).reduce(
+            (sum, damageEntry) => sum + toNumber(damageEntry.damage),
+            0,
+          );
+        }
+        for (const kill of impactKills) {
+          const killer = impactStats.get(kill.killerId);
+          const victim = impactStats.get(kill.victimId);
+          if (killer && kill === firstKill) killer.firstKill = true;
+          if (victim) {
+            victim.deaths += 1;
+            if (kill === firstKill) victim.firstDeath = true;
+          }
+          for (const assistantId of kill.assistants) {
+            const assistant = impactStats.get(assistantId);
+            if (assistant) assistant.assists += 1;
           }
         }
-
-        const selectedRound = matchAnalysis?.rounds.find(
-          (entry) => entry.roundNum === roundNum,
+        const teamAKills = impactKills.filter(
+          (kill) => teamByPuuid.get(kill.killerId) === teamAId,
+        ).length;
+        const teamBKills = impactKills.filter(
+          (kill) => teamByPuuid.get(kill.killerId) === teamBId,
+        ).length;
+        const playerImpact = calculateRoundPlayerImpacts(
+          {
+            roundNumber: roundNum + 1,
+            winnerTeamId: winningTeam,
+            teamAId,
+            teamBId,
+            teamAScore,
+            teamBScore,
+            teamALoadout: loadout?.teamAValue ?? 0,
+            teamBLoadout: loadout?.teamBValue ?? 0,
+            bombPlanter: cleanId(round.bombPlanter),
+            bombDefuser: cleanId(round.bombDefuser),
+            plantRoundTime: round.plantRoundTime,
+            defuseRoundTime: round.defuseRoundTime,
+            kills: impactKills,
+            playerRounds: [...impactStats.values()],
+          },
+          impactPlayers,
         );
-        const winnerRole = String(round.winningTeamRole ?? "").toLowerCase();
-        const winnerSide =
-          winnerRole.includes("attack")
-            ? "attack"
-            : winnerRole.includes("def")
-              ? "defense"
-              : winningTeam
-                ? determineRoundSide(winningTeam, roundNum)
-                : undefined;
+
+        // winningTeamRole is not reliable in the stored Riot-like documents
+        // (older payloads keep "string" as a placeholder), so side is inferred
+        // from team id and round number.
+        const winnerSide = winningTeam
+          ? determineRoundSide(winningTeam, roundNum)
+          : undefined;
 
         return {
           roundNumber: roundNum + 1,
@@ -2843,13 +5447,24 @@ export default function MatchDetailModal({
           teamBLoadout: loadout?.teamBValue ?? 0,
           teamAKills,
           teamBKills,
+          kills: impactKills.map((kill) => ({
+            killerId: kill.killerId,
+            victimId: kill.victimId,
+            timeMs: kill.timeMs,
+          })),
+          playerTeams: Object.fromEntries(
+            impactPlayers.map((player) => [player.id, player.teamId]),
+          ),
+          playerNames: Object.fromEntries(
+            impactPlayers.map((player) => [player.id, player.playerName]),
+          ),
+          bombPlanter: cleanId(round.bombPlanter),
+          bombDefuser: cleanId(round.bombDefuser),
+          plantRoundTime: round.plantRoundTime,
+          defuseRoundTime: round.defuseRoundTime,
           roundResult: round.roundResult,
           roundCeremony: round.roundCeremony,
-          playerImpactScore: selectedRound
-            ? selectedRound.playerScore +
-              selectedRound.playerKills * 120 +
-              selectedRound.playerAssists * 45
-            : undefined,
+          playerImpact,
         };
       },
     );
@@ -2857,11 +5472,11 @@ export default function MatchDetailModal({
     return calculateMatchMomentum(rounds, { teamAId, teamBId });
   }, [
     currentMatch,
-    matchAnalysis,
     roundTeamLoadoutTimeline,
     teamAId,
     teamBId,
     teamByPuuid,
+    players,
   ]);
 
   const economyEfficiencyAnalysis = useMemo<EconomyEfficiencyAnalysis | null>(() => {
@@ -2894,6 +5509,168 @@ export default function MatchDetailModal({
 
     return analyzeEconomyEfficiency(rounds);
   }, [roundTeamLoadoutTimeline, teamAId, teamBId]);
+
+  const advancedMomentumAnalysis = useMemo<AdvancedMomentumResult | null>(() => {
+    if (!currentMatch || !teamAId || !teamBId || !momentumAnalysis) return null;
+    const loadoutByRound = new Map(
+      roundTeamLoadoutTimeline.map((round) => [round.roundNum, round]),
+    );
+    const advancedPlayers = players
+      .filter(
+        (player) =>
+          !player.isObserver &&
+          [teamAId, teamBId].includes(cleanId(player.teamId)),
+      )
+      .map((player) => {
+        const id = cleanId(player.puuid);
+        if (!id) return null;
+        const agent = getAgentMeta(player, agentById, agentNameMap);
+        return {
+          id,
+          teamId: cleanId(player.teamId),
+          playerName: getPlayerShortDisplay(player),
+          agentName: agent.name,
+          agentIcon: agent.icon,
+        };
+      })
+      .filter((player): player is NonNullable<typeof player> => Boolean(player));
+
+    let teamAScore = 0;
+    let teamBScore = 0;
+    const rounds: AdvancedMomentumRound[] = (currentMatch.roundResults ?? []).map(
+      (round, index) => {
+        const roundNum = Number.isFinite(round.roundNum)
+          ? Number(round.roundNum)
+          : index;
+        const roundNumber = roundNum + 1;
+        const loadout = loadoutByRound.get(roundNum);
+        const winningTeam = cleanId(round.winningTeam);
+        const scoreBefore = {
+          [teamAId]: teamAScore,
+          [teamBId]: teamBScore,
+        };
+        if (winningTeam === teamAId) teamAScore += 1;
+        if (winningTeam === teamBId) teamBScore += 1;
+        const scoreAfter = {
+          [teamAId]: teamAScore,
+          [teamBId]: teamBScore,
+        };
+
+        const kills = (round.playerStats ?? [])
+          .flatMap((stat) => {
+            const ownerPuuid = cleanId(stat.puuid);
+            return (stat.kills ?? []).map((kill) => ({
+              killerId: cleanId(kill.killer) || ownerPuuid,
+              victimId: cleanId(kill.victim),
+              timeMs: toNumber(kill.timeSinceRoundStartMillis),
+              assistants: parseAssistants(kill.assistants),
+            }));
+          })
+          .filter((kill) => kill.killerId && kill.victimId)
+          .sort((a, b) => a.timeMs - b.timeMs);
+        const firstKill = kills[0] ?? null;
+        const playerRoundMap = new Map<string, AdvancedMomentumRound["playerRounds"][number]>();
+
+        for (const player of advancedPlayers) {
+          playerRoundMap.set(player.id, {
+            playerId: player.id,
+            kills: 0,
+            assists: 0,
+            deaths: 0,
+            score: 0,
+            firstKill: false,
+            firstDeath: false,
+          });
+        }
+
+        for (const stat of round.playerStats ?? []) {
+          const playerId = cleanId(stat.puuid);
+          const entry = playerRoundMap.get(playerId);
+          if (!entry) continue;
+          entry.score = toNumber(stat.score);
+          entry.kills = (stat.kills ?? []).length;
+          entry.damage = (stat.damage ?? []).reduce(
+            (sum, damageEntry) => sum + toNumber(damageEntry.damage),
+            0,
+          );
+        }
+
+        for (const kill of kills) {
+          const killerEntry = playerRoundMap.get(kill.killerId);
+          const victimEntry = playerRoundMap.get(kill.victimId);
+          if (killerEntry && firstKill === kill) killerEntry.firstKill = true;
+          if (victimEntry) {
+            victimEntry.deaths += 1;
+            if (firstKill === kill) victimEntry.firstDeath = true;
+          }
+          for (const assistant of kill.assistants) {
+            const assistantEntry = playerRoundMap.get(assistant);
+            if (assistantEntry) assistantEntry.assists += 1;
+          }
+        }
+
+        return {
+          roundNumber,
+          winnerTeamId: winningTeam,
+          teamAId,
+          teamBId,
+          teamAScore,
+          teamBScore,
+          scoreBefore,
+          scoreAfter,
+          teamALoadout: loadout?.teamAValue ?? 0,
+          teamBLoadout: loadout?.teamBValue ?? 0,
+          teamASpent: loadout?.teamASpent ?? 0,
+          teamBSpent: loadout?.teamBSpent ?? 0,
+          teamARemaining: loadout?.teamACredits ?? 0,
+          teamBRemaining: loadout?.teamBCredits ?? 0,
+          teamASide: determineRoundSide(teamAId, roundNum),
+          teamBSide: determineRoundSide(teamBId, roundNum),
+          roundResult: round.roundResult,
+          roundCeremony: round.roundCeremony,
+          plantRoundTime: round.plantRoundTime,
+          defuseRoundTime: round.defuseRoundTime,
+          bombPlanter: cleanId(round.bombPlanter),
+          bombDefuser: cleanId(round.bombDefuser),
+          kills,
+          playerRounds: [...playerRoundMap.values()],
+        };
+      },
+    );
+
+    return analyzeAdvancedMomentum({
+      existingMomentum: momentumAnalysis,
+      rounds,
+      players: advancedPlayers,
+      teamAId,
+      teamBId,
+      economyAnalysis: economyEfficiencyAnalysis,
+      playerImpacts: momentumAnalysis.rounds.flatMap((round) =>
+        round.playerImpact ? [round.playerImpact] : [],
+      ),
+    });
+  }, [
+    currentMatch,
+    momentumAnalysis,
+    economyEfficiencyAnalysis,
+    roundTeamLoadoutTimeline,
+    players,
+    teamAId,
+    teamBId,
+    agentById,
+    agentNameMap,
+  ]);
+
+  const importantMomentumEventsByRound = useMemo(() => {
+    const map = new Map<number, MomentumEvent[]>();
+    for (const event of advancedMomentumAnalysis?.events ?? []) {
+      if (event.totalImpactScore < 1.5 && !event.isTurningPoint) continue;
+      const current = map.get(event.roundNumber) ?? [];
+      current.push(event);
+      map.set(event.roundNumber, current);
+    }
+    return map;
+  }, [advancedMomentumAnalysis]);
 
   const teamEconomyDistributionData = useMemo(
     () =>
@@ -2929,20 +5706,7 @@ export default function MatchDetailModal({
     [orderedPlayersByTeam, allRoundEvents],
   );
 
-  const filteredDuelMatrix = useMemo(() => {
-    switch (duelMatrixFilter) {
-      case "withKills":
-        return duelMatrix.filter((cell) => cell.total > 0);
-      case "teamA":
-        return duelMatrix.filter((cell) => cell.leader === "teamA");
-      case "teamB":
-        return duelMatrix.filter((cell) => cell.leader === "teamB");
-      case "ties":
-        return duelMatrix.filter((cell) => cell.total > 0 && cell.leader === "tie");
-      default:
-        return duelMatrix;
-    }
-  }, [duelMatrix, duelMatrixFilter]);
+  const filteredDuelMatrix = duelMatrix;
 
   const activeDuel =
     duelMatrix.find((cell) => cell.key === selectedDuelKey) ??
@@ -2966,7 +5730,7 @@ export default function MatchDetailModal({
         mapTransform,
         playersByPuuid,
         playerTeam,
-        selectedPlayerId,
+        selectedPlayerId: effectiveSelectedPlayerId,
         agentById,
       }),
     [
@@ -2974,38 +5738,64 @@ export default function MatchDetailModal({
       mapTransform,
       playersByPuuid,
       playerTeam,
-      selectedPlayerId,
+      effectiveSelectedPlayerId,
       agentById,
     ],
   );
 
   const duelSummary = useMemo(() => {
-    const playedCells = duelMatrix.filter((cell) => cell.total > 0);
+    const selectedCells = duelMatrix.filter((cell) =>
+      [cleanId(cell.teamAPlayer.puuid), cleanId(cell.teamBPlayer.puuid)].includes(effectiveSelectedPlayerId),
+    );
+    const sourceCells = selectedCells.length > 0 ? selectedCells : duelMatrix;
+    const playedCells = sourceCells.filter((cell) => cell.total > 0);
+    const selectedKills = playedCells.reduce((sum, cell) => {
+      if (cleanId(cell.teamAPlayer.puuid) === effectiveSelectedPlayerId) return sum + cell.teamAKillsOnB;
+      if (cleanId(cell.teamBPlayer.puuid) === effectiveSelectedPlayerId) return sum + cell.teamBKillsOnA;
+      return sum;
+    }, 0);
+    const rivalKills = playedCells.reduce((sum, cell) => {
+      if (cleanId(cell.teamAPlayer.puuid) === effectiveSelectedPlayerId) return sum + cell.teamBKillsOnA;
+      if (cleanId(cell.teamBPlayer.puuid) === effectiveSelectedPlayerId) return sum + cell.teamAKillsOnB;
+      return sum;
+    }, 0);
     return {
-      teamAKills: duelMatrix.reduce((sum, cell) => sum + cell.teamAKillsOnB, 0),
-      teamBKills: duelMatrix.reduce((sum, cell) => sum + cell.teamBKillsOnA, 0),
-      teamAWon: playedCells.filter((cell) => cell.leader === "teamA").length,
-      teamBWon: playedCells.filter((cell) => cell.leader === "teamB").length,
+      selectedKills,
+      rivalKills,
+      selectedWon: playedCells.filter((cell) =>
+        cleanId(cell.teamAPlayer.puuid) === effectiveSelectedPlayerId
+          ? cell.leader === "teamA"
+          : cleanId(cell.teamBPlayer.puuid) === effectiveSelectedPlayerId
+            ? cell.leader === "teamB"
+            : false,
+      ).length,
+      rivalWon: playedCells.filter((cell) =>
+        cleanId(cell.teamAPlayer.puuid) === effectiveSelectedPlayerId
+          ? cell.leader === "teamB"
+          : cleanId(cell.teamBPlayer.puuid) === effectiveSelectedPlayerId
+            ? cell.leader === "teamA"
+            : false,
+      ).length,
       ties: playedCells.filter((cell) => cell.leader === "tie").length,
     };
-  }, [duelMatrix]);
+  }, [duelMatrix, effectiveSelectedPlayerId]);
 
   const duelHighlights = useMemo(() => {
-    const played = duelMatrix.filter((cell) => cell.total > 0);
+    const played = duelMatrix.filter(
+      (cell) =>
+        cell.total > 0 &&
+        [cleanId(cell.teamAPlayer.puuid), cleanId(cell.teamBPlayer.puuid)].includes(effectiveSelectedPlayerId),
+    );
+    const selectedMargin = (cell: PlayerDuelCell) =>
+      cleanId(cell.teamAPlayer.puuid) === effectiveSelectedPlayerId
+        ? cell.teamAKillsOnB - cell.teamBKillsOnA
+        : cell.teamBKillsOnA - cell.teamAKillsOnB;
     return {
       top: [...played].sort((a, b) => b.total - a.total)[0] ?? null,
-      teamA: [...played].sort(
-        (a, b) =>
-          b.teamAKillsOnB - b.teamBKillsOnA -
-          (a.teamAKillsOnB - a.teamBKillsOnA),
-      )[0] ?? null,
-      teamB: [...played].sort(
-        (a, b) =>
-          b.teamBKillsOnA - b.teamAKillsOnB -
-          (a.teamBKillsOnA - a.teamAKillsOnB),
-      )[0] ?? null,
+      teamA: [...played].sort((a, b) => selectedMargin(b) - selectedMargin(a))[0] ?? null,
+      teamB: [...played].sort((a, b) => selectedMargin(a) - selectedMargin(b))[0] ?? null,
     };
-  }, [duelMatrix]);
+  }, [duelMatrix, effectiveSelectedPlayerId]);
 
   const visibleDuelTeamAPlayers = useMemo(() => {
     const allowed = new Set(filteredDuelMatrix.map((cell) => cleanId(cell.teamAPlayer.puuid)));
@@ -3134,7 +5924,7 @@ export default function MatchDetailModal({
     loading,
     matchAnalysis,
     activeSection,
-    selectedPlayerId,
+    effectiveSelectedPlayerId,
     selectedRoundNum,
     selectedEventId,
     playbackOpen,
@@ -3193,6 +5983,7 @@ export default function MatchDetailModal({
   };
 
   const handlePlayerSelect = (nextPlayerId: string) => {
+    if (!nextPlayerId || nextPlayerId === selectedPlayerId) return;
     setSelectedPlayerState({
       matchId,
       playerId,
@@ -3200,8 +5991,8 @@ export default function MatchDetailModal({
     });
     setSelectedRoundNum(null);
     setSelectedEventId(null);
+    setSelectedDuelKey(null);
     setEventFilter("all");
-    setActiveSection("summary");
     setPlaybackOpen(false);
     setPlaybackPlaying(false);
   };
@@ -3227,7 +6018,7 @@ export default function MatchDetailModal({
         ? cleanId(playersByPuuid.get(cleanPuuid)?.teamId)
         : "";
       const tone =
-        cleanPuuid === selectedPlayerId
+        cleanPuuid === effectiveSelectedPlayerId
           ? "target"
           : participantTeam && participantTeam === playerTeam
             ? "ally"
@@ -3369,7 +6160,7 @@ export default function MatchDetailModal({
     mapTransform,
     playersByPuuid,
     playerTeam,
-    selectedPlayerId,
+    selectedPlayerId: effectiveSelectedPlayerId,
     agentById,
   });
 
@@ -3385,7 +6176,7 @@ export default function MatchDetailModal({
         ? cleanId(playersByPuuid.get(cleanPuuid)?.teamId)
         : "";
       const tone =
-        cleanPuuid === selectedPlayerId
+        cleanPuuid === effectiveSelectedPlayerId
           ? "target"
           : participantTeam && participantTeam === playerTeam
             ? "ally"
@@ -3493,7 +6284,7 @@ export default function MatchDetailModal({
           const playerName = getPlayerShortDisplay(row.player);
           const playerTag = row.player.tagLine?.trim();
           const accountLevel = toNumber(row.player.accountLevel);
-          const isSelected = row.puuid === selectedPlayerId;
+          const isSelected = row.puuid === effectiveSelectedPlayerId;
 
           return (
             <button
@@ -3686,7 +6477,7 @@ export default function MatchDetailModal({
   };
 
   const matchDetailHero = matchAnalysis ? (
-    <header className="match-detail-hero">
+    <header className={`match-detail-hero result-${resultState}`}>
       <div className="match-detail-hero-copy">
         <div className="match-detail-title-row">
           {playerAgentIcon && (
@@ -3697,6 +6488,16 @@ export default function MatchDetailModal({
             />
           )}
           <h2 className="stats-title modal-title-small">{mapName}</h2>
+          <button
+            type="button"
+            className="match-map-play-button"
+            onClick={openMatchPlayback}
+            disabled={allRoundEvents.length === 0}
+            aria-label="Reproducir partida"
+            title="Reproducir partida"
+          >
+            <Play aria-hidden="true" />
+          </button>
         </div>
 
         <div className="match-player-identity">
@@ -3714,36 +6515,33 @@ export default function MatchDetailModal({
         </div>
 
         <div className="match-detail-meta-row">
-          <span className={`meta-pill match-pill-${resultState}`}>
-            {resultState === "draw"
-              ? "Empate"
-              : resultState === "win"
-                ? "Victoria"
-                : "Derrota"}
-          </span>
-          <span className="meta-pill">{matchAnalysis.totalRounds} rondas</span>
           <span className="meta-pill">
-            {cleanId(currentMatch?.matchInfo?.queueId) || "Cola desconocida"}
+            Comienzo: {formatDateTime(currentMatch?.matchInfo?.gameStartMillis)}
           </span>
           <span className="meta-pill">
-            {cleanId(currentMatch?.matchInfo?.gameMode) || "Modo desconocido"}
-          </span>
-          <span className="meta-pill">
+            Duración:{" "}
             {toGameDurationLabel(currentMatch?.matchInfo?.gameLengthMillis) ||
-              "Duración no disponible"}
-          </span>
-          <span className="meta-pill">
-            {formatDateTime(currentMatch?.matchInfo?.gameStartMillis)}
+              "no disponible"}
           </span>
         </div>
       </div>
 
-      <div className={`match-result-card result-${resultState}`}>
+      <div className="match-result-card">
         <div className="match-score-main">
           <span className="match-score-label">Resultado</span>
-          <strong className="match-score-value">
-            {scoreState.selectedTeamRounds} - {scoreState.opponentTeamRounds}
-          </strong>
+          <div className="match-score-lockup">
+            <strong className="match-score-value">
+              {scoreState.selectedTeamRounds} - {scoreState.opponentTeamRounds}
+            </strong>
+            <div className="match-score-context">
+              <span>
+                {queueLabel ||
+                  gameModeLabel ||
+                  "Modo desconocido"}
+              </span>
+              <span>{matchAnalysis.totalRounds} rondas</span>
+            </div>
+          </div>
         </div>
 
         <div className="match-score-split">
@@ -3783,32 +6581,6 @@ export default function MatchDetailModal({
           </div>
         </div>
 
-        <div className="match-rank-line">
-          <span className="match-mvp-line">
-            MVP:
-            {mvpAgentIcon && (
-              <img
-                src={mvpAgentIcon}
-                alt=""
-                className="match-rank-icon-inline"
-              />
-            )}
-            {getPlayerDisplay(mvp)}
-          </span>
-          <button
-            type="button"
-            className="match-play-button"
-            onClick={openMatchPlayback}
-            disabled={allRoundEvents.length === 0}
-            title={
-              allRoundEvents.length === 0
-                ? "Sin eventos reproducibles"
-                : "Reproducir partida"
-            }
-          >
-            Reproducir partida
-          </button>
-        </div>
       </div>
     </header>
   ) : null;
@@ -3843,57 +6615,101 @@ export default function MatchDetailModal({
           </div>
         ) : (
           <div className="match-detail-shell">
-            <section className="match-teams-strip" aria-label="Jugadores de la partida">
-              {playersByTeam.map(([teamId, teamPlayers], teamIndex) => (
-                <div key={teamId} className="match-team-roster">
-                  {teamPlayers.map((player) => {
-                    const puuid = cleanId(player.puuid);
-                    const agent = getAgentMeta(player, agentById, agentNameMap);
-                    const isSelected = puuid === selectedPlayerId;
-                    const playerName = getPlayerShortDisplay(player);
-                    return (
-                      <button
-                        key={puuid || `${teamId}-${playerName}`}
-                        type="button"
-                        className={`match-team-player-button ${isSelected ? "is-selected" : ""}`}
-                        onClick={() => puuid && handlePlayerSelect(puuid)}
-                        aria-label={`Ver partida desde la perspectiva de ${playerName} con ${agent.name}`}
-                        aria-pressed={isSelected}
-                      >
-                        {agent.icon ? (
-                          <img src={agent.icon} alt="" />
-                        ) : (
-                          <span className="match-team-agent-fallback">
-                            {agent.name.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                        <span>{playerName}</span>
-                      </button>
-                    );
-                  })}
-                  {teamIndex === 0 && playersByTeam.length > 1 && (
-                    <span className="match-team-vs">VS</span>
-                  )}
+            <div className="match-detail-navigation-sticky">
+              <section className="match-teams-strip" aria-label="Jugadores de la partida">
+                <div className="match-teams-strip-track">
+                  {playersByTeam.map(([teamId, teamPlayers], teamIndex) => (
+                    <div
+                      key={teamId}
+                      className={`match-team-roster match-team-roster--${teamIndex === 0 ? "a" : "b"}`}
+                    >
+                      {teamIndex === 0 && (
+                        <span className="match-team-roster-label">Team A</span>
+                      )}
+                      <div className="match-team-roster-players">
+                        {teamPlayers.map((player) => {
+                        const puuid = cleanId(player.puuid);
+                        const agent = getAgentMeta(player, agentById, agentNameMap);
+                        const isSelected = puuid === effectiveSelectedPlayerId;
+                        const isMvp = puuid !== "" && puuid === cleanId(mvp?.puuid);
+                        const playerName = getPlayerShortDisplay(player);
+                        return (
+                          <button
+                            key={puuid || `${teamId}-${playerName}`}
+                            type="button"
+                            className={`match-team-player-button ${isSelected ? "is-selected" : ""} ${isMvp ? "is-mvp" : ""}`}
+                            onClick={() => puuid && handlePlayerSelect(puuid)}
+                            aria-label={`Ver partida desde la perspectiva de ${playerName}, ${agent.name}, ${teamIndex === 0 ? "Team A" : "Team B"}`}
+                            aria-pressed={isSelected}
+                          >
+                            {agent.icon ? (
+                              <img src={agent.icon} alt="" />
+                            ) : (
+                              <span className="match-team-agent-fallback">
+                                {agent.name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                            {isMvp && <strong className="match-team-mvp-badge">MVP</strong>}
+                            <span>{playerName}</span>
+                          </button>
+                        );
+                        })}
+                      </div>
+                      {teamIndex === 1 && (
+                        <span className="match-team-roster-label">Team B</span>
+                      )}
+                      {teamIndex === 0 && playersByTeam.length > 1 && (
+                        <span className="match-team-vs">VS</span>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </section>
+              </section>
 
-            <nav
-              className="match-detail-tabs"
-              aria-label="Secciones del detalle de partida"
-            >
-              {matchDetailSections.map((section) => (
-                <button
-                  key={section.key}
-                  type="button"
-                  className={activeSection === section.key ? "is-active" : ""}
-                  onClick={() => setActiveSection(section.key)}
-                  aria-pressed={activeSection === section.key}
-                >
-                  {section.label}
-                </button>
-              ))}
-            </nav>
+              <nav
+                className="match-detail-tabs"
+                aria-label="Secciones del detalle de partida"
+              >
+                {matchDetailSections.map((section) => (
+                  <button
+                    key={section.key}
+                    type="button"
+                    className={activeSection === section.key ? "is-active" : ""}
+                    onClick={() => setActiveSection(section.key)}
+                    aria-pressed={activeSection === section.key}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </nav>
+
+              {activeSection === "rounds" && (
+                <div className="match-round-strip-sticky" aria-label="Timeline de rondas">
+                  <div className="match-round-strip-track">
+                    {matchAnalysis.rounds.map((round) => {
+                      const isOpen = selectedRound?.roundNum === round.roundNum;
+                      const isKeyRound =
+                        round.roundNum === matchAnalysis.bestRound?.roundNum;
+                      return (
+                        <button
+                          key={`sticky-strip-${round.roundNum}`}
+                          type="button"
+                          className={`match-round-chip ${round.didWin ? "is-win" : "is-loss"} ${isOpen ? "is-open" : ""} ${isKeyRound ? "is-key-round" : ""}`}
+                          onClick={() => handleRoundSelect(round)}
+                          aria-label={`Abrir ronda ${round.roundNum + 1}, ${round.didWin ? "ganada" : "perdida"}, ${round.playerKills} kills`}
+                          aria-current={isOpen ? "true" : undefined}
+                          aria-pressed={isOpen}
+                        >
+                          <span className="match-round-chip-number">
+                            {round.roundNum + 1}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="match-detail-section-body">
               {activeSection === "summary" && (
@@ -3904,19 +6720,12 @@ export default function MatchDetailModal({
                 >
                   {matchDetailHero}
 
-                  <MatchMomentumPanel
-                    momentum={momentumAnalysis}
-                    teamAId={teamAId}
-                    teamBId={teamBId}
-                    teamALabel={teamALabel}
-                    teamBLabel={teamBLabel}
-                  />
-
                   <MatchRoundResultTimeline
                     rounds={matchAnalysis.rounds}
                     playersByTeam={playersByTeam}
                     currentMatch={currentMatch}
                     bestRoundNum={matchAnalysis.bestRound?.roundNum}
+                    importantEventsByRound={importantMomentumEventsByRound}
                   />
 
                   <div className="match-summary-grid">
@@ -3975,6 +6784,16 @@ export default function MatchDetailModal({
                       </strong>
                     </article>
                   </div>
+
+                  <MatchMomentumPanel
+                    momentum={momentumAnalysis}
+                    advancedMomentum={advancedMomentumAnalysis}
+                    match={currentMatch}
+                    selectedPlayer={playerInfo}
+                    teamAId={teamAId}
+                    selectedTeamId={playerTeam}
+                    opponentTeamId={opponentTeamId}
+                  />
                 </section>
               )}
 
@@ -3984,38 +6803,6 @@ export default function MatchDetailModal({
               role="region"
               aria-label={activeSectionLabel}
             >
-              <div className="panel-header">
-                <div>
-                  <h3 className="panel-title">Timeline de rondas</h3>
-                  <p className="panel-subtitle">
-                    Secuencia principal de rondas. El detalle se abre justo debajo.
-                  </p>
-                </div>
-              </div>
-
-              <div className="match-round-strip-track">
-                {matchAnalysis.rounds.map((round) => {
-                  const isOpen = selectedRound?.roundNum === round.roundNum;
-                  const isKeyRound =
-                    round.roundNum === matchAnalysis.bestRound?.roundNum;
-                  return (
-                    <button
-                      key={`strip-${round.roundNum}`}
-                      type="button"
-                      className={`match-round-chip ${round.didWin ? "is-win" : "is-loss"} ${isOpen ? "is-open" : ""} ${isKeyRound ? "is-key-round" : ""}`}
-                      onClick={() => handleRoundSelect(round)}
-                      aria-label={`Abrir ronda ${round.roundNum + 1}, ${round.didWin ? "ganada" : "perdida"}, ${round.playerKills} kills`}
-                      aria-current={isOpen ? "true" : undefined}
-                      aria-pressed={isOpen}
-                    >
-                      <span className="match-round-chip-number">
-                        {round.roundNum + 1}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
               {selectedRound && (
                 <article className="match-selected-round-detail">
                   <div className="match-selected-round-header">
@@ -4027,19 +6814,6 @@ export default function MatchDetailModal({
                       </p>
                     </div>
                     <div className="round-trigger-summary">
-                      <button
-                        type="button"
-                        className="match-play-button"
-                        onClick={() => openRoundPlayback(selectedRound)}
-                        disabled={selectedRound.events.length === 0}
-                        title={
-                          selectedRound.events.length === 0
-                            ? "Sin eventos reproducibles"
-                            : "Reproducir ronda"
-                        }
-                      >
-                        Reproducir ronda
-                      </button>
                       <span
                         className={
                           selectedRound.didWin ? "text-positive" : "text-negative"
@@ -4052,6 +6826,16 @@ export default function MatchDetailModal({
                       <span>{selectedRound.playerAssists}A</span>
                       {selectedRound.hadPlant && <em>Plant</em>}
                       {selectedRound.hadDefuse && <em>Defuse</em>}
+                      <button
+                        type="button"
+                        className="match-round-play-button"
+                        onClick={() => openRoundPlayback(selectedRound)}
+                        disabled={selectedRound.events.length === 0}
+                        aria-label="Reproducir ronda"
+                        title="Reproducir ronda"
+                      >
+                        <Play aria-hidden="true" />
+                      </button>
                     </div>
                   </div>
 
@@ -4109,6 +6893,18 @@ export default function MatchDetailModal({
                   </div>
                 </article>
               )}
+
+              <MatchMomentumPanel
+                momentum={momentumAnalysis}
+                advancedMomentum={advancedMomentumAnalysis}
+                match={currentMatch}
+                selectedPlayer={playerInfo}
+                teamAId={teamAId}
+                selectedTeamId={playerTeam}
+                opponentTeamId={opponentTeamId}
+                mode="explorer"
+                selectedRoundNumber={(selectedRound?.roundNum ?? 0) + 1}
+              />
             </section>
             )}
 
@@ -4128,9 +6924,9 @@ export default function MatchDetailModal({
                 </div>
 
                 <div className="match-duel-highlights">
-                  {renderDuelHighlight("Top Rivalry", duelHighlights.top, "top")}
-                  {renderDuelHighlight("Mismatch A", duelHighlights.teamA, "team-a")}
-                  {renderDuelHighlight("Mismatch B", duelHighlights.teamB, "team-b")}
+                  {renderDuelHighlight("Rivalidad del seleccionado", duelHighlights.top, "top")}
+                  {renderDuelHighlight("Ventaja seleccionado", duelHighlights.teamA, "team-a")}
+                  {renderDuelHighlight("Ventaja rival", duelHighlights.teamB, "team-b")}
                 </div>
                 {[duelHighlights.top, duelHighlights.teamA, duelHighlights.teamB]
                   .find((cell) => cell?.key === selectedDuelKey) &&
@@ -4142,20 +6938,20 @@ export default function MatchDetailModal({
 
                 <div className="match-duel-summary-grid">
                   <article>
-                    <span>Team A kills</span>
-                    <strong>{duelSummary.teamAKills}</strong>
+                    <span>Kills seleccionado</span>
+                    <strong>{duelSummary.selectedKills}</strong>
                   </article>
                   <article>
-                    <span>Team B kills</span>
-                    <strong>{duelSummary.teamBKills}</strong>
+                    <span>Kills rivales</span>
+                    <strong>{duelSummary.rivalKills}</strong>
                   </article>
                   <article>
-                    <span>Duelos Team A</span>
-                    <strong>{duelSummary.teamAWon}</strong>
+                    <span>Duelos ganados</span>
+                    <strong>{duelSummary.selectedWon}</strong>
                   </article>
                   <article>
-                    <span>Duelos Team B</span>
-                    <strong>{duelSummary.teamBWon}</strong>
+                    <span>Duelos perdidos</span>
+                    <strong>{duelSummary.rivalWon}</strong>
                   </article>
                   <article>
                     <span>Empates</span>
@@ -4177,26 +6973,6 @@ export default function MatchDetailModal({
                     <span className="match-round-legend-item">
                       <b className="match-round-legend-symbol">—</b> Sin duelos
                     </span>
-                  </div>
-
-                  <div className="match-event-filters" aria-label="Filtros de matriz de duelos">
-                    {[
-                      ["all", "Todos"],
-                      ["withKills", "Con kills"],
-                      ["teamA", "Ventaja Team A"],
-                      ["teamB", "Ventaja Team B"],
-                      ["ties", "Empates"],
-                    ].map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        className={duelMatrixFilter === key ? "is-active" : ""}
-                        onClick={() => setDuelMatrixFilter(key as DuelMatrixFilter)}
-                        aria-pressed={duelMatrixFilter === key}
-                      >
-                        {label}
-                      </button>
-                    ))}
                   </div>
                 </div>
 
@@ -4238,28 +7014,18 @@ export default function MatchDetailModal({
                                 const key = `${teamAId}:${cleanId(teamBPlayer.puuid)}`;
                                 const cell = duelCellByKey.get(key);
                                 const leader = cell?.leader ?? "tie";
-                                const isSelected = activeDuel?.key === key;
                                 return (
-                                  <button
+                                  <div
                                     key={key}
-                                    type="button"
                                     className={`match-duel-cell ${
                                       !cell || cell.total === 0
                                         ? "is-empty"
                                         : leader === "teamA"
                                           ? "is-team-a"
                                           : leader === "teamB"
-                                            ? "is-team-b"
+                                          ? "is-team-b"
                                             : "is-tie"
-                                    } ${isSelected ? "is-selected" : ""}`}
-                                    onClick={() => {
-                                      setSelectedDuelKey(key);
-                                      const firstEvent = cell?.events[0];
-                                      if (firstEvent) {
-                                        setSelectedRoundNum(firstEvent.roundNum);
-                                        setSelectedEventId(firstEvent.id);
-                                      }
-                                    }}
+                                    }`}
                                     title={
                                       cell
                                         ? `${getPlayerShortDisplay(cell.teamAPlayer)} ${cell.teamAKillsOnB} - ${cell.teamBKillsOnA} ${getPlayerShortDisplay(cell.teamBPlayer)}`
@@ -4274,7 +7040,7 @@ export default function MatchDetailModal({
                                     ) : (
                                       <span className="match-duel-empty">—</span>
                                     )}
-                                  </button>
+                                  </div>
                                 );
                               })}
                             </Fragment>
@@ -4586,8 +7352,18 @@ export default function MatchDetailModal({
                             color: "#f4f7fb",
                           }}
                         />
-                        <Bar dataKey="teamA" name={teamEconomySummaries[0]?.label ?? "Team A"} fill="#46c878" radius={[8, 8, 3, 3]} />
-                        <Bar dataKey="teamB" name={teamEconomySummaries[1]?.label ?? "Team B"} fill="#ff4655" radius={[8, 8, 3, 3]} />
+                        <Bar
+                          dataKey="teamA"
+                          name={teamEconomySummaries[0]?.label ?? "Team A"}
+                          fill={selectedTeamKey === "teamA" ? "#46c878" : "#ff4655"}
+                          radius={[8, 8, 3, 3]}
+                        />
+                        <Bar
+                          dataKey="teamB"
+                          name={teamEconomySummaries[1]?.label ?? "Team B"}
+                          fill={selectedTeamKey === "teamB" ? "#46c878" : "#ff4655"}
+                          radius={[8, 8, 3, 3]}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -4641,17 +7417,17 @@ export default function MatchDetailModal({
                           type="monotone"
                           dataKey="teamA"
                           name={teamEconomySummaries[0]?.label ?? "Team A"}
-                          stroke="#46c878"
-                          strokeWidth={3}
-                          dot={{ r: 3 }}
+                          stroke={selectedTeamKey === "teamA" ? "#46c878" : "#ff4655"}
+                          strokeWidth={selectedTeamKey === "teamA" ? 3 : 2}
+                          dot={{ r: selectedTeamKey === "teamA" ? 3 : 2 }}
                         />
                         <Line
                           type="monotone"
                           dataKey="teamB"
                           name={teamEconomySummaries[1]?.label ?? "Team B"}
-                          stroke="#ff4655"
-                          strokeWidth={2}
-                          dot={{ r: 2 }}
+                          stroke={selectedTeamKey === "teamB" ? "#46c878" : "#ff4655"}
+                          strokeWidth={selectedTeamKey === "teamB" ? 3 : 2}
+                          dot={{ r: selectedTeamKey === "teamB" ? 3 : 2 }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -4664,6 +7440,7 @@ export default function MatchDetailModal({
                 momentum={momentumAnalysis}
                 teamALabel={teamALabel}
                 teamBLabel={teamBLabel}
+                selectedTeamKey={selectedTeamKey}
               />
             </section>
             )}

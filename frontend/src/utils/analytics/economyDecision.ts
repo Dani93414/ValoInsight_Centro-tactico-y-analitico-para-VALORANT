@@ -1,4 +1,15 @@
 export type TeamEconomyType = "ECO" | "SEMIECO" | "FULL";
+export type EconomyThresholds = {
+  ecoMaxExclusive: number;
+  semiEcoMaxExclusive: number;
+  fullMinInclusive: number;
+};
+
+export const BASE_ECONOMY_THRESHOLDS: EconomyThresholds = {
+  ecoMaxExclusive: 8000,
+  semiEcoMaxExclusive: 19000,
+  fullMinInclusive: 19000,
+};
 export type EconomyEfficiency =
   | "optimal"
   | "acceptable"
@@ -81,9 +92,14 @@ const economyRank: Record<TeamEconomyType, number> = {
   FULL: 2,
 };
 
-export function classifyTeamEconomy(loadoutValue: number): TeamEconomyType {
-  if (loadoutValue < 7500) return "ECO";
-  if (loadoutValue >= 7500 && loadoutValue < 16500) return "SEMIECO";
+export function classifyTeamEconomy(
+  loadoutValue: number,
+  thresholds: EconomyThresholds = BASE_ECONOMY_THRESHOLDS,
+): TeamEconomyType {
+  if (loadoutValue < thresholds.ecoMaxExclusive) return "ECO";
+  if (loadoutValue >= thresholds.ecoMaxExclusive && loadoutValue < thresholds.fullMinInclusive) {
+    return "SEMIECO";
+  }
   return "FULL";
 }
 
@@ -120,20 +136,29 @@ export function recommendEconomyDecision(
   if (input.isPistolRound) {
     recommendedType = realType;
     reason = "Ronda de pistola: compra especial sin penalización económica.";
-  } else if (creditsProxy >= 16500 || input.teamLoadout >= 16500) {
+  } else if (
+    creditsProxy >= BASE_ECONOMY_THRESHOLDS.fullMinInclusive ||
+    input.teamLoadout >= BASE_ECONOMY_THRESHOLDS.fullMinInclusive
+  ) {
     recommendedType = "FULL";
     reason = "Compra completa recomendada por ventaja de créditos.";
   } else if (
     (input.lossStreak ?? 0) >= 2 &&
-    creditsProxy < 16500 &&
+    creditsProxy < BASE_ECONOMY_THRESHOLDS.fullMinInclusive &&
     enemyCreditsProxy > creditsProxy + 4500
   ) {
     recommendedType = "ECO";
     reason = "ECO recomendada para estabilizar economía tras derrotas consecutivas.";
-  } else if (creditsProxy < 7500 && enemyCreditsProxy > creditsProxy + 3500) {
+  } else if (
+    creditsProxy < BASE_ECONOMY_THRESHOLDS.ecoMaxExclusive &&
+    enemyCreditsProxy > creditsProxy + 3500
+  ) {
     recommendedType = "ECO";
     reason = "ECO recomendada por desventaja económica frente al rival.";
-  } else if (creditsProxy >= 7500 && creditsProxy < 16500) {
+  } else if (
+    creditsProxy >= BASE_ECONOMY_THRESHOLDS.ecoMaxExclusive &&
+    creditsProxy < BASE_ECONOMY_THRESHOLDS.fullMinInclusive
+  ) {
     recommendedType = isCritical ? "SEMIECO" : "ECO";
     reason = isCritical
       ? "SEMIECO aceptable por ronda crítica."

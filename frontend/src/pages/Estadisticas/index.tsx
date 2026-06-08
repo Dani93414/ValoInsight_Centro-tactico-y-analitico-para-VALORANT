@@ -2854,7 +2854,7 @@ export default function Estadisticas() {
         </>
       )}
 
-      <div className="floating-filters">
+      {!selectedMatchId && <div className="floating-filters">
         {filtersOpen && (
           <div className="floating-filters-panel">
             <div className="floating-filters-header">
@@ -3009,7 +3009,7 @@ export default function Estadisticas() {
             ) : null;
           })()}
         </button>
-      </div>
+      </div>}
 
       {/* ── MATCH HISTORY MODAL ── */}
       {historyModalOpen && (
