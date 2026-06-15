@@ -254,11 +254,12 @@ function getMomentumForTeam(
 }
 
 function postMomentumDelta(input: AdvancedMomentumInput, roundNumber: number, teamId: string) {
+  const maximumRound = Math.max(0, ...input.rounds.map((round) => round.roundNumber));
   const before = [roundNumber - 3, roundNumber - 2, roundNumber - 1]
     .filter((round) => round > 0)
     .map((round) => getMomentumForTeam(input.existingMomentum, round, teamId, input.teamAId));
   const after = [roundNumber + 1, roundNumber + 2, roundNumber + 3, roundNumber + 4, roundNumber + 5]
-    .filter((round) => round <= input.rounds.length)
+    .filter((round) => round <= maximumRound)
     .map((round) => getMomentumForTeam(input.existingMomentum, round, teamId, input.teamAId));
   return Math.round((average(after) - average(before)) * 10) / 10;
 }
@@ -337,26 +338,37 @@ export function evaluatePostEventImpact(
   const nextWins = winsInWindow(input.rounds, event.teamId, event.roundNumber + 1, 5);
   const brokenStreak = previousOpponentStreak(input.rounds, event.roundNumber, event.teamId);
   const changedDomain = domainChangeAfter(input.existingMomentum, event.roundNumber, event.teamId);
+  const isAdverseEvent = event.type === "FULL_LOSS_VS_ECO" || event.type === "CARRY_DROP";
+  const directionalMomentumDelta = isAdverseEvent ? -momentumDelta : momentumDelta;
   const streakBonus =
-    nextWins >= 4
+    isAdverseEvent
+      ? 0
+      : nextWins >= 4
       ? MOMENTUM_SCORING.postEvent.fourWinsNextFive
       : nextWins >= 3
         ? MOMENTUM_SCORING.postEvent.threeWinsNextFive
         : 0;
   const contextScore =
     event.contextScore +
-    (brokenStreak >= 5
+    (event.type === "STREAK_BREAKER"
+      ? 0
+      : brokenStreak >= 5
       ? MOMENTUM_SCORING.context.streakBreak5
       : brokenStreak >= 3
         ? MOMENTUM_SCORING.context.streakBreak3
         : 0) +
     (matchPointSaved(round, event.teamId) ? MOMENTUM_SCORING.context.matchPointSaved : 0) +
     (isOvertime(round.roundNumber) ? MOMENTUM_SCORING.context.overtime : 0) +
-    (round.roundNumber === 13 ? MOMENTUM_SCORING.context.sideSwitchRound : 0);
+    (round.roundNumber === 13 && event.type !== "SIDE_SWITCH_DOMINANCE"
+      ? MOMENTUM_SCORING.context.sideSwitchRound
+      : 0);
   const postScore =
     (changedDomain ? MOMENTUM_SCORING.postEvent.domainChange : 0) +
     streakBonus +
-    Math.min(1.4, Math.abs(momentumDelta) * MOMENTUM_SCORING.postEvent.deltaScale);
+    Math.min(
+      1.4,
+      Math.max(0, directionalMomentumDelta) * MOMENTUM_SCORING.postEvent.deltaScale,
+    );
   const totalImpactScore =
     event.spectacularityScore +
     contextScore +
@@ -371,10 +383,9 @@ export function evaluatePostEventImpact(
   const isTurningPoint =
     totalImpactScore >= MOMENTUM_SCORING.thresholds.turningPoint &&
     (changedDomain ||
-      Math.abs(momentumDelta) >= MOMENTUM_SCORING.thresholds.momentumDelta ||
+      directionalMomentumDelta >= MOMENTUM_SCORING.thresholds.momentumDelta ||
       nextWins >= 3 ||
       event.economicSwingScore >= MOMENTUM_SCORING.economy.ecoBeatsFull ||
-      event.type === "ACE" ||
       (event.type === "CLUTCH_INFERRED" && event.spectacularityScore >= MOMENTUM_SCORING.clutch.clutch1v3) ||
       (event.type === "EXTREME_DEFUSE" && event.objectiveScore >= MOMENTUM_SCORING.objective.defuseUnderHalf) ||
       matchPointSaved(round, event.teamId) ||
@@ -493,12 +504,13 @@ export function detectMultikillEvents(input: AdvancedMomentumInput): MomentumEve
     for (const playerRound of round.playerRounds) {
       if (playerRound.kills < 3) continue;
       const player = getPlayer(input.players, playerRound.playerId);
+      if (!player) continue;
       const isAce = playerRound.kills >= 5;
       drafts.push({
         id: roundId(isAce ? "ACE" : "MULTIKILL", round.roundNumber, playerRound.playerId),
         roundNumber: round.roundNumber,
         type: isAce ? "ACE" : "MULTIKILL",
-        teamId: player?.teamId ?? round.winnerTeamId,
+        teamId: player.teamId,
         playerId: playerRound.playerId,
         playerName: player?.playerName,
         agentName: player?.agentName,
@@ -538,10 +550,23 @@ export function detectInferredClutchEvents(input: AdvancedMomentumInput): Moment
       aliveByTeam.set(player.teamId, alive);
     }
     const candidates = new Map<string, number>();
+    const deadPlayers = new Set<string>();
+    let reliable =
+      (aliveByTeam.get(round.teamAId)?.size ?? 0) >= 5 &&
+      (aliveByTeam.get(round.teamBId)?.size ?? 0) >= 5;
     for (const kill of [...round.kills].sort((a, b) => a.timeMs - b.timeMs)) {
       const killer = getPlayer(input.players, kill.killerId);
       const victim = getPlayer(input.players, kill.victimId);
-      if (!killer || !victim) continue;
+      if (
+        !killer ||
+        !victim ||
+        killer.teamId === victim.teamId ||
+        deadPlayers.has(kill.killerId) ||
+        deadPlayers.has(kill.victimId)
+      ) {
+        reliable = false;
+        continue;
+      }
       const killerAlive = aliveByTeam.get(killer.teamId);
       const victimAlive = aliveByTeam.get(victim.teamId);
       const aliveTeammates = Math.max(0, (killerAlive?.size ?? 0) - 1);
@@ -553,11 +578,14 @@ export function detectInferredClutchEvents(input: AdvancedMomentumInput): Moment
       ) {
         candidates.set(killer.id, Math.max(candidates.get(killer.id) ?? 0, aliveEnemies));
       }
+      deadPlayers.add(victim.id);
       victimAlive?.delete(victim.id);
     }
 
+    if (!reliable) continue;
     for (const [playerId, enemies] of candidates) {
       const player = getPlayer(input.players, playerId);
+      if (!player || !aliveByTeam.get(round.winnerTeamId)?.has(playerId)) continue;
       drafts.push({
         id: roundId("CLUTCH_INFERRED", round.roundNumber, playerId),
         roundNumber: round.roundNumber,
@@ -602,6 +630,7 @@ export function detectExtremeDefuseEvents(input: AdvancedMomentumInput): Momentu
     const remainingMs = SPIKE_FUSE_MS - fuseElapsed;
     if (fuseElapsed <= 0 || fuseElapsed > SPIKE_FUSE_MS || remainingMs > 1000) continue;
     const player = getPlayer(input.players, round.bombDefuser);
+    if (player && player.teamId !== round.winnerTeamId) continue;
     drafts.push({
       id: roundId("EXTREME_DEFUSE", round.roundNumber, round.bombDefuser),
       roundNumber: round.roundNumber,
@@ -761,7 +790,11 @@ export function detectSideSwitchDominance(input: AdvancedMomentumInput): Momentu
     const after = input.rounds.filter((round) => round.roundNumber >= 13 && round.roundNumber <= 20);
     const beforeWins = before.filter((round) => round.winnerTeamId === teamId).length;
     const afterWins = after.filter((round) => round.winnerTeamId === teamId).length;
-    if (afterWins < 5 || afterWins - beforeWins < 2) return [];
+    const beforeRate = beforeWins / Math.max(before.length, 1);
+    const afterRate = afterWins / Math.max(after.length, 1);
+    if (after.length < 4 || afterWins < Math.ceil(after.length * 0.625) || afterRate - beforeRate < 0.2) {
+      return [];
+    }
     const side = teamId === firstSecondHalf.teamAId ? firstSecondHalf.teamASide : firstSecondHalf.teamBSide;
     return [{
       id: roundId("SIDE_SWITCH_DOMINANCE", 13, teamId),
@@ -991,19 +1024,18 @@ export function detectDuelReversalEvents(input: AdvancedMomentumInput): Momentum
 
 function eventPriority(event: MomentumEvent) {
   const typePriority: Partial<Record<MomentumEventType, number>> = {
-    CLUTCH_INFERRED: 3,
-    ECO_WIN: 3,
-    SEMIECO_WIN_VS_FULL: 3,
-    FULL_LOSS_VS_ECO: 3,
-    EXTREME_DEFUSE: 3,
-    SIDE_SWITCH_DOMINANCE: 2,
-    PLAYER_ACTIVATION: 2,
-    CARRY_DROP: 2,
-    DUEL_REVERSAL: 2,
-    ACE: 1,
-    MULTIKILL: 1,
+    SIDE_SWITCH_DOMINANCE: 0.35,
+    COMEBACK_SIGNAL: 0.35,
+    STREAK_BREAKER: 0.25,
+    ECO_WIN: 0.2,
+    SEMIECO_WIN_VS_FULL: 0.15,
+    CLUTCH_INFERRED: 0.15,
+    EXTREME_DEFUSE: 0.15,
+    PLAYER_ACTIVATION: 0.1,
+    CARRY_DROP: 0.1,
+    DUEL_REVERSAL: 0.1,
   };
-  return event.totalImpactScore + (typePriority[event.type] ?? 0);
+  return event.totalImpactScore + (event.isTurningPoint ? 2 : 0) + (typePriority[event.type] ?? 0);
 }
 
 function enrichEconomyLinks(events: MomentumEvent[]): MomentumEvent[] {
@@ -1021,9 +1053,26 @@ function enrichEconomyLinks(events: MomentumEvent[]): MomentumEvent[] {
 }
 
 function buildDataQuality(input: AdvancedMomentumInput): AdvancedMomentumResult["dataQuality"] {
-  const hasKills = input.rounds.some((round) => round.kills.length > 0);
-  const hasEconomy = input.rounds.some((round) => round.teamALoadout > 0 || round.teamBLoadout > 0);
-  const hasPlantDefuse = input.rounds.some((round) => round.plantRoundTime && round.defuseRoundTime);
+  const totalRounds = Math.max(input.rounds.length, 1);
+  const killCoverage = input.rounds.filter((round) => round.kills.length > 0).length / totalRounds;
+  const economyCoverage =
+    input.rounds.filter((round) => round.teamALoadout > 0 && round.teamBLoadout > 0).length /
+    totalRounds;
+  const completeRoster = input.players.filter((player) =>
+    [input.teamAId, input.teamBId].includes(player.teamId),
+  ).length >= 10;
+  const validKillTimestamps = input.rounds.every((round) =>
+    round.kills.every((kill) => Number.isFinite(kill.timeMs) && kill.timeMs >= 0),
+  );
+  const hasKills = killCoverage > 0;
+  const hasEconomy = economyCoverage > 0;
+  const hasPlantDefuse = input.rounds.some(
+    (round) =>
+      Boolean(round.bombPlanter) &&
+      Boolean(round.bombDefuser) &&
+      (round.plantRoundTime ?? 0) > 0 &&
+      (round.defuseRoundTime ?? 0) > (round.plantRoundTime ?? 0),
+  );
   const availableSignals = [
     "Secuencia de rondas desde roundResults",
     hasKills ? "Kills con timestamps" : "",
@@ -1036,11 +1085,19 @@ function buildDataQuality(input: AdvancedMomentumInput): AdvancedMomentumResult[
     "No hay snapshot completo de HP/vivos para clutches exactos.",
     "Retakes exactos no se afirman sin heurística espacial adicional.",
     hasPlantDefuse ? "" : "Defuse extremo no se calcula sin plant/defuse positivos.",
+    completeRoster ? "" : "Roster incompleto para inferir situaciones de vivos con fiabilidad.",
+    validKillTimestamps ? "" : "Hay timestamps de kills inválidos.",
   ].filter(Boolean);
+  const overallConfidence: MomentumConfidence =
+    killCoverage >= 0.8 && economyCoverage >= 0.8 && completeRoster && validKillTimestamps
+      ? "high"
+      : (killCoverage >= 0.4 || economyCoverage >= 0.4) && validKillTimestamps
+        ? "medium"
+        : "low";
   return {
     availableSignals,
     unavailableSignals,
-    overallConfidence: hasKills && hasEconomy ? "high" : hasKills || hasEconomy ? "medium" : "low",
+    overallConfidence,
   };
 }
 
@@ -1098,11 +1155,18 @@ export function analyzeAdvancedMomentum(input: AdvancedMomentumInput): AdvancedM
   );
   const mainTurningPoint = events.find((event) => event.isTurningPoint);
   const biggestEconomicSwing = events.find((event) =>
-    ["ECO_WIN", "SEMIECO_WIN_VS_FULL", "FULL_LOSS_VS_ECO", "ECONOMIC_SWING"].includes(event.type),
+    ["ECO_WIN", "SEMIECO_WIN_VS_FULL", "ECONOMIC_SWING"].includes(event.type),
   );
-  const mostEpicPlay = events.find((event) =>
-    ["CLUTCH_INFERRED", "ACE", "EXTREME_DEFUSE", "MULTIKILL"].includes(event.type),
-  );
+  const mostEpicPlay = events
+    .filter((event) =>
+      ["CLUTCH_INFERRED", "ACE", "EXTREME_DEFUSE", "MULTIKILL"].includes(event.type),
+    )
+    .sort(
+      (a, b) =>
+        b.spectacularityScore - a.spectacularityScore ||
+        b.objectiveScore - a.objectiveScore ||
+        b.totalImpactScore - a.totalImpactScore,
+    )[0];
   const unexpectedPlayerActivation = events.find((event) => event.type === "PLAYER_ACTIVATION");
   const carryDropEvent = events.find((event) => event.type === "CARRY_DROP");
   const sideSwitchImpact = events.find((event) => event.type === "SIDE_SWITCH_DOMINANCE");

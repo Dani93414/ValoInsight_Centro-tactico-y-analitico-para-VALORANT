@@ -47,6 +47,29 @@ import {
 export const MATCHES_PER_PAGE = 8;
 export const HISTORY_LOAD_STEP = 12;
 
+const ROLE_ICON_BY_NAME: Record<string, string> = {
+  duelista:
+    "/content/agents/0e38b510-41a8-5780-5e8f-568b2a4f2d6c/role/displayIcon.png",
+  duelist:
+    "/content/agents/0e38b510-41a8-5780-5e8f-568b2a4f2d6c/role/displayIcon.png",
+  centinela:
+    "/content/agents/569fdd95-4d10-43ab-ca70-79becc718b46/role/displayIcon.png",
+  sentinel:
+    "/content/agents/569fdd95-4d10-43ab-ca70-79becc718b46/role/displayIcon.png",
+  controlador:
+    "/content/agents/9f0d8ba9-4140-b941-57d3-a7ad57c6b417/role/displayIcon.png",
+  controller:
+    "/content/agents/9f0d8ba9-4140-b941-57d3-a7ad57c6b417/role/displayIcon.png",
+  iniciador:
+    "/content/agents/320b2a48-4d9b-a075-30f1-1f93a9b638fa/role/displayIcon.png",
+  initiator:
+    "/content/agents/320b2a48-4d9b-a075-30f1-1f93a9b638fa/role/displayIcon.png",
+};
+
+function getRoleIcon(roleName: string, fallback?: string | null) {
+  return ROLE_ICON_BY_NAME[normalizeLabel(roleName)] ?? fallback ?? null;
+}
+
 type ProfilePerformanceMetric = {
   key: RankComparisonMetricKey;
   label: string;
@@ -689,6 +712,89 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
       .sort((a, b) => b.matches - a.matches);
   }, [filteredMatches, dashboard]);
 
+  const mostPlayedRoles = useMemo(() => {
+    type RoleOverview = {
+      id: string;
+      name: string;
+      matches: number;
+      wins: number;
+      winRate: number;
+      image?: string | null;
+      displayIcon?: string | null;
+    };
+
+    const grouped = new Map<string, RoleOverview>();
+
+    Object.values(dashboard?.agentMediaMap ?? {}).forEach((media) => {
+      const roleName = media.roleName?.trim();
+      if (!roleName) return;
+
+      const roleId = normalizeLabel(roleName);
+      const roleIcon = getRoleIcon(roleName, media.roleIcon);
+      const current = grouped.get(roleId);
+      if (current) {
+        if (!current.displayIcon && roleIcon) {
+          current.image = roleIcon;
+          current.displayIcon = roleIcon;
+        }
+        return;
+      }
+
+      grouped.set(roleId, {
+        id: roleId,
+        name: roleName,
+        matches: 0,
+        wins: 0,
+        winRate: 0,
+        image: roleIcon,
+        displayIcon: roleIcon,
+      });
+    });
+
+    filteredMatches.forEach((match) => {
+      const media = match.agentId
+        ? dashboard?.agentMediaMap?.[match.agentId]
+        : undefined;
+      const roleName = match.role?.trim() || media?.roleName?.trim();
+      if (!roleName) return;
+
+      const roleId = normalizeLabel(roleName);
+      const roleIcon = getRoleIcon(roleName, media?.roleIcon);
+      const current = grouped.get(roleId);
+      if (current) {
+        current.matches += 1;
+        if (match.result === "Victoria") {
+          current.wins += 1;
+        }
+        if (!current.displayIcon && roleIcon) {
+          current.image = roleIcon;
+          current.displayIcon = roleIcon;
+        }
+        return;
+      }
+
+      grouped.set(roleId, {
+        id: roleId,
+        name: roleName,
+        matches: 1,
+        wins: match.result === "Victoria" ? 1 : 0,
+        winRate: 0,
+        image: roleIcon,
+        displayIcon: roleIcon,
+      });
+    });
+
+    return Array.from(grouped.values())
+      .map((role) => ({
+        ...role,
+        winRate: safeDiv(role.wins * 100, Math.max(role.matches, 1)),
+      }))
+      .sort((a, b) => {
+        if (b.matches !== a.matches) return b.matches - a.matches;
+        return b.winRate - a.winRate;
+      });
+  }, [filteredMatches, dashboard?.agentMediaMap]);
+
   const dashboardWeaponImageById = useMemo(() => {
     const map = new Map<string, string | null>();
     (dashboard?.mostPlayedWeapons ?? []).forEach((weapon) => {
@@ -875,6 +981,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
     let roundsForKastTotal = 0;
     let kastSum = 0;
     let kastCount = 0;
+    let usedApproximateKast = false;
 
     filteredAnalyticsList.forEach((match) => {
       const overview = match.overview ?? {};
@@ -903,6 +1010,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
         roundsWithKillRaw != null &&
         roundsWithAssistRaw != null
       ) {
+        usedApproximateKast = true;
         const survivalRounds = Number(survivalRoundsRaw);
         const roundsWithKill = Number(roundsWithKillRaw);
         const roundsWithAssist = Number(roundsWithAssistRaw);
@@ -930,6 +1038,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
         overview.kast_pct ??
         overview.kill_assist_survive_trade_pct;
       if (typeof rawKast === "number" && Number.isFinite(rawKast)) {
+        usedApproximateKast = true;
         kastSum += rawKast <= 1 ? rawKast * 100 : rawKast;
         kastCount += 1;
       }
@@ -950,6 +1059,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
       damageDeltaPerRound: safeDiv(damageDeltaTotal, damageDeltaRoundsTotal),
       kastPct,
       hasKastData: roundsForKastTotal > 0 || kastCount > 0,
+      kastIsApproximate: usedApproximateKast,
     };
   }, [filteredAnalyticsList]);
 
@@ -1688,6 +1798,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
     filteredResultSummary,
     latestFilteredAccountLevel,
     mostPlayedAgents,
+    mostPlayedRoles,
     mostPlayedWeapons,
     mapPerformance,
     bestMapWinrateInsight,
@@ -1700,6 +1811,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
     cohortSampleSize,
     cohortNotes,
     hasKastData: advancedRoundStats.hasKastData,
+    kastIsApproximate: advancedRoundStats.kastIsApproximate,
 
     // floating tooltip
     floatingTooltip,

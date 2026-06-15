@@ -449,7 +449,7 @@ class RoundStatsSummaryTest(unittest.TestCase):
         self.assertEqual(round_overview["missed_trade_opportunities"], 0)
         self.assertEqual(round_overview["trade_conversion_rate"], 100.0)
 
-    def test_round_overview_does_not_count_trade_only_round_as_kast(self):
+    def test_round_overview_counts_trade_only_round_as_kast(self):
         puuid = "P1"
         teammate = "P2"
         enemy = "E1"
@@ -479,7 +479,7 @@ class RoundStatsSummaryTest(unittest.TestCase):
 
         self.assertEqual(round_overview["rounds"], 2)
         self.assertEqual(round_overview["traded_deaths"], 1)
-        self.assertEqual(round_overview["rounds_with_kast"], 0)
+        self.assertEqual(round_overview["rounds_with_kast"], 1)
 
 
 if __name__ == "__main__":

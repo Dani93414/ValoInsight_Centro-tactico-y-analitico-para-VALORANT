@@ -19,6 +19,12 @@ from modules.analytics.infrastructure.reference_data import (
     resolve_weapon_name,
 )
 
+from shared.combat_events import (
+    is_enemy_damage,
+    is_valid_kill,
+    valid_assistants,
+    valid_kills,
+)
 from shared.math_utils import euclidean_distance_2d, safe_div as _safe_div_raw
 from shared.stat_formulas import finalize_core_stats
 from shared.weapon_attribution import (
@@ -290,12 +296,18 @@ def _attacking_team_for_round(
     return starting_attack_team if (round_num - 24) % 2 == 0 else other_team
 
 
-def _get_player_damage_dealt_and_shots(round_pstat: dict) -> tuple[int, int, int, int]:
+def _get_player_damage_dealt_and_shots(
+    round_pstat: dict,
+    puuid: str,
+    player_team_map: Dict[str, str],
+) -> tuple[int, int, int, int]:
     total_damage = 0
     hs = 0
     body = 0
     leg = 0
     for dmg in round_pstat.get("damage", []) or []:
+        if not is_enemy_damage(puuid, dmg.get("receiver"), player_team_map):
+            continue
         total_damage += int(dmg.get("damage", 0) or 0)
         hs += int(dmg.get("headshots", 0) or 0)
         body += int(dmg.get("bodyshots", 0) or 0)
@@ -303,29 +315,45 @@ def _get_player_damage_dealt_and_shots(round_pstat: dict) -> tuple[int, int, int
     return total_damage, hs, body, leg
 
 
-def _get_player_damage_received(round_obj: dict, puuid: str) -> int:
+def _get_player_damage_received(
+    round_obj: dict,
+    puuid: str,
+    player_team_map: Dict[str, str],
+) -> int:
     total_received = 0
     for pstat in round_obj.get("playerStats", []) or []:
+        attacker = pstat.get("puuid")
         for dmg in pstat.get("damage", []) or []:
-            if dmg.get("receiver") == puuid:
+            if (
+                dmg.get("receiver") == puuid
+                and is_enemy_damage(attacker, puuid, player_team_map)
+            ):
                 total_received += int(dmg.get("damage", 0) or 0)
     return total_received
 
 
-def _get_round_assists_from_kills(kills: Iterable[dict], puuid: str) -> int:
+def _get_round_assists_from_kills(
+    kills: Iterable[dict],
+    puuid: str,
+    player_team_map: Dict[str, str],
+) -> int:
     count = 0
     for kill in kills:
-        assistants = kill.get("assistants", []) or []
+        assistants = valid_assistants(kill, player_team_map)
         count += sum(1 for assistant in assistants if assistant == puuid)
     return count
 
 
-def _get_player_kills_count(round_pstat: dict, puuid: str) -> int:
-    count = 0
-    for kill in round_pstat.get("kills", []) or []:
-        if kill.get("killer") == puuid:
-            count += 1
-    return count
+def _get_player_kills_count(
+    kills: Iterable[dict],
+    puuid: str,
+    player_team_map: Dict[str, str],
+) -> int:
+    return sum(
+        1
+        for kill in kills
+        if kill.get("killer") == puuid and is_valid_kill(kill, player_team_map)
+    )
 
 
 def _did_player_die(kills: Iterable[dict], puuid: str) -> bool:
@@ -934,6 +962,7 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             pstats_map = _player_stats_map(round_obj)
             round_pstat = pstats_map.get(puuid, {})
             all_kills = _collect_round_kills(round_obj)
+            competitive_kills = valid_kills(all_kills, player_team)
 
             round_num = round_obj.get("roundNum")
             if not isinstance(round_num, int):
@@ -959,10 +988,26 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             player_team_set = team_members.get(team_id, set())
             enemy_team_set = team_members.get(enemy_team_id, set()) if enemy_team_id else set()
 
-            dealt_damage, hs, body, leg = _get_player_damage_dealt_and_shots(round_pstat)
-            received_damage = _get_player_damage_received(round_obj, puuid)
-            assists_round = _get_round_assists_from_kills(all_kills, puuid)
-            kills_round = _get_player_kills_count(round_pstat, puuid)
+            dealt_damage, hs, body, leg = _get_player_damage_dealt_and_shots(
+                round_pstat,
+                puuid,
+                player_team,
+            )
+            received_damage = _get_player_damage_received(
+                round_obj,
+                puuid,
+                player_team,
+            )
+            assists_round = _get_round_assists_from_kills(
+                competitive_kills,
+                puuid,
+                player_team,
+            )
+            kills_round = _get_player_kills_count(
+                competitive_kills,
+                puuid,
+                player_team,
+            )
             died = _did_player_die(all_kills, puuid)
             deaths_round = 1 if died else 0
 
@@ -973,7 +1018,7 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
             equipped_weapon_id = str(economy.get("weapon") or "UNKNOWN")
             equipped_armor_id = str(economy.get("armor") or "UNKNOWN")
 
-            first_kill = _find_first_kill(all_kills)
+            first_kill = _find_first_kill(competitive_kills)
             first_kills = 0
             first_deaths = 0
             opening_duel_wins = 0
@@ -988,14 +1033,14 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
                     opening_duel_losses = 1
 
             trade_metrics = _compute_trade_metrics(
-                kills=all_kills,
+                kills=competitive_kills,
                 puuid=puuid,
                 player_team=player_team_set,
                 enemy_team=enemy_team_set,
             )
 
             clutch_opportunities, clutches_won, clutch_breakdown = _find_clutch_for_player(
-                kills=all_kills,
+                kills=competitive_kills,
                 puuid=puuid,
                 player_team=player_team_set,
                 enemy_team=enemy_team_set,
@@ -1012,6 +1057,7 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
                     survival_rounds > 0
                     or rounds_with_kill > 0
                     or rounds_with_assist > 0
+                    or int(trade_metrics["traded_deaths"]) > 0
                 )
                 else 0
             )
@@ -1167,13 +1213,17 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
 
         overview["weapon_stats"] = merge_precise_weapon_core_stats(
             overview.get("weapon_stats"),
-            compute_precise_weapon_stats_core(round_results, puuid),
+            compute_precise_weapon_stats_core(round_results, puuid, player_team),
         )
         overview["weapon_stats"].update(overview.get("armor_stats") or {})
         for side_name in (SIDE_ATTACK, SIDE_DEFENSE):
             sides[side_name]["weapon_stats"] = merge_precise_weapon_core_stats(
                 sides[side_name].get("weapon_stats"),
-                compute_precise_weapon_stats_core(side_round_results[side_name], puuid),
+                compute_precise_weapon_stats_core(
+                    side_round_results[side_name],
+                    puuid,
+                    player_team,
+                ),
             )
             sides[side_name]["weapon_stats"].update(sides[side_name].get("armor_stats") or {})
 

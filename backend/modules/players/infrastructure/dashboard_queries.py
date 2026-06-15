@@ -17,6 +17,7 @@ _DASHBOARD_CONTENT_PROJECTION = {
     "agents.displayIcon": 1,
     "agents.fullPortrait": 1,
     "agents.bustPortrait": 1,
+    "agents.role.displayName": 1,
     "maps.uuid": 1,
     "maps.id": 1,
     "maps.displayName": 1,

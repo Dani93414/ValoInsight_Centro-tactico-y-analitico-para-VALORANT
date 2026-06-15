@@ -142,7 +142,11 @@ function clamp(value: number, minimum: number, maximum: number) {
 }
 
 function roundTwo(value: number) {
-  return Math.round(value * 100) / 100;
+  return (
+    Math.sign(value) *
+    Math.round((Math.abs(value) + Number.EPSILON) * 100) /
+    100
+  );
 }
 
 function isCriticalRound(round: PlayerImpactRoundInput) {
@@ -153,7 +157,8 @@ function isCriticalRound(round: PlayerImpactRoundInput) {
   return (
     round.roundNumber !== 13 &&
     (round.roundNumber >= 25 ||
-      Math.max(teamAScoreBefore, teamBScoreBefore) >= 12)
+      Math.max(teamAScoreBefore, teamBScoreBefore) >= 12 ||
+      Math.min(teamAScoreBefore, teamBScoreBefore) >= 11)
   );
 }
 
@@ -197,10 +202,23 @@ function detectWonClutches(
   }
 
   const clutches = new Map<string, number>();
+  const deadPlayers = new Set<string>();
+  let reliable =
+    (aliveByTeam.get(round.teamAId)?.size ?? 0) >= 5 &&
+    (aliveByTeam.get(round.teamBId)?.size ?? 0) >= 5;
   for (const kill of [...round.kills].sort((a, b) => a.timeMs - b.timeMs)) {
     const killerTeam = teamByPlayer.get(kill.killerId);
     const victimTeam = teamByPlayer.get(kill.victimId);
-    if (!killerTeam || !victimTeam || killerTeam === victimTeam) continue;
+    if (
+      !killerTeam ||
+      !victimTeam ||
+      killerTeam === victimTeam ||
+      deadPlayers.has(kill.killerId) ||
+      deadPlayers.has(kill.victimId)
+    ) {
+      reliable = false;
+      continue;
+    }
     const killerAlive = aliveByTeam.get(killerTeam);
     const victimAlive = aliveByTeam.get(victimTeam);
     const teammatesAlive = Math.max(0, (killerAlive?.size ?? 0) - 1);
@@ -215,9 +233,15 @@ function detectWonClutches(
         Math.max(clutches.get(kill.killerId) ?? 0, enemiesAlive),
       );
     }
+    deadPlayers.add(kill.victimId);
     victimAlive?.delete(kill.victimId);
   }
-  return clutches;
+  if (!reliable) return new Map<string, number>();
+  return new Map(
+    [...clutches].filter(([playerId]) =>
+      aliveByTeam.get(round.winnerTeamId)?.has(playerId),
+    ),
+  );
 }
 
 function milestoneTieScore(breakdown: PlayerRoundImpactBreakdown) {

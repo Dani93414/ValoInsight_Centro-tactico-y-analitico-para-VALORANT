@@ -106,6 +106,7 @@ export const TEAM_PLAYER_IMPACT_CAP = 0.4;
 export const TEAM_PLAYER_IMPACT_CRITICAL_CAP = 0.55;
 
 export const BALANCED_THRESHOLD = 0.75;
+// Threshold for classifying the signed impact of one round in the UI.
 export const MEDIUM_IMPACT_THRESHOLD = 0.75;
 export const HIGH_IMPACT_THRESHOLD = 1.5;
 export const DECISIVE_IMPACT_THRESHOLD = 2.4;
@@ -116,12 +117,20 @@ const economyRank: Record<TeamEconomyType, number> = {
   FULL: 2,
 };
 
+function roundToPrecision(value: number, factor: number): number {
+  return (
+    Math.sign(value) *
+    Math.round((Math.abs(value) + Number.EPSILON) * factor) /
+    factor
+  );
+}
+
 function roundToOneDecimal(value: number): number {
-  return Math.round(value * 10) / 10;
+  return roundToPrecision(value, 10);
 }
 
 function roundToTwoDecimals(value: number): number {
-  return Math.round(value * 100) / 100;
+  return roundToPrecision(value, 100);
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -175,7 +184,8 @@ function criticalRound(round: MomentumInputRound): boolean {
   return (
     round.roundNumber !== 13 &&
     (round.roundNumber >= 25 ||
-      Math.max(teamAScoreBefore, teamBScoreBefore) >= 11)
+      Math.max(teamAScoreBefore, teamBScoreBefore) >= 12 ||
+      Math.min(teamAScoreBefore, teamBScoreBefore) >= 11)
   );
 }
 
@@ -212,7 +222,22 @@ function getRoundEventModifiers(
   const teamOf = (playerId?: string) => playerTeams[playerId ?? ""] ?? "";
   const opponentTeamId =
     winnerTeamId === round.teamAId ? round.teamBId : round.teamAId;
-  const firstTeams = kills.slice(0, 3).map((kill) => teamOf(kill.killerId));
+  const sequenceDeaths = new Set<string>();
+  const reliableKillSequence = kills.every((kill) => {
+    const killerTeam = teamOf(kill.killerId);
+    const victimTeam = teamOf(kill.victimId);
+    const valid =
+      Boolean(killerTeam) &&
+      Boolean(victimTeam) &&
+      killerTeam !== victimTeam &&
+      !sequenceDeaths.has(kill.killerId) &&
+      !sequenceDeaths.has(kill.victimId);
+    sequenceDeaths.add(kill.victimId);
+    return valid;
+  });
+  const firstTeams = reliableKillSequence
+    ? kills.slice(0, 3).map((kill) => teamOf(kill.killerId))
+    : [];
   const openingTeam = firstTeams[0];
   let openingReversalModifier: Omit<MomentumContribution, "kind"> | null = null;
   if (openingTeam) {
@@ -265,12 +290,15 @@ function getRoundEventModifiers(
     soleSurvivorId?: string;
   } | null = null;
   let largestDisadvantage = 0;
-  let unreliableAliveTracking = false;
+  let unreliableAliveTracking =
+    (aliveByTeam.get(winnerTeamId)?.size ?? 0) < 5 ||
+    (aliveByTeam.get(opponentTeamId)?.size ?? 0) < 5;
   const deadPlayers = new Set<string>();
   for (const kill of kills) {
     if (
       !teamOf(kill.killerId) ||
       !teamOf(kill.victimId) ||
+      teamOf(kill.killerId) === teamOf(kill.victimId) ||
       deadPlayers.has(kill.killerId) ||
       deadPlayers.has(kill.victimId)
     ) {
@@ -343,9 +371,9 @@ function getRoundEventModifiers(
   const winnerDeaths = kills.filter(
     (kill) => teamOf(kill.victimId) === winnerTeamId,
   ).length;
-  if (winnerDeaths === 0 && kills.length > 0) {
+  if (winnerDeaths === 0 && kills.length > 0 && reliableKillSequence) {
     add("flawless", "Ronda perfecta", 0.15, "El ganador no perdió jugadores.");
-  } else if (winnerDeaths >= 4) {
+  } else if (winnerDeaths >= 4 && reliableKillSequence) {
     add(
       "costly",
       "Ronda costosa",
@@ -364,7 +392,7 @@ function getRoundEventModifiers(
     let label = "Defuse";
     let detail = "La ronda se resolvió mediante defuse.";
     const defuseTime = round.defuseRoundTime ?? 0;
-    if (defuseTime > 0) {
+    if (defuseTime > 0 && reliableKillSequence) {
       const aliveAtDefuse = new Map<string, Set<string>>();
       for (const [playerId, teamId] of Object.entries(playerTeams)) {
         const alive = aliveAtDefuse.get(teamId) ?? new Set<string>();
@@ -421,7 +449,7 @@ function getRoundEventModifiers(
     (a, b) => b[1] - a[1],
   )[0]?.[0];
   const topKillerName = playerNames[topKillerId] ?? "Un jugador";
-  if (!hardestSituation || hardestSituation.winnerAlive !== 1) {
+  if (reliableKillSequence && (!hardestSituation || hardestSituation.winnerAlive !== 1)) {
     if (maximumKills >= 5) {
       add("ace", "Ace decisivo", 0.35, `${topKillerName} consiguió cinco bajas.`);
     } else if (maximumKills === 4) {
@@ -489,13 +517,18 @@ export function calculateMatchMomentum(
   let teamBMomentum = 0;
   let teamAStreak = 0;
   let teamBStreak = 0;
-  let previousEstablishedDominantTeamId: string | null = null;
+  let previousDominantTeamId: string | null = null;
+  let hasObservedDominance = false;
 
   const momentumRounds: MomentumRound[] = [];
   const domainChanges: DomainChange[] = [];
 
   for (const round of rounds) {
-    const winnerTeamId = round.winnerTeamId ?? "";
+    const rawWinnerTeamId = round.winnerTeamId ?? "";
+    const winnerTeamId =
+      rawWinnerTeamId === teams.teamAId || rawWinnerTeamId === teams.teamBId
+        ? rawWinnerTeamId
+        : "";
     const winnerIsA = winnerTeamId === teams.teamAId;
     const winnerIsB = winnerTeamId === teams.teamBId;
     const winnerLabel = winnerIsA ? "Team A" : winnerIsB ? "Team B" : "Equipo ganador";
@@ -573,7 +606,7 @@ export function calculateMatchMomentum(
       tags.push("Ronda crítica");
     }
     if (round.roundNumber === 13) {
-      tags.push("Cambio de lado favorable");
+      tags.push("Inicio de segunda mitad");
     }
     const eventModifiers = winnerTeamId
       ? getRoundEventModifiers(round, winnerTeamId)
@@ -655,7 +688,7 @@ export function calculateMatchMomentum(
     }
 
     const signedImpact = winnerIsA ? impact : winnerIsB ? -impact : 0;
-    const decay = getRoundDecay(round);
+    const decay = winnerTeamId ? getRoundDecay(round) : 1;
     const previousMomentumDiff = teamAMomentum - teamBMomentum;
     const carryoverImpact = previousMomentumDiff * decay;
     teamAMomentum = teamAMomentum * decay + Math.max(signedImpact, 0);
@@ -673,29 +706,34 @@ export function calculateMatchMomentum(
       round.teamAScore - (winnerIsA ? 1 : 0);
     const teamBScoreBefore =
       round.teamBScore - (winnerIsB ? 1 : 0);
+    const winnerDeficitBefore = winnerIsA
+      ? teamBScoreBefore - teamAScoreBefore
+      : winnerIsB
+        ? teamAScoreBefore - teamBScoreBefore
+        : 0;
     const isComebackSignal =
-      (winnerIsA && teamAScoreBefore < teamBScoreBefore && isStreakBreaker) ||
-      (winnerIsB && teamBScoreBefore < teamAScoreBefore && isStreakBreaker);
-    const establishedDomainChange =
-      dominantTeamId !== null &&
-      dominantTeamId !== previousEstablishedDominantTeamId;
+      winnerDeficitBefore > 0 &&
+      (isStreakBreaker || winnerDeficitBefore >= 4);
+    const domainChanged =
+      hasObservedDominance && dominantTeamId !== previousDominantTeamId;
 
-    if (establishedDomainChange) {
+    if (domainChanged) {
       const reason =
         tags.find((tag) => tag === "Ruptura de racha") ??
         tags.find((tag) => tag === "Victoria con economía inferior") ??
-        tags.find((tag) => tag === "Cambio de lado favorable") ??
+        tags.find((tag) => tag === "Inicio de segunda mitad") ??
         tags.find((tag) => tag === "Ronda crítica") ??
         "Acumulación de rondas consecutivas";
       domainChanges.push({
         roundNumber: round.roundNumber,
-        fromTeamId: previousEstablishedDominantTeamId,
+        fromTeamId: previousDominantTeamId,
         toTeamId: dominantTeamId,
         reason,
       });
       tags.push("Cambio de dominio");
-      previousEstablishedDominantTeamId = dominantTeamId;
     }
+    previousDominantTeamId = dominantTeamId;
+    hasObservedDominance = true;
     const contributionDirection = winnerIsA ? 1 : winnerIsB ? -1 : 0;
     const rawAccountingContributions: MomentumContribution[] = [
       {
@@ -716,33 +754,21 @@ export function calculateMatchMomentum(
         value: roundToTwoDecimals(contribution.value),
       }),
     );
-    const accountingTotal = accountingContributions.reduce(
+    const accountingTotal = roundToTwoDecimals(accountingContributions.reduce(
       (sum, contribution) => sum + contribution.value,
       0,
-    );
-    let accountingResidual = roundToTwoDecimals(
+    ));
+    const accountingResidual = roundToTwoDecimals(
       roundToTwoDecimals(momentumDiff) - accountingTotal,
     );
-    while (Math.abs(accountingResidual) >= 0.01) {
-      const direction = Math.sign(accountingResidual);
-      const recipientIndex = rawAccountingContributions
-        .map((contribution, index) => ({
-          index,
-          roundingError:
-            contribution.value - accountingContributions[index].value,
-        }))
-        .sort((a, b) =>
-          direction > 0
-            ? b.roundingError - a.roundingError
-            : a.roundingError - b.roundingError,
-        )[0]?.index;
-      if (recipientIndex === undefined) break;
-      accountingContributions[recipientIndex].value = roundToTwoDecimals(
-        accountingContributions[recipientIndex].value + direction * 0.01,
-      );
-      accountingResidual = roundToTwoDecimals(
-        accountingResidual - direction * 0.01,
-      );
+    if (Math.abs(accountingResidual) >= 0.01) {
+      accountingContributions.push({
+        id: "rounding-adjustment",
+        label: "Ajuste de redondeo",
+        value: accountingResidual,
+        kind: "carryover",
+        detail: "Ajuste contable para cuadrar los valores mostrados a dos decimales.",
+      });
     }
 
     momentumRounds.push({
@@ -758,7 +784,7 @@ export function calculateMatchMomentum(
       dominanceLevel,
       isSwingRound:
         Math.abs(signedImpact) >= HIGH_IMPACT_THRESHOLD ||
-        establishedDomainChange,
+        domainChanged,
       isComebackSignal,
       isStreakBreaker,
       roundImpact: roundToOneDecimal(signedImpact),
@@ -796,11 +822,16 @@ export function calculateMatchMomentum(
     (max, round) => Math.max(max, Math.abs(round.momentumDiff)),
     0,
   );
+  const minimumGlobalControlLead = Math.max(
+    2,
+    Math.ceil(momentumRounds.length * 0.1),
+  );
+  const controlLead = Math.abs(teamAControlRounds - teamBControlRounds);
 
   return {
     rounds: momentumRounds,
     globalDominantTeamId:
-      teamAControlRounds === teamBControlRounds
+      controlLead < minimumGlobalControlLead
         ? null
         : teamAControlRounds > teamBControlRounds
           ? teams.teamAId

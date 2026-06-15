@@ -33,6 +33,7 @@ import {
   MATCHES_PER_PAGE,
   HISTORY_LOAD_STEP,
 } from "./useEstadisticasViewModel";
+import { useDashboardStats } from "../../hooks/useDashboardStats";
 import "../Estadisticas.scss";
 
 import type {
@@ -437,6 +438,7 @@ export default function Estadisticas() {
     filteredResultSummary,
     latestFilteredAccountLevel,
     mostPlayedAgents,
+    mostPlayedRoles,
     mostPlayedWeapons,
     mapPerformance,
     bestMapWinrateInsight,
@@ -449,10 +451,24 @@ export default function Estadisticas() {
     cohortSampleSize,
     cohortNotes,
     hasKastData,
+    kastIsApproximate,
     floatingTooltip,
     updateFloatingTooltipLayout,
     getFloatingInfoHoverHandlers,
   } = useEstadisticasViewModel(playerId);
+  const [shotChartRange, setShotChartRange] = React.useState<
+    "total" | "recent20"
+  >("total");
+  const recentShotMatches = React.useMemo(
+    () => sortedFilteredMatches.slice(0, 20),
+    [sortedFilteredMatches],
+  );
+  const { filteredShotChart: recentShotChart } = useDashboardStats(
+    recentShotMatches,
+    filters.side,
+  );
+  const activeShotChart =
+    shotChartRange === "total" ? filteredShotChart : recentShotChart;
 
   const floatingTooltipRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -485,7 +501,7 @@ export default function Estadisticas() {
 
   const cohortNotesText =
     cohortNotes.length > 0 ? ` ${cohortNotes.join(" ")}` : "";
-  const profilePanelTooltip = `${CHART_HELP.profile} Rango base del cohorte: ${cohortBaseRankName}. Cohorte activa: ${cohortReferenceLabel} (${formatNumber(cohortSampleSize)} jugadores).${!hasKastData ? " KAST no aparece en este historial y se calcula con los datos disponibles o queda neutral si no hay muestra." : ""}${cohortNotesText}`;
+  const profilePanelTooltip = `${CHART_HELP.profile} Rango base del cohorte: ${cohortBaseRankName}. Cohorte activa: ${cohortReferenceLabel} (${formatNumber(cohortSampleSize)} jugadores).${!hasKastData ? " KAST no aparece en este historial y queda neutral si no hay muestra." : kastIsApproximate ? " Parte del KAST es una aproximación K/A/S porque faltan rondas_with_kast exactas; no incluye trades desconocidos." : " KAST usa rondas exactas con kill válida, asistencia válida, supervivencia o muerte tradeada."}${cohortNotesText}`;
 
   const playerRankIcon =
     displayedRankVisual ||
@@ -500,6 +516,12 @@ export default function Estadisticas() {
   const [tacticalPanelTab, setTacticalPanelTab] =
     React.useState<TacticalPanelTab>("Headshot");
   const [agentsSortMode, setAgentsSortMode] = React.useState<
+    "matches" | "winrate"
+  >("matches");
+  const [bestOverviewMode, setBestOverviewMode] = React.useState<
+    "agents" | "roles"
+  >("agents");
+  const [rolesSortMode, setRolesSortMode] = React.useState<
     "matches" | "winrate"
   >("matches");
   const [weaponsSortMode, setWeaponsSortMode] = React.useState<"kills" | "kd">(
@@ -577,6 +599,22 @@ export default function Estadisticas() {
       return b.winRate - a.winRate;
     });
   }, [mostPlayedAgents, agentsSortMode]);
+
+  const displayedRoles = React.useMemo(() => {
+    if (rolesSortMode === "winrate") {
+      return [...mostPlayedRoles].sort((a, b) => {
+        if (a.matches === 0 && b.matches !== 0) return 1;
+        if (b.matches === 0 && a.matches !== 0) return -1;
+        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+        return b.matches - a.matches;
+      });
+    }
+
+    return [...mostPlayedRoles].sort((a, b) => {
+      if (b.matches !== a.matches) return b.matches - a.matches;
+      return b.winRate - a.winRate;
+    });
+  }, [mostPlayedRoles, rolesSortMode]);
 
   const displayedWeapons = React.useMemo(() => {
     if (weaponsSortMode === "kd") {
@@ -1423,23 +1461,43 @@ export default function Estadisticas() {
                   getHoverHandlers={getFloatingInfoHoverHandlers}
                 />
               </div>
+              <div className="shot-chart-range-tabs" role="tablist">
+                <button
+                  type="button"
+                  className={shotChartRange === "total" ? "active" : ""}
+                  onClick={() => setShotChartRange("total")}
+                  role="tab"
+                  aria-selected={shotChartRange === "total"}
+                >
+                  Total
+                </button>
+                <button
+                  type="button"
+                  className={shotChartRange === "recent20" ? "active" : ""}
+                  onClick={() => setShotChartRange("recent20")}
+                  role="tab"
+                  aria-selected={shotChartRange === "recent20"}
+                >
+                  20 últimas partidas
+                </button>
+              </div>
 
               <div className="shot-panel-layout">
                 <div className="chart-box shot-chart-box">
-                  {filteredShotChart.length > 0 ? (
+                  {activeShotChart.length > 0 ? (
                     <ResponsiveContainer width="100%" height={200}>
                       <PieChart
                         margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
                       >
                         <Pie
-                          data={filteredShotChart}
+                          data={activeShotChart}
                           dataKey="value"
                           nameKey="name"
                           innerRadius={48}
                           outerRadius={70}
                           paddingAngle={3}
                         >
-                          {filteredShotChart.map((entry) => (
+                          {activeShotChart.map((entry) => (
                             <Cell key={entry.name} fill={entry.color} />
                           ))}
                         </Pie>
@@ -1465,7 +1523,7 @@ export default function Estadisticas() {
                 </div>
 
                 <div className="shot-legend">
-                  {filteredShotChart.map((item) => (
+                  {activeShotChart.map((item) => (
                     <div key={item.name} className="shot-legend-item">
                       <div className="shot-legend-left">
                         <span
@@ -2659,64 +2717,129 @@ export default function Estadisticas() {
               <div className="side-panels-top-row side-panels-top-row--triple">
                 {/* ── Panel: Mejores agentes ── */}
                 <div className="side-panel-card side-panel-card--compact">
-                  <div className="side-panel-header">
-                    <h4 className="side-panel-card-title">Mejores Agentes</h4>
+                  <div className="side-panel-header side-panel-header--overview">
+                    <div className="side-panel-header-main-row">
+                      <div className="side-panel-title-mode">
+                        <h4 className="side-panel-card-title">Mejores</h4>
+                        <select
+                          className="side-panel-title-select"
+                          value={bestOverviewMode}
+                          onChange={(event) =>
+                            setBestOverviewMode(
+                              event.target.value as "agents" | "roles",
+                            )
+                          }
+                          aria-label="Mostrar mejores agentes o roles"
+                        >
+                          <option value="agents">Agentes</option>
+                          <option value="roles">Roles</option>
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        className="side-panel-view-all-btn"
+                        onClick={() => setAgentsModalOpen(true)}
+                      >
+                        Ver Todos
+                      </button>
+                    </div>
                     <div className="side-panel-sort-toggle side-panel-sort-toggle--inline">
                       <button
                         type="button"
-                        className={`side-panel-sort-btn${agentsSortMode === "matches" ? " active" : ""}`}
-                        onClick={() => setAgentsSortMode("matches")}
+                        className={`side-panel-sort-btn${
+                          (bestOverviewMode === "agents"
+                            ? agentsSortMode
+                            : rolesSortMode) === "matches"
+                            ? " active"
+                            : ""
+                        }`}
+                        onClick={() =>
+                          bestOverviewMode === "agents"
+                            ? setAgentsSortMode("matches")
+                            : setRolesSortMode("matches")
+                        }
                       >
                         Partidas
                       </button>
-                      {canSortAgentsByWinRate && (
+                      {(bestOverviewMode === "roles" ||
+                        canSortAgentsByWinRate) && (
                         <button
                           type="button"
-                          className={`side-panel-sort-btn${agentsSortMode === "winrate" ? " active" : ""}`}
-                          onClick={() => setAgentsSortMode("winrate")}
+                          className={`side-panel-sort-btn${
+                            (bestOverviewMode === "agents"
+                              ? agentsSortMode
+                              : rolesSortMode) === "winrate"
+                              ? " active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            bestOverviewMode === "agents"
+                              ? setAgentsSortMode("winrate")
+                              : setRolesSortMode("winrate")
+                          }
                         >
                           Winrate
                         </button>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      className="side-panel-view-all-btn"
-                      onClick={() => setAgentsModalOpen(true)}
-                    >
-                      Ver Todos
-                    </button>
                   </div>
 
                   <div className="side-panel-card-items side-panel-card-items--compact">
-                    {displayedAgents.slice(0, 3).map((agent) => (
-                      <button
-                        key={agent.id}
-                        type="button"
-                        className="side-panel-mini"
-                        onClick={() => openAgentDetail(agent.id)}
-                      >
-                        {agent.displayIcon || agent.image ? (
-                          <img
-                            className="side-panel-mini-img side-panel-mini-img--agent"
-                            src={agent.displayIcon || agent.image || ""}
-                            alt={agent.name}
-                          />
-                        ) : (
-                          <div className="side-panel-mini-img side-panel-mini-img--agent side-panel-mini-placeholder">
-                            {agent.name.charAt(0)}
+                    {bestOverviewMode === "agents"
+                      ? displayedAgents.slice(0, 3).map((agent) => (
+                          <button
+                            key={agent.id}
+                            type="button"
+                            className="side-panel-mini"
+                            onClick={() => openAgentDetail(agent.id)}
+                          >
+                            {agent.displayIcon || agent.image ? (
+                              <img
+                                className="side-panel-mini-img side-panel-mini-img--agent"
+                                src={agent.displayIcon || agent.image || ""}
+                                alt={agent.name}
+                              />
+                            ) : (
+                              <div className="side-panel-mini-img side-panel-mini-img--agent side-panel-mini-placeholder">
+                                {agent.name.charAt(0)}
+                              </div>
+                            )}
+                            <span className="side-panel-mini-name">
+                              {agent.name}
+                            </span>
+                            <span className="side-panel-mini-stat">
+                              {agentsSortMode === "winrate"
+                                ? `${formatPercent(agent.winRate, 1)} · ${formatNumber(agent.matches)} pj`
+                                : `${formatNumber(agent.matches)} partidas`}
+                            </span>
+                          </button>
+                        ))
+                      : displayedRoles.slice(0, 4).map((role) => (
+                          <div
+                            key={role.id}
+                            className="side-panel-mini side-panel-mini--role"
+                          >
+                            {role.displayIcon || role.image ? (
+                              <img
+                                className="side-panel-mini-img side-panel-mini-img--role"
+                                src={role.displayIcon || role.image || ""}
+                                alt={role.name}
+                              />
+                            ) : (
+                              <div className="side-panel-mini-img side-panel-mini-img--role side-panel-mini-placeholder">
+                                {role.name.charAt(0)}
+                              </div>
+                            )}
+                            <span className="side-panel-mini-name">
+                              {role.name}
+                            </span>
+                            <span className="side-panel-mini-stat">
+                              {rolesSortMode === "winrate"
+                                ? `${formatPercent(role.winRate, 1)} · ${formatNumber(role.matches)} pj`
+                                : `${formatNumber(role.matches)} partidas`}
+                            </span>
                           </div>
-                        )}
-                        <span className="side-panel-mini-name">
-                          {agent.name}
-                        </span>
-                        <span className="side-panel-mini-stat">
-                          {agentsSortMode === "winrate"
-                            ? `${formatPercent(agent.winRate, 1)} · ${formatNumber(agent.matches)} pj`
-                            : `${formatNumber(agent.matches)} partidas`}
-                        </span>
-                      </button>
-                    ))}
+                        ))}
                   </div>
                 </div>
 
@@ -3108,7 +3231,11 @@ export default function Estadisticas() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="list-modal-header">
-              <h3>Agentes jugados</h3>
+              <h3>
+                {bestOverviewMode === "agents"
+                  ? "Agentes jugados"
+                  : "Roles jugados"}
+              </h3>
               <button
                 type="button"
                 className="list-modal-close"
@@ -3118,40 +3245,73 @@ export default function Estadisticas() {
               </button>
             </div>
             <div className="list-modal-body">
-              {displayedAgents.length === 0 ? (
-                <div className="empty-panel">Sin datos de agentes.</div>
+              {bestOverviewMode === "agents" ? (
+                displayedAgents.length === 0 ? (
+                  <div className="empty-panel">Sin datos de agentes.</div>
+                ) : (
+                  <div className="list-modal-items">
+                    {displayedAgents.map((agent) => (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        className="list-modal-item"
+                        onClick={() => {
+                          setAgentsModalOpen(false);
+                          openAgentDetail(agent.id);
+                        }}
+                      >
+                        {agent.displayIcon || agent.image ? (
+                          <img
+                            src={agent.displayIcon || agent.image || ""}
+                            alt={agent.name}
+                            className="list-modal-item-img"
+                          />
+                        ) : (
+                          <div className="list-modal-item-img list-modal-item-placeholder">
+                            {agent.name.charAt(0)}
+                          </div>
+                        )}
+                        <div className="list-modal-item-info">
+                          <strong>{agent.name}</strong>
+                          <small>
+                            {agentsSortMode === "winrate"
+                              ? `${formatPercent(agent.winRate, 1)} · ${formatNumber(agent.matches)} partidas`
+                              : `${formatNumber(agent.matches)} partidas`}
+                          </small>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )
+              ) : displayedRoles.length === 0 ? (
+                <div className="empty-panel">Sin datos de roles.</div>
               ) : (
                 <div className="list-modal-items">
-                  {displayedAgents.map((agent) => (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      className="list-modal-item"
-                      onClick={() => {
-                        setAgentsModalOpen(false);
-                        openAgentDetail(agent.id);
-                      }}
+                  {displayedRoles.map((role) => (
+                    <div
+                      key={role.id}
+                      className="list-modal-item list-modal-item--static"
                     >
-                      {agent.displayIcon || agent.image ? (
+                      {role.displayIcon || role.image ? (
                         <img
-                          src={agent.displayIcon || agent.image || ""}
-                          alt={agent.name}
-                          className="list-modal-item-img"
+                          src={role.displayIcon || role.image || ""}
+                          alt={role.name}
+                          className="list-modal-item-img list-modal-item-role-img"
                         />
                       ) : (
                         <div className="list-modal-item-img list-modal-item-placeholder">
-                          {agent.name.charAt(0)}
+                          {role.name.charAt(0)}
                         </div>
                       )}
                       <div className="list-modal-item-info">
-                        <strong>{agent.name}</strong>
+                        <strong>{role.name}</strong>
                         <small>
-                          {agentsSortMode === "winrate"
-                            ? `${formatPercent(agent.winRate, 1)} · ${formatNumber(agent.matches)} partidas`
-                            : `${formatNumber(agent.matches)} partidas`}
+                          {rolesSortMode === "winrate"
+                            ? `${formatPercent(role.winRate, 1)} · ${formatNumber(role.matches)} partidas`
+                            : `${formatNumber(role.matches)} partidas`}
                         </small>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
