@@ -7,6 +7,7 @@ from modules.analytics.infrastructure.reference_data import (
     resolve_weapon_or_gear_name,
 )
 
+from shared.combat_events import is_valid_kill, valid_assistants
 from shared.math_utils import safe_div as _safe_div_raw
 
 
@@ -109,6 +110,7 @@ def _ensure_weapon_bucket(
 def compute_precise_weapon_stats_core(
     round_results: Iterable[dict[str, Any]] | None,
     puuid: str,
+    team_by_puuid: dict[str, str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     weapon_stats: dict[str, dict[str, Any]] = {}
 
@@ -124,9 +126,14 @@ def compute_precise_weapon_stats_core(
         assist_count = sum(
             1
             for kill in all_kills
-            if puuid in (kill.get("assistants") or [])
+            if puuid in valid_assistants(kill, team_by_puuid)
         )
-        own_kills = [kill for kill in all_kills if kill.get("killer") == puuid]
+        own_kills = [
+            kill
+            for kill in all_kills
+            if kill.get("killer") == puuid
+            and is_valid_kill(kill, team_by_puuid)
+        ]
 
         death_time_ms: int | None = None
         for kill in all_kills:

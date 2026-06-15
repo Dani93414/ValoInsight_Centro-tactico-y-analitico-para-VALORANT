@@ -35,6 +35,7 @@ def _get_dashboard_content() -> dict[str, Any]:
 
 
 from shared.math_utils import euclidean_distance_2d, safe_div as _safe_div
+from shared.combat_events import build_team_lookup, valid_assistants, valid_kills
 from shared.weapon_attribution import (
     compute_precise_weapon_stats_core,
     merge_precise_weapon_core_stats,
@@ -781,17 +782,20 @@ def _compute_round_overview_from_round_results(
         if own_team_won_round and ceremony:
             round_ceremonies[ceremony] = round_ceremonies.get(ceremony, 0) + 1
         unique_kills = _collect_unique_round_kills(round_obj)
+        competitive_kills = valid_kills(unique_kills, team_by_puuid)
         first_death_time_ms = _first_death_time_in_round(unique_kills, puuid)
-        kills_round = sum(1 for kill in unique_kills if kill.get("killer") == puuid)
+        kills_round = sum(
+            1 for kill in competitive_kills if kill.get("killer") == puuid
+        )
         assists_round = sum(
             1
-            for kill in unique_kills
-            if puuid in (kill.get("assistants") or [])
+            for kill in competitive_kills
+            if puuid in valid_assistants(kill, team_by_puuid)
         )
         died = any(kill.get("victim") == puuid for kill in unique_kills)
 
         round_trade_metrics = _compute_trade_metrics_from_round_kills(
-            kills=unique_kills,
+            kills=competitive_kills,
             puuid=puuid,
             player_team=player_team_members,
             enemy_team=enemy_team_members,
@@ -810,9 +814,10 @@ def _compute_round_overview_from_round_results(
             not died
             or has_kill
             or has_assist
+            or int(round_trade_metrics["traded_deaths"]) > 0
         )
 
-        if unique_kills and unique_kills[0].get("killer") == puuid:
+        if competitive_kills and competitive_kills[0].get("killer") == puuid:
             first_kills += 1
 
         planter = round_obj.get("bombPlanter")
@@ -1252,10 +1257,18 @@ def _build_agent_maps(
         if agent_name:
             name_map[agent_id] = agent_name
 
+        role = agent.get("role") or {}
+        role_name = role.get("displayName")
         media_map[agent_id] = {
             "name": agent_name or "Agente desconocido",
             "image": f"/content/agents/{agent_id}/fullPortrait.png",
             "displayIcon": f"/content/agents/{agent_id}/displayIcon.png",
+            "roleName": role_name,
+            "roleIcon": (
+                f"/content/agents/{agent_id}/role/displayIcon.png"
+                if role_name
+                else None
+            ),
         }
 
     return name_map, media_map
@@ -2683,6 +2696,7 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
                 compute_precise_weapon_stats_core(
                     match_obj.get("roundResults") or [],
                     puuid,
+                    build_team_lookup(match_obj.get("players") or []),
                 ),
             )
             player_team_id = str(player.get("teamId") or "").lower()
@@ -2722,11 +2736,14 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
                 "competitive_tier": player.get("competitiveTier"),
                 "account_level": player.get("accountLevel"),
                 "player_totals_from_match": {
-                    "kills": int(player_stats.get("kills", 0) or 0),
-                    "deaths": int(player_stats.get("deaths", 0) or 0),
-                    "assists": int(player_stats.get("assists", 0) or 0),
-                    "score": int(player_stats.get("score", 0) or 0),
-                    "rounds_played": int(player_stats.get("roundsPlayed", 0) or 0),
+                    "kills": int(overview.get("kills", 0) or 0),
+                    "deaths": int(overview.get("deaths", 0) or 0),
+                    "assists": int(overview.get("assists", 0) or 0),
+                    "score": int(overview.get("score", player_stats.get("score", 0)) or 0),
+                    "rounds_played": int(
+                        overview.get("rounds", player_stats.get("roundsPlayed", 0))
+                        or 0
+                    ),
                     "match_duration_millis": int(match_info.get("gameLengthMillis", 0) or 0),
                     "playtime_millis": int(player_stats.get("playtimeMillis", 0) or 0),
                 },

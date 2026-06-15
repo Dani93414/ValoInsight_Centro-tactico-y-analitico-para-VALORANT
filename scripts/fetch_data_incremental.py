@@ -82,6 +82,45 @@ def get_item_identity_value(item: Any) -> str | None:
     return value or None
 
 
+def build_child_change_report(
+    existing_item: Dict[str, Any],
+    incoming_item: Dict[str, Any],
+    child_field: str,
+) -> Dict[str, Any]:
+    """Describe changes inside an identified top-level content item."""
+    existing_children = existing_item.get(child_field) or []
+    incoming_children = incoming_item.get(child_field) or []
+    existing_by_identity = {
+        get_item_identity(item): item
+        for item in existing_children
+        if get_item_identity(item)
+    }
+
+    added_ids: List[str] = []
+    updated_ids: List[str] = []
+    for incoming_child in incoming_children:
+        identity = get_item_identity(incoming_child)
+        identity_value = get_item_identity_value(incoming_child)
+        if not identity or not identity_value:
+            continue
+
+        existing_child = existing_by_identity.get(identity)
+        if existing_child is None:
+            added_ids.append(identity_value)
+        elif stable_json(existing_child) != stable_json(incoming_child):
+            updated_ids.append(identity_value)
+
+    existing_parent = {key: value for key, value in existing_item.items() if key != child_field}
+    incoming_parent = {key: value for key, value in incoming_item.items() if key != child_field}
+    return {
+        "parent_updated": stable_json(existing_parent) != stable_json(incoming_parent),
+        child_field: {
+            "added": sorted(set(added_ids)),
+            "updated": sorted(set(updated_ids)),
+        },
+    }
+
+
 def merge_incremental_list(existing: List[Any], incoming: List[Any]) -> Tuple[List[Any], Dict[str, int]]:
     """
     Actualiza o añade elementos de incoming sobre existing.
@@ -421,6 +460,7 @@ def sync_incremental_content(*, content_only: bool = False) -> None:
                 {
                     "changed_fields": sorted(key for key in new_doc.keys() if key != "type"),
                     "changed_items": {},
+                    "changed_children": {},
                     "leaderboards": leaderboard_report,
                 },
                 ensure_ascii=False,
@@ -433,6 +473,7 @@ def sync_incremental_content(*, content_only: bool = False) -> None:
     set_fields: Dict[str, Any] = {}
     summary: Dict[str, Dict[str, int]] = {}
     changed_items: Dict[str, Dict[str, List[str]]] = {}
+    changed_children: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
     for field, incoming_value in new_doc.items():
         if field == "type":
@@ -465,6 +506,12 @@ def sync_incremental_content(*, content_only: bool = False) -> None:
                     added_ids.append(identity_value)
                 elif stable_json(existing_item) != stable_json(incoming_item):
                     updated_ids.append(identity_value)
+                    if field == "weapons":
+                        changed_children.setdefault(field, {})[identity_value] = build_child_change_report(
+                            existing_item,
+                            incoming_item,
+                            "skins",
+                        )
 
             if added_ids or updated_ids:
                 changed_items[field] = {
@@ -498,6 +545,7 @@ def sync_incremental_content(*, content_only: bool = False) -> None:
     report_payload = {
         "changed_fields": sorted(changed_items.keys()),
         "changed_items": changed_items,
+        "changed_children": changed_children,
         "leaderboards": {} if content_only else sync_incremental_leaderboards(new_doc.get("acts", [])),
     }
     CHANGE_REPORT_PATH.write_text(

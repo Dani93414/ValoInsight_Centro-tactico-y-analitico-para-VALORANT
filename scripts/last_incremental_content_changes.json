@@ -1,4 +1,43 @@
 {
   "changed_fields": [],
-  "changed_items": {}
+  "changed_items": {},
+  "changed_children": {},
+  "leaderboards": {
+    "pc:AP": {
+      "checked": 39,
+      "inserted": 1,
+      "unchanged": 32,
+      "errors": 6
+    },
+    "pc:EU": {
+      "checked": 39,
+      "inserted": 1,
+      "unchanged": 32,
+      "errors": 6
+    },
+    "pc:LATAM": {
+      "checked": 39,
+      "inserted": 1,
+      "unchanged": 32,
+      "errors": 6
+    },
+    "pc:NA": {
+      "checked": 39,
+      "inserted": 1,
+      "unchanged": 32,
+      "errors": 6
+    },
+    "pc:BR": {
+      "checked": 39,
+      "inserted": 1,
+      "unchanged": 32,
+      "errors": 6
+    },
+    "pc:KR": {
+      "checked": 39,
+      "inserted": 1,
+      "unchanged": 32,
+      "errors": 6
+    }
+  }
 }

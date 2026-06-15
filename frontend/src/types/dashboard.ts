@@ -316,7 +316,13 @@ export type DashboardPayload = {
   agentNameMap: Record<string, string>;
   agentMediaMap: Record<
     string,
-    { name?: string; image?: string | null; displayIcon?: string | null }
+    {
+      name?: string;
+      image?: string | null;
+      displayIcon?: string | null;
+      roleName?: string;
+      roleIcon?: string | null;
+    }
   >;
   mapMediaMap?: Record<string, string>;
   analyticsList: AnalyticsMatch[];

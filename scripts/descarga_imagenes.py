@@ -48,6 +48,7 @@ stats = {
 jobs = []
 queued_targets = set()
 ONLY_CHANGED_IDS_BY_COLLECTION = {}
+CHANGED_SKINS_BY_WEAPON = {}
 OVERWRITE_RUNTIME = OVERWRITE
 
 
@@ -162,14 +163,14 @@ def enqueue_download(url, file_base_path):
     stats["found_urls"] += 1
 
 
-def load_changes_filter(path: Path) -> dict[str, set[str]]:
+def load_changes_filter(path: Path) -> tuple[dict[str, set[str]], dict[str, dict]]:
     if not path.exists():
-        return {}
+        return {}, {}
 
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return {}
+        return {}, {}
 
     changed = payload.get("changed_items") or {}
     result: dict[str, set[str]] = {}
@@ -177,7 +178,26 @@ def load_changes_filter(path: Path) -> dict[str, set[str]]:
         ids = set((data or {}).get("added", []) + (data or {}).get("updated", []))
         if ids:
             result[str(collection_name)] = ids
-    return result
+
+    weapon_details = (payload.get("changed_children") or {}).get("weapons") or {}
+    return result, weapon_details
+
+
+def walk_changed_weapon_skins(weapon, weapon_dir, change_detail):
+    if change_detail.get("parent_updated"):
+        walk_node(weapon, str(weapon_dir))
+        return
+
+    skin_changes = change_detail.get("skins") or {}
+    changed_skin_ids = set(skin_changes.get("added", []) + skin_changes.get("updated", []))
+    for index, skin in enumerate(weapon.get("skins") or []):
+        if not isinstance(skin, dict):
+            continue
+        skin_id = skin.get("uuid") or skin.get("id") or skin.get("_id")
+        if not skin_id or str(skin_id) not in changed_skin_ids:
+            continue
+        skin_dir = weapon_dir / "skins" / pick_object_folder_name(skin, index)
+        walk_node(skin, str(skin_dir))
 
 
 def walk_node(node, current_dir, field_name=None, index_in_array=None):
@@ -321,7 +341,7 @@ def collect_all_content_from_content_collection(db):
 
 
 def main():
-    global ONLY_CHANGED_IDS_BY_COLLECTION, OVERWRITE_RUNTIME
+    global ONLY_CHANGED_IDS_BY_COLLECTION, CHANGED_SKINS_BY_WEAPON, OVERWRITE_RUNTIME
     parser = argparse.ArgumentParser(description="Descarga imágenes referenciadas desde content en MongoDB.")
     parser.add_argument(
         "--only-changed",
@@ -342,7 +362,7 @@ def main():
 
     OVERWRITE_RUNTIME = bool(args.overwrite)
     if args.only_changed:
-        ONLY_CHANGED_IDS_BY_COLLECTION = load_changes_filter(Path(args.changes_file))
+        ONLY_CHANGED_IDS_BY_COLLECTION, CHANGED_SKINS_BY_WEAPON = load_changes_filter(Path(args.changes_file))
         OVERWRITE_RUNTIME = True
 
     project_root = Path(__file__).resolve().parent.parent
@@ -396,6 +416,17 @@ def main():
                             if not identity_value or str(identity_value) not in allowed_ids:
                                 continue
                         object_dir = collection_dir / pick_object_folder_name(item, index)
+                        if (
+                            args.only_changed
+                            and collection_name == "weapons"
+                            and str(identity_value) in CHANGED_SKINS_BY_WEAPON
+                        ):
+                            walk_changed_weapon_skins(
+                                item,
+                                object_dir,
+                                CHANGED_SKINS_BY_WEAPON[str(identity_value)],
+                            )
+                            continue
                         walk_node(item, str(object_dir))
                     else:
                         if args.only_changed:

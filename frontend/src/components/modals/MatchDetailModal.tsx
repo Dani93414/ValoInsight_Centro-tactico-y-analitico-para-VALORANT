@@ -1,12 +1,18 @@
 ﻿import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  ChevronLeft,
   Circle,
   Clock3,
   Crosshair,
   Info,
+  Pause,
   Play,
+  RotateCcw,
+  SkipForward,
+  StepForward,
   Wrench,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -73,13 +79,19 @@ import type {
 import type { AgentContent } from "../../types/agents";
 import type { Arma } from "../../types/weapons";
 import type {
-  RawKillEvent,
   RawLocation,
   RawMatchDetail,
   RawPlayer,
   RawPlayerLocation,
   RawRound,
 } from "../../types/matches";
+import { TRADE_WINDOW_MS } from "../../constants/stats";
+import {
+  collectRoundKills,
+  isEnemyDamage,
+  isValidKill,
+  validAssistants,
+} from "../../utils/stats/combatEvents";
 import "./DetailModals.css";
 
 type Props = {
@@ -107,13 +119,6 @@ type CompetitiveTierContent = {
 };
 
 type SideKey = "attack" | "defense";
-type EventFilterKey =
-  | "all"
-  | "kills"
-  | "deaths"
-  | "opening"
-  | "trade"
-  | "objectives";
 type MatchDetailSection =
   | "summary"
   | "classification"
@@ -148,6 +153,7 @@ type KillRoundEvent = {
   victimLocation?: RawLocation;
   isPlayerKill: boolean;
   isPlayerDeath: boolean;
+  isValidKill: boolean;
   isOpening: boolean;
   isTrade: boolean;
 };
@@ -330,6 +336,22 @@ type PlayerDuelCell = {
   events: RoundEvent[];
 };
 
+type RoundScoreboardRow = {
+  playerId: string;
+  teamId: string;
+  agentName: string;
+  agentIcon?: string;
+  playerName: string;
+  score: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  loadout: number;
+  spent: number;
+  weaponName?: string;
+  armorName?: string;
+};
+
 type MatchPerspective = {
   selectedPlayer: RawPlayer;
   selectedPlayerId: string;
@@ -385,9 +407,11 @@ type EventMapMarker = {
   weaponIcon?: string | null;
   weaponLabel?: string;
   deathIcon?: string;
+  objectiveIcon?: "plant" | "defuse";
   team: "ally" | "enemy" | "neutral";
   kind: "player" | "victim" | "objective";
   isTarget: boolean;
+  facingRadians?: number;
 };
 
 type EventMapState = {
@@ -444,17 +468,6 @@ function formatQueueLabel(queueId?: string | null): string {
   if (queue === "unrated") return "No competitivo";
   if (queue === "swiftplay") return "Swiftplay";
   return queue.charAt(0).toUpperCase() + queue.slice(1);
-}
-
-function parseAssistants(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((entry) => cleanId(String(entry))).filter(Boolean);
-  }
-  if (typeof value === "string") {
-    const assistant = cleanId(value);
-    return assistant ? [assistant] : [];
-  }
-  return [];
 }
 
 function getWeaponIdFromIcon(icon?: string | null): string {
@@ -609,6 +622,17 @@ function transformLocation(
   };
 }
 
+function transformViewRadians(
+  viewRadians: number | undefined,
+  transform: MapTransform | null,
+): number | undefined {
+  if (!Number.isFinite(viewRadians)) return undefined;
+  return Math.atan2(
+    Math.cos(Number(viewRadians)) * (transform?.yMultiplier ?? 1),
+    Math.sin(Number(viewRadians)) * (transform?.xMultiplier ?? 1),
+  );
+}
+
 function roundLabel(roundNum: number): string {
   return `Ronda ${roundNum + 1}`;
 }
@@ -617,7 +641,9 @@ function getEventDescription(event: RoundEvent): string {
   if (event.kind === "kill") {
     return `${event.killerName} eliminó a ${event.victimName}`;
   }
-  return `${event.kind === "plant" ? "Plant" : "Defuse"}`;
+  return `${event.actorName} ha ${
+    event.kind === "plant" ? "plantado" : "defusado"
+  }`;
 }
 
 function classifyRoundEconomy(teamSpent: number, teamLoadout: number): EconomyBuyType {
@@ -952,6 +978,13 @@ type RoundMomentumTicketPlayer = {
   contribution: number;
   breakdown: Array<{ label: string; value: number }>;
 };
+type RoundMomentumTimelineItem = {
+  id: string;
+  label: string;
+  detail: string;
+  timeMs?: number;
+  tone: RoundMomentumTone;
+};
 
 type RoundMomentumViewModel = {
   roundNumber: number;
@@ -959,6 +992,7 @@ type RoundMomentumViewModel = {
   isSelectedTeamWin: boolean;
   momentumBefore: number;
   momentumAfter: number;
+  momentumChange: number;
   roundImpact: number;
   impactLevel: RoundMomentumImpactLevel;
   dominanceBefore: RoundMomentumDominance;
@@ -979,6 +1013,7 @@ type RoundMomentumViewModel = {
   secondaryEvents: Array<{ type: MomentumEvent["type"]; label: string }>;
   ticketEvents: RoundMomentumTicketEvent[];
   ticketPlayers: RoundMomentumTicketPlayer[];
+  timeline: RoundMomentumTimelineItem[];
   confidenceLabel: string;
   evidences: string[];
   learning?: string;
@@ -1031,6 +1066,22 @@ function formatMomentumDelta(value: number): string {
   return value > 0
     ? `+${formatNumber(value, 1)} para tu equipo`
     : `${formatNumber(value, 1)} hacia el rival`;
+}
+
+function getMomentumEventCategory(event: RoundMomentumTicketEvent): string {
+  const text = `${event.id} ${event.label}`.toLowerCase();
+  if (text.includes("defuse") || text.includes("spike") || text.includes("plant")) return "Objetivo";
+  if (text.includes("trade")) return "Trade";
+  if (text.includes("opening") || text.includes("apertura") || text.includes("primera")) return "Apertura";
+  if (text.includes("clutch") || text.includes("remontada")) return "Clutch";
+  if (text.includes("eco") || text.includes("compra") || text.includes("loadout")) return "Economía";
+  if (text.includes("racha") || text.includes("crítica") || event.isContext) return "Contexto";
+  return "Combate";
+}
+
+function formatRoundTimelineTime(timeMs?: number): string {
+  if (!Number.isFinite(timeMs)) return "Contexto";
+  return `${(Math.max(0, timeMs ?? 0) / 1000).toFixed(1)}s`;
 }
 
 function getRoundWinMethod(roundResult?: string, roundCeremony?: string): string | undefined {
@@ -2619,6 +2670,7 @@ function inferSelectedPlayerContribution({
   selectedPlayer,
   selectedTeamId,
   opponentTeamId,
+  teamByPuuid,
   playerImpact,
   roundMvp,
 }: {
@@ -2626,6 +2678,7 @@ function inferSelectedPlayerContribution({
   selectedPlayer: RawPlayer;
   selectedTeamId: string;
   opponentTeamId: string;
+  teamByPuuid: Map<string, string>;
   playerImpact?: PlayerRoundImpactBreakdown;
   roundMvp?: PlayerRoundImpactBreakdown;
 }): RoundMomentumViewModel["selectedPlayerContribution"] {
@@ -2633,20 +2686,34 @@ function inferSelectedPlayerContribution({
   const selectedStats = (round.playerStats ?? []).find(
     (stat) => cleanId(stat.puuid) === selectedPlayerId,
   );
-  const kills = selectedStats?.kills?.length ?? 0;
+  const allRoundKills = collectRoundKills(round);
+  const competitiveKills = allRoundKills.filter(({ kill, ownerPuuid }) =>
+    isValidKill(kill, teamByPuuid, ownerPuuid),
+  );
+  const kills = competitiveKills.filter(
+    ({ kill, ownerPuuid }) =>
+      (cleanId(kill.killer) || ownerPuuid) === selectedPlayerId,
+  ).length;
   const damage = (selectedStats?.damage ?? []).reduce(
-    (sum, entry) => sum + toNumber(entry.damage),
+    (sum, entry) =>
+      sum +
+      (isEnemyDamage(selectedPlayerId, entry, teamByPuuid)
+        ? toNumber(entry.damage)
+        : 0),
     0,
   );
-  const allKills = (round.playerStats ?? [])
-    .flatMap((stat) => stat.kills ?? [])
-    .filter((kill) => cleanId(kill.killer) && cleanId(kill.victim))
-    .sort((a, b) => toNumber(a.timeSinceRoundStartMillis) - toNumber(b.timeSinceRoundStartMillis));
-  const firstKill = allKills[0] ?? null;
-  const selectedFirstKill = cleanId(firstKill?.killer) === selectedPlayerId;
-  const selectedFirstDeath = cleanId(firstKill?.victim) === selectedPlayerId;
+  const assists = competitiveKills.filter(({ kill, ownerPuuid }) =>
+    validAssistants(kill, teamByPuuid, ownerPuuid).includes(selectedPlayerId),
+  ).length;
+  const firstKill = competitiveKills[0] ?? null;
+  const selectedFirstKill =
+    (cleanId(firstKill?.kill.killer) || firstKill?.ownerPuuid) ===
+    selectedPlayerId;
+  const selectedFirstDeath =
+    cleanId(firstKill?.kill.victim) === selectedPlayerId;
   const stats = [
     { label: "Bajas", value: String(kills) },
+    { label: "Asistencias", value: String(assists) },
     { label: "Daño", value: formatNumber(damage) },
     { label: "Impacto", value: formatNumber(playerImpact?.totalImpact ?? 0, 2) },
     { label: "Loadout", value: formatNumber(toNumber(selectedStats?.economy?.loadoutValue)) },
@@ -2791,6 +2858,7 @@ function buildRoundMomentumViewModels({
     const previousMomentum = momentumByRound.get(roundNumber - 1);
     const momentumBefore = previousMomentum ? orientValue(previousMomentum.momentumDiff) : 0;
     const momentumAfter = currentMomentum ? orientValue(currentMomentum.momentumDiff) : momentumBefore;
+    const momentumChange = momentumAfter - momentumBefore;
     const rawRoundImpact = Number.isFinite(currentMomentum?.roundImpact)
       ? orientValue(currentMomentum?.roundImpact ?? 0)
       : 0;
@@ -2956,6 +3024,56 @@ function buildRoundMomentumViewModels({
         Math.abs(b.contribution) - Math.abs(a.contribution) ||
         a.playerName.localeCompare(b.playerName),
     );
+    const timelinePlayerName = new Map(
+      (roundPlayerImpact?.players ?? []).map((player) => [
+        player.playerId,
+        player.playerName ?? player.agentName ?? "Jugador",
+      ]),
+    );
+    const timeline: RoundMomentumTimelineItem[] = advancedRound
+      ? [
+          ...advancedRound.kills.map((kill, killIndex) => {
+            const killerTeam = playerTeamByPuuid.get(kill.killerId);
+            const tone: RoundMomentumTone =
+              killerTeam === selectedTeamId
+                ? "positive"
+                : killerTeam === opponentTeamId
+                  ? "negative"
+                  : "neutral";
+            return {
+              id: `timeline-kill-${killIndex}-${kill.timeMs}`,
+              label: killIndex === 0 ? "Primera baja" : "Eliminación",
+              detail: `${timelinePlayerName.get(kill.killerId) ?? "Jugador"} eliminó a ${timelinePlayerName.get(kill.victimId) ?? "rival"}`,
+              timeMs: kill.timeMs,
+              tone,
+            };
+          }),
+          ...(advancedRound.bombPlanter
+            ? [{
+                id: "timeline-plant",
+                label: "Spike plantada",
+                detail: `${timelinePlayerName.get(advancedRound.bombPlanter) ?? "Jugador"} completó el plant`,
+                timeMs: advancedRound.plantRoundTime,
+                tone:
+                  playerTeamByPuuid.get(advancedRound.bombPlanter) === selectedTeamId
+                    ? "positive" as const
+                    : "negative" as const,
+              }]
+            : []),
+          ...(advancedRound.bombDefuser
+            ? [{
+                id: "timeline-defuse",
+                label: "Defuse completado",
+                detail: `${timelinePlayerName.get(advancedRound.bombDefuser) ?? "Jugador"} cerró la ronda`,
+                timeMs: advancedRound.defuseRoundTime,
+                tone:
+                  playerTeamByPuuid.get(advancedRound.bombDefuser) === selectedTeamId
+                    ? "positive" as const
+                    : "negative" as const,
+              }]
+            : []),
+        ].sort((a, b) => (a.timeMs ?? Number.MAX_SAFE_INTEGER) - (b.timeMs ?? Number.MAX_SAFE_INTEGER))
+      : [];
 
     return {
       roundNumber,
@@ -2963,6 +3081,7 @@ function buildRoundMomentumViewModels({
       isSelectedTeamWin,
       momentumBefore,
       momentumAfter,
+      momentumChange,
       roundImpact: rawRoundImpact,
       impactLevel,
       dominanceBefore: dominanceFromMomentum(momentumBefore),
@@ -2990,6 +3109,7 @@ function buildRoundMomentumViewModels({
       })),
       ticketEvents,
       ticketPlayers,
+      timeline,
       confidenceLabel: getConfidenceLabel(sourceEvent),
       evidences: safeEvidences,
       learning,
@@ -3006,13 +3126,15 @@ function buildRoundMomentumViewModels({
       afterItems: [
         { label: "Dominio", value: dominanceLabel(dominanceFromMomentum(momentumAfter)), tone: dominanceFromMomentum(momentumAfter) === "selected" ? "positive" : dominanceFromMomentum(momentumAfter) === "opponent" ? "negative" : "neutral" },
         { label: "Momentum", value: formatNumber(momentumAfter, 1) },
-        { label: "Cambio", value: formatMomentumDelta(rawRoundImpact), tone: rawRoundImpact > 0 ? "positive" : rawRoundImpact < 0 ? "negative" : "neutral" },
+        { label: "Variación neta", value: formatMomentumDelta(momentumChange), tone: momentumChange > 0 ? "positive" : momentumChange < 0 ? "negative" : "neutral" },
+        { label: "Impacto de ronda", value: formatMomentumDelta(rawRoundImpact), tone: rawRoundImpact > 0 ? "positive" : rawRoundImpact < 0 ? "negative" : "neutral" },
       ],
       selectedPlayerContribution: inferSelectedPlayerContribution({
         round,
         selectedPlayer,
         selectedTeamId,
         opponentTeamId,
+        teamByPuuid: playerTeamByPuuid,
         playerImpact: selectedPlayerImpact,
         roundMvp: roundPlayerImpact?.mvp,
       }),
@@ -3094,6 +3216,10 @@ function MatchMomentumPanel({
   const selectedRound =
     roundViewModels.find((round) => round.roundNumber === activeRoundNumber) ??
     roundViewModels[0];
+  const selectedRoundPlayerImpactMax = Math.max(
+    0.01,
+    ...(selectedRound?.ticketPlayers.map((player) => Math.abs(player.contribution)) ?? []),
+  );
   const selectedControlPercentage =
     selectedTeamId === teamAId
       ? momentum.summary.teamAControlPercentage
@@ -3116,6 +3242,7 @@ function MatchMomentumPanel({
       negativeDiff: diff <= -0.4 ? diff : null,
       neutralDiff: Math.abs(diff) < 0.4 ? diff : null,
       impact: vm?.roundImpact ?? 0,
+      momentumChange: vm?.momentumChange ?? 0,
       impactLabel: vm ? formatMomentumDelta(vm.roundImpact) : "sin cambio claro",
       eventTitle: vm?.eventTitle ?? "Ronda normal",
       eventPerspective: vm?.eventPerspective ?? "Ronda",
@@ -3270,7 +3397,8 @@ function MatchMomentumPanel({
                         <span>Momentum: {formatNumber(point.diff, 1)}</span>
                         <span>Equipo beneficiado: {beneficiary}</span>
                         <span>Motivo: {point.eventTitle}</span>
-                        <span>Impacto: {formatMomentumDelta(point.impact)}</span>
+                        <span>Variación neta: {formatMomentumDelta(point.momentumChange)}</span>
+                        <span>Impacto de ronda: {formatMomentumDelta(point.impact)}</span>
                       </div>
                     );
                   }}
@@ -3282,7 +3410,7 @@ function MatchMomentumPanel({
                   stroke="#46c878"
                   strokeWidth={3}
                   dot={false}
-                  activeDot={{ r: 4, fill: "#151a22", stroke: "#ffffff" }}
+                  activeDot={{ r: 5, fill: "#f3c567", stroke: "#ffffff" }}
                   connectNulls={false}
                 />
                 <Line
@@ -3292,23 +3420,13 @@ function MatchMomentumPanel({
                   stroke="#ff4655"
                   strokeWidth={3}
                   dot={false}
-                  activeDot={{ r: 4, fill: "#151a22", stroke: "#ffffff" }}
+                  activeDot={{ r: 5, fill: "#f3c567", stroke: "#ffffff" }}
                   connectNulls={false}
                 />
                 <Line
                   type="linear"
                   dataKey="actualDomain"
                   name="Ronda"
-                  stroke="transparent"
-                  strokeWidth={0}
-                  dot={{ r: 3, fill: "#151a22", stroke: "#ffffff", strokeWidth: 1.5 }}
-                  activeDot={{ r: 5, fill: "#151a22", stroke: "#ffffff", strokeWidth: 2 }}
-                  tooltipType="none"
-                />
-                <Line
-                  type="linear"
-                  dataKey="event"
-                  name="Evento decisivo"
                   stroke="#f3c567"
                   strokeWidth={0}
                   dot={{ r: 5, fill: "#f3c567", stroke: "#ffffff" }}
@@ -3331,129 +3449,118 @@ function MatchMomentumPanel({
           </div>
 
       {selectedRound ? (
-        <article className="match-selected-momentum-round">
-          <header className="match-selected-momentum-header">
-            <h4>Ronda {selectedRound.roundNumber}</h4>
+        <article className="round-analysis-dashboard">
+          <header className="round-analysis-hero">
+            <div className="round-analysis-identity">
+              <span>Ronda {selectedRound.roundNumber}</span>
+              <strong className={selectedRound.isSelectedTeamWin ? "is-positive" : "is-negative"}>
+                {selectedRound.isSelectedTeamWin ? "Victoria" : "Derrota"}
+              </strong>
+              <small>{selectedRound.winMethod ?? selectedRound.roundType}</small>
+            </div>
+            <div className={`round-analysis-momentum ${selectedRound.momentumAfter > 0 ? "is-positive" : selectedRound.momentumAfter < 0 ? "is-negative" : "is-neutral"}`}>
+              <span>Momentum final</span>
+              <strong>{selectedRound.momentumAfter > 0 ? "+" : ""}{formatNumber(selectedRound.momentumAfter, 1)}</strong>
+              <small>{formatMomentumDelta(selectedRound.momentumChange)}</small>
+            </div>
+            <div className="round-analysis-hero-metrics">
+              <div><span>Dominio final</span><strong>{dominanceLabel(selectedRound.dominanceAfter)}</strong></div>
+              <div><span>Economía</span><strong>{selectedRound.selectedTeamEconomy ?? "Sin datos"}</strong></div>
+              <div><span>Impacto de ronda</span><strong>{formatNumber(selectedRound.roundImpact, 1)}</strong></div>
+              <div><span>Confianza</span><strong>{selectedRound.confidenceLabel}</strong></div>
+            </div>
           </header>
 
-          <div className="match-momentum-round-layout">
-            <div className="match-momentum-round-flow">
-              {[
-                ["ANTES", selectedRound.beforeItems],
-                ["DURANTE", selectedRound.duringItems],
-                ["DESPUÉS", selectedRound.afterItems],
-              ].map(([title, items]) => (
-                <section key={`momentum-flow-${title}`}>
-                  <h5>{title as string}</h5>
-                  {(items as RoundMomentumViewModel["beforeItems"]).map((item) => (
-                    <div key={`${title}-${item.label}`}>
-                      <span>{item.label}</span>
-                      <strong className={item.tone ? `is-${item.tone}` : ""}>
-                        {item.value}
-                      </strong>
-                    </div>
-                  ))}
-                </section>
-              ))}
+          <section className="round-analysis-executive">
+            <div>
+              <span>Resumen ejecutivo</span>
+              <h4>{selectedRound.eventTitle}</h4>
+              <p>{selectedRound.eventDescription || selectedRound.shortComment}</p>
             </div>
+            <strong className={selectedRound.momentumChange >= 0 ? "is-positive" : "is-negative"}>
+              {selectedRound.momentumChange > 0 ? "+" : ""}{formatNumber(selectedRound.momentumChange, 2)}
+              <small>variación neta</small>
+            </strong>
+          </section>
 
-            <section className="match-momentum-ticket">
+          <div className="round-analysis-main-grid">
+            <section className="round-analysis-card round-analysis-breakdown">
               <header>
-                <div>
-                  <span>Desglose de la ronda</span>
-                  <h5>Ticket de momentum</h5>
-                </div>
-                <strong>
-                  Momentum final {formatNumber(selectedRound.momentumAfter, 1)}
-                </strong>
+                <div><span>Desglose de momentum</span><h4>Acumulado por jugadores</h4></div>
+                <small>Ordenado por impacto absoluto</small>
               </header>
-
-              <div className="match-momentum-ticket-section">
-                <h6>Eventos generales</h6>
-                {selectedRound.ticketEvents.length > 0 ? (
-                  selectedRound.ticketEvents.map((event) => (
-                    <article key={event.id}>
-                      <div>
-                        <strong>{event.label}</strong>
-                        <span>{event.teamLabel} · {event.detail}</span>
-                      </div>
-                      {event.isContext ? (
-                        <em className="match-momentum-ticket-context">Contexto</em>
-                      ) : (
-                        <b className={event.contribution >= 0 ? "is-positive" : "is-negative"}>
-                          {event.contribution > 0 ? "+" : ""}
-                          {formatNumber(event.contribution, 2)}
-                        </b>
-                      )}
-                    </article>
-                  ))
-                ) : (
-                  <p>Sin eventos generales registrables en esta ronda.</p>
-                )}
-              </div>
-
-              <div className="match-momentum-ticket-section">
-                <h6>Impacto por agente</h6>
+              <div className="round-impact-player-list">
                 {selectedRound.ticketPlayers.map((player) => (
-                  <article key={`ticket-player-${player.playerId}`}>
-                    <div className="match-momentum-ticket-player">
-                      {player.agentIcon ? (
-                        <img src={player.agentIcon} alt="" />
-                      ) : (
-                        <span className="match-momentum-ticket-agent-fallback">
-                          {(player.agentName ?? player.playerName).charAt(0)}
-                        </span>
-                      )}
-                      <div>
-                        <strong>{player.agentName ?? player.playerName}</strong>
-                        <span>{player.playerName} · {player.teamLabel}</span>
-                      </div>
-                      <div
-                        className="match-momentum-ticket-info"
-                        tabIndex={0}
-                        aria-label={`Ver desglose de impacto de ${player.playerName}`}
-                      >
-                        <Info aria-hidden="true" />
-                        <div role="tooltip">
-                          <strong>Descomposición</strong>
-                          {player.breakdown.length > 0 ? (
-                            player.breakdown.map((item, itemIndex) => (
-                              <span key={`${player.playerId}-${item.label}-${itemIndex}`}>
-                                {item.label}
-                                <b className={item.value >= 0 ? "is-positive" : "is-negative"}>
-                                  {item.value > 0 ? "+" : ""}
-                                  {formatNumber(item.value, 2)}
-                                </b>
-                              </span>
-                            ))
-                          ) : (
-                            <span>Sin acciones con impacto registrable.</span>
-                          )}
-                        </div>
-                      </div>
+                  <article key={`round-impact-player-${player.playerId}`}>
+                    <div className="round-impact-player-name">
+                      {player.agentIcon ? <img src={player.agentIcon} alt="" /> : <i>{(player.agentName ?? player.playerName).charAt(0)}</i>}
+                      <div><strong>{player.playerName}</strong><span>{player.agentName ?? player.teamLabel}</span></div>
+                    </div>
+                    <div className="round-impact-player-bar">
+                      <i
+                        className={player.contribution >= 0 ? "is-positive" : "is-negative"}
+                        style={{ width: `${Math.max(4, (Math.abs(player.contribution) / selectedRoundPlayerImpactMax) * 100)}%` }}
+                      />
                     </div>
                     <b className={player.contribution >= 0 ? "is-positive" : "is-negative"}>
-                      {player.contribution > 0 ? "+" : ""}
-                      {formatNumber(player.contribution, 2)}
+                      {player.contribution > 0 ? "+" : ""}{formatNumber(player.contribution, 2)}
                     </b>
+                    <div className="match-momentum-ticket-info" tabIndex={0}>
+                      <Info aria-hidden="true" />
+                      <div role="tooltip">
+                        <strong>Descomposición</strong>
+                        {player.breakdown.map((item, itemIndex) => (
+                          <span key={`${player.playerId}-${item.label}-${itemIndex}`}>{item.label}<b>{item.value > 0 ? "+" : ""}{formatNumber(item.value, 2)}</b></span>
+                        ))}
+                      </div>
+                    </div>
                   </article>
                 ))}
               </div>
             </section>
-          </div>
 
-          <section className={`match-player-round-role is-${selectedRound.selectedPlayerContribution.tone}`}>
-            <h5>Tu papel en esta ronda</h5>
-            <strong>{selectedRound.selectedPlayerContribution.title}</strong>
-            <p>{selectedRound.selectedPlayerContribution.description}</p>
-            <div>
-              {selectedRound.selectedPlayerContribution.stats?.map((stat) => (
-                <span key={`player-role-${stat.label}`}>
-                  {stat.label} <strong>{stat.value}</strong>
-                </span>
-              ))}
-            </div>
-          </section>
+            <section className="round-analysis-card round-analysis-events">
+              <header>
+                <div><span>Causas observadas</span><h4>Eventos que modificaron el momentum</h4></div>
+                <small>{selectedRound.ticketEvents.length} eventos</small>
+              </header>
+              <div className="round-analysis-event-list">
+                {selectedRound.ticketEvents.length > 0 ? selectedRound.ticketEvents.map((event) => (
+                  <article key={`round-event-${event.id}`} title={event.detail}>
+                    <em data-category={getMomentumEventCategory(event)}>{getMomentumEventCategory(event)}</em>
+                    <div><strong>{event.label}</strong><span>{event.teamLabel} · {event.detail}</span></div>
+                    <b className={event.contribution >= 0 ? "is-positive" : "is-negative"}>
+                      {event.isContext ? "Contexto" : `${event.contribution > 0 ? "+" : ""}${formatNumber(event.contribution, 2)}`}
+                    </b>
+                  </article>
+                )) : <p>Sin eventos extraordinarios; el resultado de ronda explica la mayor parte del cambio.</p>}
+              </div>
+            </section>
+
+            <section className={`round-analysis-card round-analysis-user is-${selectedRound.selectedPlayerContribution.tone}`}>
+              <header><div><span>Contribución del usuario</span><h4>{selectedRound.selectedPlayerContribution.title}</h4></div><Crosshair aria-hidden="true" /></header>
+              <p>{selectedRound.selectedPlayerContribution.description}</p>
+              <div className="round-analysis-user-stats">
+                {selectedRound.selectedPlayerContribution.stats?.map((stat) => (
+                  <div key={`player-role-${stat.label}`}><span>{stat.label}</span><strong>{stat.value}</strong></div>
+                ))}
+              </div>
+            </section>
+
+            <section className="round-analysis-card round-analysis-timeline">
+              <header><div><span>Secuencia verificable</span><h4>Timeline de la ronda</h4></div><Clock3 aria-hidden="true" /></header>
+              <div className="round-analysis-timeline-list">
+                <article className="is-neutral"><time>0.0s</time><i /><div><strong>Inicio de ronda</strong><span>Estado inicial</span></div></article>
+                {selectedRound.timeline.map((item) => (
+                  <article key={item.id} className={`is-${item.tone}`}>
+                    <time>{formatRoundTimelineTime(item.timeMs)}</time><i />
+                    <div><strong>{item.label}</strong><span>{item.detail}</span></div>
+                  </article>
+                ))}
+                <article className={selectedRound.isSelectedTeamWin ? "is-positive" : "is-negative"}><time>Fin</time><i /><div><strong>{selectedRound.winnerLabel}</strong><span>{selectedRound.winMethod ?? "Ronda finalizada"}</span></div></article>
+              </div>
+            </section>
+          </div>
         </article>
       ) : null}
         </>
@@ -3776,13 +3883,14 @@ function buildPlayerScoreboardStats({
 
     rounds += 1;
     const roundState = { kills: 0, assists: 0, deaths: 0, traded: false };
-    const timelineKills: Array<{ kill: RawKillEvent; ownerPuuid: string }> = [];
+    const timelineKills = collectRoundKills(round);
 
     for (const stat of round.playerStats ?? []) {
       const ownerPuuid = cleanId(stat.puuid);
       if (ownerPuuid === puuid) {
         score += toNumber(stat.score);
         for (const damageEntry of stat.damage ?? []) {
+          if (!isEnemyDamage(ownerPuuid, damageEntry, teamByPuuid)) continue;
           damageDealt += toNumber(damageEntry.damage);
           headshots += toNumber(damageEntry.headshots);
           bodyshots += toNumber(damageEntry.bodyshots);
@@ -3791,30 +3899,28 @@ function buildPlayerScoreboardStats({
       }
 
       for (const damageEntry of stat.damage ?? []) {
-        if (cleanId(damageEntry.receiver) === puuid) {
+        if (
+          cleanId(damageEntry.receiver) === puuid &&
+          isEnemyDamage(ownerPuuid, damageEntry, teamByPuuid)
+        ) {
           damageReceived += toNumber(damageEntry.damage);
         }
       }
-
-      for (const kill of stat.kills ?? []) {
-        timelineKills.push({ kill, ownerPuuid });
-      }
     }
 
-    timelineKills.sort(
-      (a, b) =>
-        toNumber(a.kill.timeSinceRoundStartMillis) -
-        toNumber(b.kill.timeSinceRoundStartMillis),
-    );
-    const firstKill = timelineKills[0]?.kill ?? null;
+    const firstKill =
+      timelineKills.find(({ kill, ownerPuuid }) =>
+        isValidKill(kill, teamByPuuid, ownerPuuid),
+      )?.kill ?? null;
 
     for (let killIndex = 0; killIndex < timelineKills.length; killIndex += 1) {
       const { kill, ownerPuuid } = timelineKills[killIndex];
       const killerId = cleanId(kill.killer) || ownerPuuid;
       const victimId = cleanId(kill.victim);
       const timeMs = toNumber(kill.timeSinceRoundStartMillis);
+      const validKill = isValidKill(kill, teamByPuuid, ownerPuuid);
 
-      if (killerId === puuid) {
+      if (validKill && killerId === puuid) {
         roundState.kills += 1;
         if (firstKill === kill) firstKills += 1;
       }
@@ -3826,11 +3932,12 @@ function buildPlayerScoreboardStats({
         for (let forward = killIndex + 1; forward < timelineKills.length; forward += 1) {
           const next = timelineKills[forward].kill;
           const nextTime = toNumber(next.timeSinceRoundStartMillis);
-          if (nextTime - timeMs > 5000) break;
+          if (nextTime - timeMs > TRADE_WINDOW_MS) break;
 
           const nextKiller = cleanId(next.killer);
           const nextVictim = cleanId(next.victim);
           if (
+            isValidKill(next, teamByPuuid) &&
             nextVictim === killerId &&
             nextKiller &&
             teamByPuuid.get(nextKiller) === teamByPuuid.get(victimId)
@@ -3841,7 +3948,10 @@ function buildPlayerScoreboardStats({
         }
       }
 
-      if (killerId !== puuid && parseAssistants(kill.assistants).includes(puuid)) {
+      if (
+        killerId !== puuid &&
+        validAssistants(kill, teamByPuuid, ownerPuuid).includes(puuid)
+      ) {
         roundState.assists += 1;
       }
     }
@@ -3849,7 +3959,7 @@ function buildPlayerScoreboardStats({
     kills += roundState.kills;
     deaths += roundState.deaths;
     assists += roundState.assists;
-    if (roundState.kills >= 3) multikillRounds += 1;
+    if (roundState.kills >= 2) multikillRounds += 1;
     if (
       roundState.kills > 0 ||
       roundState.assists > 0 ||
@@ -3894,6 +4004,78 @@ function buildPlayerScoreboardStats({
   };
 }
 
+function buildRoundScoreboardRows({
+  round,
+  players,
+  selectedTeamId,
+  teamByPuuid,
+  agentById,
+  agentNameMap,
+  weaponById,
+}: {
+  round: RawRound | null;
+  players: RawPlayer[];
+  selectedTeamId: string;
+  teamByPuuid: Map<string, string>;
+  agentById: Map<string, AgentContent>;
+  agentNameMap: Record<string, string>;
+  weaponById: Map<string, WeaponCatalogEntry>;
+}): RoundScoreboardRow[] {
+  if (!round) return [];
+  const kills = collectRoundKills(round);
+  const playerById = new Map(
+    players
+      .map((player) => [cleanId(player.puuid), player] as const)
+      .filter(([playerId]) => Boolean(playerId)),
+  );
+
+  const rows = (round.playerStats ?? []).map((stat) => {
+    const playerId = cleanId(stat.puuid);
+    const player = playerById.get(playerId);
+    const agent = getAgentMeta(player, agentById, agentNameMap);
+    const validPlayerKills = kills.filter(
+      ({ kill, ownerPuuid }) =>
+        isValidKill(kill, teamByPuuid, ownerPuuid) &&
+        (cleanId(kill.killer) || ownerPuuid) === playerId,
+    );
+    const deaths = kills.filter(
+      ({ kill }) => cleanId(kill.victim) === playerId,
+    ).length;
+    const assists = kills.filter(({ kill, ownerPuuid }) =>
+      validAssistants(kill, teamByPuuid, ownerPuuid).includes(playerId),
+    ).length;
+    const weaponId = cleanId(stat.economy?.weapon);
+
+    return {
+      playerId,
+      teamId: teamByPuuid.get(playerId) ?? cleanId(player?.teamId),
+      agentName: agent.name,
+      agentIcon: agent.icon ?? undefined,
+      playerName: getPlayerShortDisplay(player),
+      score: toNumber(stat.score),
+      kills: validPlayerKills.length,
+      deaths,
+      assists,
+      loadout: toNumber(stat.economy?.loadoutValue),
+      spent: toNumber(stat.economy?.spent),
+      weaponName: weaponId
+        ? weaponById.get(weaponId)?.displayName ?? weaponId
+        : undefined,
+      armorName: cleanId(stat.economy?.armor) || undefined,
+    };
+  });
+
+  return rows.sort(
+    (a, b) =>
+      Number(b.teamId === selectedTeamId) -
+        Number(a.teamId === selectedTeamId) ||
+      a.teamId.localeCompare(b.teamId) ||
+      b.score - a.score ||
+      b.kills - a.kills ||
+      a.playerName.localeCompare(b.playerName),
+  );
+}
+
 function buildDuelMatrix(
   playersByTeam: Array<[string, RawPlayer[]]>,
   allRoundEvents: RoundEvent[],
@@ -3924,7 +4106,7 @@ function buildDuelMatrix(
   }
 
   for (const event of allRoundEvents) {
-    if (event.kind !== "kill") continue;
+    if (event.kind !== "kill" || !event.isValidKill) continue;
     const killer = cleanId(event.killer);
     const victim = cleanId(event.victim);
     if (!killer || !victim) continue;
@@ -4040,6 +4222,7 @@ function MatchRoundResultTimeline({
 
 function buildEventMapState({
   event,
+  roundEvents,
   mapTransform,
   playersByPuuid,
   playerTeam,
@@ -4047,6 +4230,7 @@ function buildEventMapState({
   agentById,
 }: {
   event: RoundEvent | null;
+  roundEvents?: RoundEvent[];
   mapTransform: MapTransform | null;
   playersByPuuid: Map<string, RawPlayer>;
   playerTeam: string;
@@ -4063,6 +4247,33 @@ function buildEventMapState({
     event.kind === "plant" || event.kind === "defuse"
       ? cleanId(event.actor)
       : "";
+  const resolveFacingRadians = (
+    puuid: string,
+    currentViewRadians?: number,
+  ) => {
+    if (Number.isFinite(currentViewRadians)) {
+      return transformViewRadians(currentViewRadians, mapTransform);
+    }
+
+    const eventsByDistance = [...(roundEvents ?? [])].sort(
+      (a, b) =>
+        Math.abs(a.timeMs - event.timeMs) -
+          Math.abs(b.timeMs - event.timeMs) ||
+        b.timeMs - a.timeMs,
+    );
+    for (const roundEvent of eventsByDistance) {
+      const location = roundEvent.playerLocations.find(
+        (entry) =>
+          cleanId(entry.puuid) === puuid &&
+          Number.isFinite(entry.viewRadians),
+      );
+      if (location) {
+        return transformViewRadians(location.viewRadians, mapTransform);
+      }
+    }
+
+    return transformViewRadians(0, mapTransform);
+  };
 
   const pushMarker = (marker: EventMapMarker) => {
     if (usedIds.has(marker.id)) return;
@@ -4072,7 +4283,6 @@ function buildEventMapState({
 
   const addSnapshotMarker = (entry: RawPlayerLocation, index: number) => {
     const puuid = cleanId(entry.puuid);
-    if (objectiveActorId && puuid === objectiveActorId) return;
 
     const position = transformLocation(entry.location, mapTransform);
     if (!position) return;
@@ -4082,21 +4292,46 @@ function buildEventMapState({
       ? agentById.get(cleanId(player?.characterId))
       : undefined;
     const teamId = puuid ? cleanId(player?.teamId) : "";
+    const isVictim =
+      event.kind === "kill" && puuid === cleanId(event.victim);
+    const isObjectiveActor =
+      (event.kind === "plant" || event.kind === "defuse") &&
+      puuid === objectiveActorId;
+    const facingRadians = resolveFacingRadians(puuid, entry.viewRadians);
 
     pushMarker({
       id: `snapshot-${event.id}-${puuid || index}`,
       x: position.x,
       y: position.y,
-      label: getPlayerDisplay(player),
-      icon: agent?.displayIconSmall ?? agent?.displayIcon ?? undefined,
+      label: isObjectiveActor
+        ? event.kind === "plant"
+          ? "Spike plantada"
+          : "Spike defusada"
+        : getPlayerDisplay(player),
+      icon: isObjectiveActor
+        ? undefined
+        : agent?.displayIconSmall ?? agent?.displayIcon ?? undefined,
+      actorIcon: isObjectiveActor
+        ? agent?.displayIconSmall ?? agent?.displayIcon ?? undefined
+        : undefined,
+      actorLabel: isObjectiveActor ? getPlayerDisplay(player) : undefined,
       team:
         !teamId || !playerTeam
           ? "neutral"
           : teamId === playerTeam
             ? "ally"
             : "enemy",
-      kind: "player",
+      kind: isObjectiveActor
+        ? "objective"
+        : isVictim
+          ? "victim"
+          : "player",
       isTarget: puuid === selectedPlayerId,
+      facingRadians,
+      deathIcon: isVictim ? "X" : undefined,
+      objectiveIcon: isObjectiveActor
+        ? event.kind
+        : undefined,
       weaponIcon:
         event.kind === "kill" && puuid === cleanId(event.killer)
           ? event.weaponIcon
@@ -4139,13 +4374,19 @@ function buildEventMapState({
               : "enemy",
         kind: "player",
         isTarget: killerId === selectedPlayerId,
+        facingRadians: resolveFacingRadians(killerId),
       });
     }
 
+    const victimId = cleanId(event.victim);
+    const victimSnapshot = event.playerLocations.find(
+      (entry) => cleanId(entry.puuid) === victimId,
+    );
+    const hasVictimSnapshot = Boolean(victimSnapshot);
     const victimPos = transformLocation(event.victimLocation, mapTransform);
-    if (victimPos) {
-      const victim = cleanId(event.victim)
-        ? playersByPuuid.get(cleanId(event.victim))
+    if (victimPos && !hasVictimSnapshot) {
+      const victim = victimId
+        ? playersByPuuid.get(victimId)
         : undefined;
       const victimTeamId = cleanId(victim?.teamId);
       const victimAgent = cleanId(victim?.characterId)
@@ -4166,34 +4407,50 @@ function buildEventMapState({
               ? "ally"
               : "enemy",
         kind: "victim",
-        isTarget: cleanId(event.victim) === selectedPlayerId,
+        isTarget: victimId === selectedPlayerId,
+        facingRadians: resolveFacingRadians(
+          victimId,
+          victimSnapshot?.viewRadians,
+        ),
       });
     }
   }
 
   if (event.kind === "plant" || event.kind === "defuse") {
+    const hasActorSnapshot = event.playerLocations.some(
+      (entry) => cleanId(entry.puuid) === objectiveActorId,
+    );
     const objectivePos = transformLocation(event.location, mapTransform);
-    if (objectivePos) {
+    if (objectivePos && !hasActorSnapshot) {
       const actor = objectiveActorId
         ? playersByPuuid.get(objectiveActorId)
         : undefined;
       const actorAgent = cleanId(actor?.characterId)
         ? agentById.get(cleanId(actor?.characterId))
         : undefined;
+      const actorTeamId = cleanId(actor?.teamId);
 
       pushMarker({
         id: `${event.kind}-${event.id}-objective`,
         x: objectivePos.x,
         y: objectivePos.y,
         label:
-          event.kind === "plant"
-            ? `Plant${event.site ? ` en ${event.site}` : ""}`
-            : "Defuse",
-        actorIcon: actorAgent?.displayIconSmall ?? actorAgent?.displayIcon ?? undefined,
+          event.kind === "plant" ? "Spike plantada" : "Spike defusada",
+        actorIcon:
+          actorAgent?.displayIconSmall ??
+          actorAgent?.displayIcon ??
+          undefined,
         actorLabel: getPlayerDisplay(actor) || event.actorName,
-        team: "neutral",
+        objectiveIcon: event.kind,
+        team:
+          !actorTeamId || !playerTeam
+            ? "neutral"
+            : actorTeamId === playerTeam
+              ? "ally"
+              : "enemy",
         kind: "objective",
-        isTarget: false,
+        isTarget: objectiveActorId === selectedPlayerId,
+        facingRadians: resolveFacingRadians(objectiveActorId),
       });
     }
   }
@@ -4297,6 +4554,58 @@ function MatchEventMapCanvas({
                 />
               </svg>
             )}
+            <div className="event-map-facing-layer" aria-hidden="true">
+              {eventMapState.markers.map((marker) =>
+                typeof marker.facingRadians === "number" ? (
+                  <span
+                    key={`facing-${marker.id}`}
+                    className={`event-map-facing-anchor event-map-facing-anchor--${marker.team} ${
+                      marker.kind === "objective"
+                        ? "event-map-facing-anchor--objective"
+                        : ""
+                    }`}
+                    style={{
+                      left: `${marker.x * 100}%`,
+                      top: `${marker.y * 100}%`,
+                    }}
+                  >
+                    <span
+                      className="event-map-marker-facing-arrow"
+                      style={{
+                        transform: `translate(-50%, -50%) rotate(${marker.facingRadians}rad) translateX(${
+                          marker.kind === "objective" ? 18 : 20
+                        }px)`,
+                      }}
+                    />
+                  </span>
+                ) : null,
+              )}
+            </div>
+            <div className="event-map-weapon-layer">
+              {eventMapState.markers.map((marker) =>
+                marker.weaponIcon || marker.weaponLabel ? (
+                  <span
+                    key={`weapon-${marker.id}`}
+                    className="event-map-weapon-anchor"
+                    style={{
+                      left: `${marker.x * 100}%`,
+                      top: `${marker.y * 100}%`,
+                    }}
+                  >
+                    <span
+                      className="event-map-marker-weapon-badge"
+                      title={marker.weaponLabel}
+                    >
+                      {marker.weaponIcon ? (
+                        <img src={marker.weaponIcon} alt={marker.weaponLabel ?? ""} />
+                      ) : (
+                        marker.weaponLabel?.charAt(0).toUpperCase()
+                      )}
+                    </span>
+                  </span>
+                ) : null,
+              )}
+            </div>
             {eventMapState.markers.map((marker) => (
               <div
                 key={marker.id}
@@ -4309,10 +4618,18 @@ function MatchEventMapCanvas({
               >
                 {marker.kind === "objective" ? (
                   <>
-                    <span>{selectedEvent.kind === "defuse" ? "D" : "P"}</span>
+                    <img
+                      className="event-map-marker-objective-icon"
+                      src={
+                        marker.objectiveIcon === "plant"
+                          ? "/content/SpikePlantada.png"
+                          : "/content/SpikeDesfusada.png"
+                      }
+                      alt={marker.label}
+                    />
                     {marker.actorIcon || marker.actorLabel ? (
                       <span
-                        className="event-map-marker-linked-agent"
+                        className={`event-map-marker-linked-agent event-map-marker-linked-agent--${marker.team}`}
                         title={marker.actorLabel}
                       >
                         {marker.actorIcon ? (
@@ -4326,40 +4643,31 @@ function MatchEventMapCanvas({
                 ) : marker.icon ? (
                   <>
                     <img src={marker.icon} alt={marker.label} />
-                    {marker.weaponIcon || marker.weaponLabel ? (
-                      <span
-                        className="event-map-marker-weapon-badge"
-                        title={marker.weaponLabel}
-                      >
-                        {marker.weaponIcon ? (
-                          <img src={marker.weaponIcon} alt={marker.weaponLabel ?? ""} />
-                        ) : (
-                          marker.weaponLabel?.charAt(0).toUpperCase()
-                        )}
-                      </span>
-                    ) : null}
-                    {marker.deathIcon ? (
-                      <span
-                        className="event-map-marker-death-badge"
-                        title="Jugador eliminado"
-                      >
-                        {marker.deathIcon}
-                      </span>
-                    ) : null}
                   </>
                 ) : (
                   <>
                     <span>{marker.label.charAt(0).toUpperCase()}</span>
-                    {marker.deathIcon ? (
-                      <span
-                        className="event-map-marker-death-badge"
-                        title="Jugador eliminado"
-                      >
-                        {marker.deathIcon}
-                      </span>
-                    ) : null}
                   </>
                 )}
+                {marker.objectiveIcon && marker.kind !== "objective" ? (
+                  <span
+                    className="event-map-marker-objective-badge"
+                    title={
+                      marker.objectiveIcon === "plant"
+                        ? "Spike plantada"
+                        : "Spike defusada"
+                    }
+                  >
+                    <img
+                      src={
+                        marker.objectiveIcon === "plant"
+                          ? "/content/SpikePlantada.png"
+                          : "/content/SpikeDesfusada.png"
+                      }
+                      alt=""
+                    />
+                  </span>
+                ) : null}
               </div>
             ))}
           </div>
@@ -4415,6 +4723,7 @@ export default function MatchDetailModal({
   onClose,
 }: Props) {
   const matchDetailPanelRef = useRef<HTMLDivElement | null>(null);
+  const playbackActionListRef = useRef<HTMLDivElement | null>(null);
   const { data: matchData, isLoading: matchLoading } = useMatchById(matchId);
   const { data: agentsData, isLoading: agentsLoading } = useAgentes();
   const { data: weaponsData, isLoading: weaponsLoading } = useArmas();
@@ -4433,7 +4742,6 @@ export default function MatchDetailModal({
       : playerId;
   const [selectedRoundNum, setSelectedRoundNum] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [eventFilter, setEventFilter] = useState<EventFilterKey>("all");
   const [activeSectionState, setActiveSectionState] = useState(() => ({
     matchId,
     section: "summary" as MatchDetailSection,
@@ -4458,6 +4766,7 @@ export default function MatchDetailModal({
   const [playbackIndex, setPlaybackIndex] = useState(0);
   const [playbackPlaying, setPlaybackPlaying] = useState(false);
   const [playbackTitle, setPlaybackTitle] = useState("");
+  const [playbackMode, setPlaybackMode] = useState<"match" | "round">("round");
   const [isMatchDetailOverflowing, setIsMatchDetailOverflowing] =
     useState(false);
 
@@ -4663,10 +4972,17 @@ export default function MatchDetailModal({
         teamLoadout || playerLoadout,
       );
 
-      const playerKills = (playerRoundStats?.kills ?? []).length;
-
       let playerRoundDamage = 0;
       for (const damageEntry of playerRoundStats?.damage ?? []) {
+        if (
+          !isEnemyDamage(
+            effectiveSelectedPlayerId,
+            damageEntry,
+            teamByPuuid,
+          )
+        ) {
+          continue;
+        }
         playerRoundDamage += toNumber(damageEntry.damage);
         totalHeadshots += toNumber(damageEntry.headshots);
         totalBodyshots += toNumber(damageEntry.bodyshots);
@@ -4674,23 +4990,12 @@ export default function MatchDetailModal({
       }
       totalDamage += playerRoundDamage;
 
-      const timelineKills: Array<{ kill: RawKillEvent; ownerPuuid: string }> =
-        [];
-      for (const stat of round.playerStats ?? []) {
-        const ownerPuuid = cleanId(stat.puuid);
-        for (const kill of stat.kills ?? []) {
-          timelineKills.push({ kill, ownerPuuid });
-        }
-      }
+      const timelineKills = collectRoundKills(round);
+      const firstKill = timelineKills.find(({ kill, ownerPuuid }) =>
+        isValidKill(kill, teamByPuuid, ownerPuuid),
+      )?.kill;
 
-      timelineKills.sort(
-        (a, b) =>
-          toNumber(a.kill.timeSinceRoundStartMillis) -
-          toNumber(b.kill.timeSinceRoundStartMillis),
-      );
-
-      const firstKill = timelineKills[0]?.kill;
-
+      let playerKills = 0;
       let playerDeaths = 0;
       let playerAssists = 0;
       let playerWasTraded = false;
@@ -4705,17 +5010,23 @@ export default function MatchDetailModal({
         const killerId = cleanId(kill.killer) || ownerPuuid;
         const victimId = cleanId(kill.victim);
         const timeMs = toNumber(kill.timeSinceRoundStartMillis);
+        const validKill = isValidKill(kill, teamByPuuid, ownerPuuid);
+
+        if (validKill && killerId === effectiveSelectedPlayerId) {
+          playerKills += 1;
+        }
 
         if (victimId === effectiveSelectedPlayerId) {
           playerDeaths += 1;
           for (let forward = killIndex + 1; forward < timelineKills.length; forward += 1) {
             const next = timelineKills[forward].kill;
             const nextTime = toNumber(next.timeSinceRoundStartMillis);
-            if (nextTime - timeMs > 5000) break;
+            if (nextTime - timeMs > TRADE_WINDOW_MS) break;
 
             const nextKiller = cleanId(next.killer);
             const nextVictim = cleanId(next.victim);
             if (
+              isValidKill(next, teamByPuuid) &&
               nextVictim === killerId &&
               nextKiller &&
               teamByPuuid.get(nextKiller) === playerTeam
@@ -4726,7 +5037,7 @@ export default function MatchDetailModal({
           }
         }
 
-        const assistants = parseAssistants(kill.assistants);
+        const assistants = validAssistants(kill, teamByPuuid, ownerPuuid);
         if (
           killerId !== effectiveSelectedPlayerId &&
           assistants.includes(effectiveSelectedPlayerId)
@@ -4765,7 +5076,8 @@ export default function MatchDetailModal({
             ? (weaponData?.displayIcon ?? null)
             : null;
 
-        const isPlayerKill = killerId === effectiveSelectedPlayerId;
+        const isPlayerKill =
+          validKill && killerId === effectiveSelectedPlayerId;
         const isPlayerDeath = victimId === effectiveSelectedPlayerId;
         const isOpening = Boolean(
           firstKill && firstKill === kill && (isPlayerKill || isPlayerDeath),
@@ -4781,13 +5093,14 @@ export default function MatchDetailModal({
           for (let back = killIndex - 1; back >= 0; back -= 1) {
             const previous = timelineKills[back].kill;
             const previousTime = toNumber(previous.timeSinceRoundStartMillis);
-            if (timeMs - previousTime > 5000) break;
+            if (timeMs - previousTime > TRADE_WINDOW_MS) break;
 
             const previousVictim = cleanId(previous.victim);
             const previousKiller = cleanId(previous.killer);
             if (!previousVictim || !previousKiller) continue;
 
             if (
+              isValidKill(previous, teamByPuuid) &&
               teamByPuuid.get(previousVictim) === playerTeam &&
               previousKiller === victimId
             ) {
@@ -4805,8 +5118,8 @@ export default function MatchDetailModal({
           timeMs,
           killer: killerId,
           victim: victimId,
-          killerName: getPlayerDisplay(killer),
-          victimName: getPlayerDisplay(victim),
+          killerName: getPlayerShortDisplay(killer),
+          victimName: getPlayerShortDisplay(victim),
           killerIcon:
             killerAgent?.displayIconSmall ??
             killerAgent?.displayIcon ??
@@ -4826,6 +5139,7 @@ export default function MatchDetailModal({
           victimLocation: kill.victimLocation,
           isPlayerKill,
           isPlayerDeath,
+          isValidKill: validKill,
           isOpening,
           isTrade,
         };
@@ -4842,7 +5156,7 @@ export default function MatchDetailModal({
           roundNum,
           timeMs: toNumber(round.plantRoundTime),
           actor: planterId,
-          actorName: getPlayerDisplay(playersByPuuid.get(planterId)),
+          actorName: getPlayerShortDisplay(playersByPuuid.get(planterId)),
           site: cleanSite(round.plantSite),
           location: round.plantLocation,
           playerLocations: Array.isArray(round.plantPlayerLocations)
@@ -4859,7 +5173,7 @@ export default function MatchDetailModal({
           roundNum,
           timeMs: toNumber(round.defuseRoundTime),
           actor: defuserId,
-          actorName: getPlayerDisplay(playersByPuuid.get(defuserId)),
+          actorName: getPlayerShortDisplay(playersByPuuid.get(defuserId)),
           site: cleanSite(round.plantSite),
           location: round.defuseLocation,
           playerLocations: Array.isArray(round.defusePlayerLocations)
@@ -4894,15 +5208,9 @@ export default function MatchDetailModal({
       });
     }
 
-    const kills =
-      toNumber(playerInfo.stats?.kills) ||
-      rounds.reduce((sum, round) => sum + round.playerKills, 0);
-    const deaths =
-      toNumber(playerInfo.stats?.deaths) ||
-      rounds.reduce((sum, round) => sum + round.playerDeaths, 0);
-    const assists =
-      toNumber(playerInfo.stats?.assists) ||
-      rounds.reduce((sum, round) => sum + round.playerAssists, 0);
+    const kills = rounds.reduce((sum, round) => sum + round.playerKills, 0);
+    const deaths = rounds.reduce((sum, round) => sum + round.playerDeaths, 0);
+    const assists = rounds.reduce((sum, round) => sum + round.playerAssists, 0);
     const score =
       toNumber(playerInfo.stats?.score) ||
       rounds.reduce((sum, round) => sum + round.playerScore, 0);
@@ -4939,7 +5247,7 @@ export default function MatchDetailModal({
     ).length;
     const kastPct = safeDivide(kastRounds, Math.max(totalRounds, 1)) * 100;
     const multikillRounds = rounds.filter(
-      (round) => round.playerKills >= 3,
+      (round) => round.playerKills >= 2,
     ).length;
     const maxKillsInRound = rounds.reduce(
       (maxKills, round) => Math.max(maxKills, round.playerKills),
@@ -5161,34 +5469,44 @@ export default function MatchDetailModal({
       null
     );
   }, [matchAnalysis, selectedRoundNum]);
+  const selectedRawRound = useMemo(
+    () =>
+      (currentMatch?.roundResults ?? []).find(
+        (round, index) =>
+          (Number.isFinite(round.roundNum) ? Number(round.roundNum) : index) ===
+          selectedRound?.roundNum,
+      ) ?? null,
+    [currentMatch, selectedRound?.roundNum],
+  );
+  const selectedRoundScoreboardRows = useMemo(
+    () =>
+      buildRoundScoreboardRows({
+        round: selectedRawRound,
+        players,
+        selectedTeamId: playerTeam,
+        teamByPuuid,
+        agentById,
+        agentNameMap,
+        weaponById,
+      }),
+    [
+      agentById,
+      agentNameMap,
+      playerTeam,
+      players,
+      selectedRawRound,
+      teamByPuuid,
+      weaponById,
+    ],
+  );
 
-  const filteredSelectedRoundEvents = useMemo(() => {
-    const events = selectedRound?.events ?? [];
-    switch (eventFilter) {
-      case "kills":
-        return events.filter(
-          (event) => event.kind === "kill" && event.isPlayerKill,
-        );
-      case "deaths":
-        return events.filter(
-          (event) => event.kind === "kill" && event.isPlayerDeath,
-        );
-      case "opening":
-        return events.filter(
-          (event) => event.kind === "kill" && event.isOpening,
-        );
-      case "trade":
-        return events.filter(
-          (event) => event.kind === "kill" && event.isTrade,
-        );
-      case "objectives":
-        return events.filter(
-          (event) => event.kind === "plant" || event.kind === "defuse",
-        );
-      default:
-        return events;
-    }
-  }, [eventFilter, selectedRound]);
+  const selectedRoundEvents = useMemo(
+    () =>
+      [...(selectedRound?.events ?? [])].sort(
+        (a, b) => a.timeMs - b.timeMs,
+      ),
+    [selectedRound],
+  );
 
   const sortedAllRoundEvents = useMemo(
     () =>
@@ -5200,15 +5518,16 @@ export default function MatchDetailModal({
 
   const selectedEvent = useMemo(() => {
     const explicitEvent =
-      filteredSelectedRoundEvents.find((event) => event.id === selectedEventId) ??
+      selectedRoundEvents.find((event) => event.id === selectedEventId) ??
       null;
-    return explicitEvent ?? filteredSelectedRoundEvents[0] ?? null;
-  }, [filteredSelectedRoundEvents, selectedEventId]);
+    return explicitEvent ?? selectedRoundEvents[0] ?? null;
+  }, [selectedRoundEvents, selectedEventId]);
 
   const eventMapState = useMemo(
     () =>
       buildEventMapState({
         event: selectedEvent,
+        roundEvents: selectedRoundEvents,
         mapTransform,
         playersByPuuid,
         playerTeam,
@@ -5217,6 +5536,7 @@ export default function MatchDetailModal({
       }),
     [
       selectedEvent,
+      selectedRoundEvents,
       mapTransform,
       playersByPuuid,
       playerTeam,
@@ -5353,17 +5673,16 @@ export default function MatchDetailModal({
             playerName: getPlayerShortDisplay(player),
           }))
           .filter((player) => player.id && player.teamId);
-        const impactKills = (round.playerStats ?? [])
-          .flatMap((stat) => {
-            const ownerId = cleanId(stat.puuid);
-            return (stat.kills ?? []).map((kill) => ({
-              killerId: cleanId(kill.killer) || ownerId,
-              victimId: cleanId(kill.victim),
-              timeMs: toNumber(kill.timeSinceRoundStartMillis),
-              assistants: parseAssistants(kill.assistants),
-            }));
-          })
-          .filter((kill) => kill.killerId && kill.victimId)
+        const impactKills = collectRoundKills(round)
+          .filter(({ kill, ownerPuuid }) =>
+            isValidKill(kill, teamByPuuid, ownerPuuid),
+          )
+          .map(({ kill, ownerPuuid }) => ({
+            killerId: cleanId(kill.killer) || ownerPuuid,
+            victimId: cleanId(kill.victim),
+            timeMs: toNumber(kill.timeSinceRoundStartMillis),
+            assistants: validAssistants(kill, teamByPuuid, ownerPuuid),
+          }))
           .sort((a, b) => a.timeMs - b.timeMs);
         const firstKill = impactKills[0];
         const impactStats = new Map(
@@ -5383,9 +5702,15 @@ export default function MatchDetailModal({
         for (const stat of round.playerStats ?? []) {
           const entry = impactStats.get(cleanId(stat.puuid));
           if (!entry) continue;
-          entry.kills = (stat.kills ?? []).length;
+          entry.kills = impactKills.filter(
+            (kill) => kill.killerId === entry.playerId,
+          ).length;
           entry.damage = (stat.damage ?? []).reduce(
-            (sum, damageEntry) => sum + toNumber(damageEntry.damage),
+            (sum, damageEntry) =>
+              sum +
+              (isEnemyDamage(entry.playerId, damageEntry, teamByPuuid)
+                ? toNumber(damageEntry.damage)
+                : 0),
             0,
           );
         }
@@ -5556,17 +5881,16 @@ export default function MatchDetailModal({
           [teamBId]: teamBScore,
         };
 
-        const kills = (round.playerStats ?? [])
-          .flatMap((stat) => {
-            const ownerPuuid = cleanId(stat.puuid);
-            return (stat.kills ?? []).map((kill) => ({
-              killerId: cleanId(kill.killer) || ownerPuuid,
-              victimId: cleanId(kill.victim),
-              timeMs: toNumber(kill.timeSinceRoundStartMillis),
-              assistants: parseAssistants(kill.assistants),
-            }));
-          })
-          .filter((kill) => kill.killerId && kill.victimId)
+        const kills = collectRoundKills(round)
+          .filter(({ kill, ownerPuuid }) =>
+            isValidKill(kill, teamByPuuid, ownerPuuid),
+          )
+          .map(({ kill, ownerPuuid }) => ({
+            killerId: cleanId(kill.killer) || ownerPuuid,
+            victimId: cleanId(kill.victim),
+            timeMs: toNumber(kill.timeSinceRoundStartMillis),
+            assistants: validAssistants(kill, teamByPuuid, ownerPuuid),
+          }))
           .sort((a, b) => a.timeMs - b.timeMs);
         const firstKill = kills[0] ?? null;
         const playerRoundMap = new Map<string, AdvancedMomentumRound["playerRounds"][number]>();
@@ -5588,9 +5912,15 @@ export default function MatchDetailModal({
           const entry = playerRoundMap.get(playerId);
           if (!entry) continue;
           entry.score = toNumber(stat.score);
-          entry.kills = (stat.kills ?? []).length;
+          entry.kills = kills.filter(
+            (kill) => kill.killerId === playerId,
+          ).length;
           entry.damage = (stat.damage ?? []).reduce(
-            (sum, damageEntry) => sum + toNumber(damageEntry.damage),
+            (sum, damageEntry) =>
+              sum +
+              (isEnemyDamage(playerId, damageEntry, teamByPuuid)
+                ? toNumber(damageEntry.damage)
+                : 0),
             0,
           );
         }
@@ -5659,6 +5989,7 @@ export default function MatchDetailModal({
     teamBId,
     agentById,
     agentNameMap,
+    teamByPuuid,
   ]);
 
   const importantMomentumEventsByRound = useMemo(() => {
@@ -5727,6 +6058,9 @@ export default function MatchDetailModal({
     () =>
       buildEventMapState({
         event: selectedDuelDetailEvent,
+        roundEvents: allRoundEvents.filter(
+          (event) => event.roundNum === selectedDuelDetailEvent?.roundNum,
+        ),
         mapTransform,
         playersByPuuid,
         playerTeam,
@@ -5735,6 +6069,7 @@ export default function MatchDetailModal({
       }),
     [
       selectedDuelDetailEvent,
+      allRoundEvents,
       mapTransform,
       playersByPuuid,
       playerTeam,
@@ -5897,6 +6232,35 @@ export default function MatchDetailModal({
   }, [playbackEvents.length, playbackOpen, playbackPlaying]);
 
   useEffect(() => {
+    if (!playbackOpen) return;
+    const list = playbackActionListRef.current;
+    if (!list) return;
+    const frameId = window.requestAnimationFrame(() => {
+      const activeItem =
+        list.querySelector<HTMLElement>(
+          `[data-playback-index="${playbackIndex}"]`,
+        ) ??
+        list.querySelector<HTMLElement>(".match-playback-round-group.is-open");
+      if (!activeItem) return;
+
+      const listRect = list.getBoundingClientRect();
+      const itemRect = activeItem.getBoundingClientRect();
+      if (itemRect.top < listRect.top) {
+        list.scrollBy({
+          top: itemRect.top - listRect.top - 8,
+          behavior: "smooth",
+        });
+      } else if (itemRect.bottom > listRect.bottom) {
+        list.scrollBy({
+          top: itemRect.bottom - listRect.bottom + 8,
+          behavior: "smooth",
+        });
+      }
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [playbackIndex, playbackOpen]);
+
+  useEffect(() => {
     const panel = matchDetailPanelRef.current;
     if (!panel) return;
 
@@ -5979,7 +6343,6 @@ export default function MatchDetailModal({
   const handleRoundSelect = (round: RoundSummary) => {
     setSelectedRoundNum(round.roundNum);
     setSelectedEventId(round.events[0]?.id ?? null);
-    setEventFilter("all");
   };
 
   const handlePlayerSelect = (nextPlayerId: string) => {
@@ -5992,19 +6355,9 @@ export default function MatchDetailModal({
     setSelectedRoundNum(null);
     setSelectedEventId(null);
     setSelectedDuelKey(null);
-    setEventFilter("all");
     setPlaybackOpen(false);
     setPlaybackPlaying(false);
   };
-
-  const eventFilterOptions: Array<{ key: EventFilterKey; label: string }> = [
-    { key: "all", label: "Todos" },
-    { key: "kills", label: "Kills del jugador" },
-    { key: "deaths", label: "Muertes del jugador" },
-    { key: "opening", label: "Opening" },
-    { key: "trade", label: "Trade" },
-    { key: "objectives", label: "Objetivos" },
-  ];
 
   const renderRoundEventButton = (event: RoundEvent) => {
     const isActive = selectedEvent?.id === event.id;
@@ -6049,9 +6402,6 @@ export default function MatchDetailModal({
           aria-pressed={isActive}
         >
           <div className="match-round-event-top">
-            <span className="match-round-event-time">
-              {toSecondsLabel(event.timeMs)}
-            </span>
             <span className="match-action-text">
               {renderActionParticipant(
                 event.killer,
@@ -6068,10 +6418,15 @@ export default function MatchDetailModal({
           </div>
 
           <div className="match-round-event-meta">
-            {event.weaponIcon && (
-              <img src={event.weaponIcon} alt={event.weaponName} />
-            )}
-            <span>{event.weaponName}</span>
+            <span className="match-round-event-weapon">
+              {event.weaponIcon && (
+                <img src={event.weaponIcon} alt={event.weaponName} />
+              )}
+              <span>{event.weaponName}</span>
+            </span>
+            <span className="match-round-event-time">
+              {toSecondsLabel(event.timeMs)}
+            </span>
           </div>
         </button>
       );
@@ -6095,17 +6450,21 @@ export default function MatchDetailModal({
         aria-pressed={isActive}
       >
         <div className="match-round-event-top">
-          <span className="match-round-event-time">
-            {toSecondsLabel(event.timeMs)}
+          <span className="match-action-text">
+            {renderActionParticipant(
+              event.actor,
+              event.actorName,
+              actorMeta.icon ?? undefined,
+            )}
+            <span>
+              ha {event.kind === "plant" ? "plantado" : "defusado"}
+            </span>
           </span>
-          {actorMeta.icon &&
-            renderActionParticipant(event.actor, event.actorName, actorMeta.icon)}
         </div>
         <div className="match-round-event-meta">
-          <span>
-            {event.site
-              ? `${event.kind === "plant" ? "Spike en" : "Sitio"} ${event.site}`
-              : "Evento de objetivo"}
+          <span>{event.site ? `Sitio ${event.site}` : "Objetivo"}</span>
+          <span className="match-round-event-time">
+            {toSecondsLabel(event.timeMs)}
           </span>
         </div>
       </button>
@@ -6115,6 +6474,7 @@ export default function MatchDetailModal({
   const openRoundPlayback = (round: RoundSummary) => {
     if (round.events.length === 0) return;
     setPlaybackEvents(round.events);
+    setPlaybackMode("round");
     setPlaybackIndex(0);
     setPlaybackTitle(`Reproducción de ${roundLabel(round.roundNum)}`);
     setPlaybackPlaying(true);
@@ -6124,6 +6484,7 @@ export default function MatchDetailModal({
   const openMatchPlayback = () => {
     if (allRoundEvents.length === 0) return;
     setPlaybackEvents(sortedAllRoundEvents);
+    setPlaybackMode("match");
     setPlaybackIndex(0);
     setPlaybackTitle("Reproducción de partida");
     setPlaybackPlaying(true);
@@ -6155,8 +6516,81 @@ export default function MatchDetailModal({
   };
 
   const playbackEvent = playbackEvents[playbackIndex] ?? null;
+  const playbackRounds = (() => {
+    const grouped = new Map<number, Array<{ event: RoundEvent; index: number }>>();
+    playbackEvents.forEach((event, index) => {
+      const entries = grouped.get(event.roundNum) ?? [];
+      entries.push({ event, index });
+      grouped.set(event.roundNum, entries);
+    });
+    return [...grouped.entries()];
+  })();
+  const playbackIndexByEventId = new Map(
+    playbackEvents.map((event, index) => [event.id, index] as const),
+  );
+  const activePlaybackRoundNum = playbackEvent?.roundNum ?? null;
+  const nextPlaybackRoundIndex =
+    playbackMode === "match" && playbackEvent
+      ? playbackEvents.findIndex(
+          (event, index) =>
+            index > playbackIndex && event.roundNum !== playbackEvent.roundNum,
+        )
+      : -1;
+  const nextPlaybackRound = () => {
+    if (nextPlaybackRoundIndex >= 0) {
+      setPlaybackIndex(nextPlaybackRoundIndex);
+    }
+  };
+  const activePlaybackRoundEntries = playbackEvent
+    ? playbackRounds.find(([roundNum]) => roundNum === playbackEvent.roundNum)?.[1] ??
+      []
+    : [];
+  const activePlaybackActionIndex = playbackEvent
+    ? activePlaybackRoundEntries.findIndex(
+        ({ index }) => index === playbackIndex,
+      )
+    : -1;
+  const playbackProgressLabel = playbackEvent
+    ? `${roundLabel(playbackEvent.roundNum)}, acción ${
+        activePlaybackActionIndex + 1
+      } de ${activePlaybackRoundEntries.length} acciones de esta ronda`
+    : "No hay acciones para reproducir";
+  const getPlaybackRoundHighlights = (
+    roundNum: number,
+    entries: Array<{ event: RoundEvent; index: number }>,
+  ) => {
+    const highlights: string[] = [];
+    const round = matchAnalysis?.rounds.find(
+      (entry) => entry.roundNum === roundNum,
+    );
+    const validKills = entries
+      .map(({ event }) => event)
+      .filter(
+        (event): event is KillRoundEvent =>
+          event.kind === "kill" && event.isValidKill,
+      );
+    const firstBlood = validKills[0];
+    if (firstBlood) {
+      highlights.push(`Primera sangre: ${firstBlood.killerName}`);
+    }
+    const killsByPlayer = new Map<string, number>();
+    validKills.forEach((event) => {
+      const key = cleanId(event.killer) || event.killerName;
+      killsByPlayer.set(key, (killsByPlayer.get(key) ?? 0) + 1);
+    });
+    const multikill = [...killsByPlayer.values()].sort((a, b) => b - a)[0] ?? 0;
+    if (multikill >= 2) highlights.push(`Multikill ${multikill}K`);
+    if (round?.hadPlant) highlights.push("Plant");
+    if (round?.hadDefuse) highlights.push("Defuse");
+    const momentumHighlight = importantMomentumEventsByRound
+      .get(roundNum + 1)
+      ?.find((event) => event.type.toLowerCase().includes("clutch"));
+    if (momentumHighlight) highlights.push("Clutch");
+    return highlights;
+  };
   const playbackMapState = buildEventMapState({
     event: playbackEvent,
+    roundEvents: activePlaybackRoundEntries.map(({ event }) => event),
     mapTransform,
     playersByPuuid,
     playerTeam,
@@ -6164,7 +6598,8 @@ export default function MatchDetailModal({
     agentById,
   });
 
-  const renderPlaybackEventButton = (event: RoundEvent, index: number) => {
+  const renderPlaybackEventButton = (event: RoundEvent) => {
+    const index = playbackIndexByEventId.get(event.id) ?? 0;
     const isActive = index === playbackIndex;
     const renderActionParticipant = (
       puuid: string | undefined,
@@ -6207,11 +6642,12 @@ export default function MatchDetailModal({
         key={event.id}
         type="button"
         className={`match-playback-action ${isActive ? "is-active" : ""}`}
+        data-playback-index={index}
         onClick={() => setPlaybackIndex(index)}
         aria-current={isActive ? "true" : undefined}
       >
         <span className="match-round-event-time">
-          {roundLabel(event.roundNum)} · {toSecondsLabel(event.timeMs)}
+          {toSecondsLabel(event.timeMs)}
         </span>
         <span className="match-action-text">
           {event.kind === "kill" ? (
@@ -6230,9 +6666,14 @@ export default function MatchDetailModal({
             </>
           ) : (
             <>
-              {actorMeta?.icon &&
-                renderActionParticipant(event.actor, event.actorName, actorMeta.icon)}
-              <span>{event.site ? `Sitio ${event.site}` : "Objetivo"}</span>
+              {renderActionParticipant(
+                event.actor,
+                event.actorName,
+                actorMeta?.icon ?? undefined,
+              )}
+              <span>
+                ha {event.kind === "plant" ? "plantado" : "defusado"}
+              </span>
             </>
           )}
         </span>
@@ -6476,7 +6917,27 @@ export default function MatchDetailModal({
     );
   };
 
-  const matchDetailHero = matchAnalysis ? (
+  if (loading || !matchAnalysis) {
+    return (
+      <div
+        className="modal-overlay match-detail-modal-overlay match-detail-loading-overlay"
+        onClick={onClose}
+      >
+        <div
+          className="loading-card match-detail-loading-card"
+          role="status"
+          aria-live="polite"
+          aria-label="Cargando partida"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="loading-spinner" />
+          <h2>Cargando partida</h2>
+        </div>
+      </div>
+    );
+  }
+
+  const matchDetailHero = (
     <header className={`match-detail-hero result-${resultState}`}>
       <div className="match-detail-hero-copy">
         <div className="match-detail-title-row">
@@ -6583,7 +7044,7 @@ export default function MatchDetailModal({
 
       </div>
     </header>
-  ) : null;
+  );
 
 
   return (
@@ -6602,19 +7063,7 @@ export default function MatchDetailModal({
           <span className="content-detail-close-icon modal-close-icon" aria-hidden="true" />
         </button>
 
-        {loading || !matchAnalysis ? (
-          <div
-            className="match-detail-loading-state"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="loading-card">
-              <div className="loading-spinner" />
-              <h2>Cargando partida</h2>
-            </div>
-          </div>
-        ) : (
-          <div className="match-detail-shell">
+        <div className="match-detail-shell">
             <div className="match-detail-navigation-sticky">
               <section className="match-teams-strip" aria-label="Jugadores de la partida">
                 <div className="match-teams-strip-track">
@@ -6840,48 +7289,87 @@ export default function MatchDetailModal({
                   </div>
 
                   <div className="match-selected-round-layout">
-                    <div className="match-selected-round-actions">
-                    <div className="match-round-player-row">
-                      <span>
-                        Score <strong>{formatNumber(selectedRound.playerScore)}</strong>
-                      </span>
-                      <span>
-                        Daño <strong>{formatNumber(selectedRound.playerDamage)}</strong>
-                      </span>
-                      <span>
-                        Gasto <strong>{formatNumber(selectedRound.playerSpent)}</strong>
-                      </span>
-                      <span>
-                        Loadout{" "}
-                        <strong>{formatNumber(selectedRound.playerLoadout)}</strong>
-                      </span>
-                    </div>
-
-                    <div className="match-event-filters" aria-label="Filtros de eventos">
-                      {eventFilterOptions.map((option) => (
-                        <button
-                          key={option.key}
-                          type="button"
-                          className={eventFilter === option.key ? "is-active" : ""}
-                          onClick={() => setEventFilter(option.key)}
-                          aria-pressed={eventFilter === option.key}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="match-round-events">
-                      {filteredSelectedRoundEvents.length === 0 ? (
-                        <div className="empty-chart">
-                          No hay eventos para este filtro en la ronda seleccionada.
+                    <div className="match-round-mini-scoreboard">
+                      <h5>Clasificación</h5>
+                      <div className="match-round-mini-table" role="table">
+                        <div className="match-round-mini-row is-header" role="row">
+                          <span aria-label="Agente" />
+                          <span>Nombre</span>
+                          <span>Score</span>
+                          <span>K</span>
+                          <span>D</span>
+                          <span>A</span>
+                          <span>Economía</span>
                         </div>
-                      ) : (
-                        filteredSelectedRoundEvents.map(renderRoundEventButton)
-                      )}
+                        {selectedRoundScoreboardRows.map((row, index) => (
+                          <Fragment key={`round-score-${row.playerId}`}>
+                            {(index === 0 ||
+                              selectedRoundScoreboardRows[index - 1]?.teamId !==
+                                row.teamId) && (
+                              <div
+                                className={`match-round-mini-team-label ${
+                                  row.teamId === playerTeam
+                                    ? "is-selected-team"
+                                    : ""
+                                }`}
+                              >
+                                {row.teamId === playerTeam
+                                  ? "Tu equipo"
+                                  : "Equipo rival"}
+                              </div>
+                            )}
+                            <div
+                              className={`match-round-mini-row ${
+                                row.teamId === playerTeam
+                                  ? "is-selected-team"
+                                  : ""
+                              }`}
+                              role="row"
+                            >
+                              <span title={row.agentName}>
+                                {row.agentIcon ? (
+                                  <img src={row.agentIcon} alt={row.agentName} />
+                                ) : (
+                                  <i>{row.agentName.charAt(0)}</i>
+                                )}
+                              </span>
+                              <strong>{row.playerName}</strong>
+                              <span>{formatNumber(row.score)}</span>
+                              <span>{row.kills}</span>
+                              <span>{row.deaths}</span>
+                              <span>{row.assists}</span>
+                              <span
+                                className="match-round-mini-economy"
+                                title={[row.weaponName, row.armorName]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              >
+                                <small>
+                                  Loadout <strong>{formatNumber(row.loadout)}</strong>
+                                </small>
+                                <small>
+                                  Gastado <strong>{formatNumber(row.spent)}</strong>
+                                </small>
+                              </span>
+                            </div>
+                          </Fragment>
+                        ))}
+                      </div>
                     </div>
+                    <div className="match-selected-round-actions">
+                      <h5>Acciones</h5>
+                      <div className="match-round-events">
+                        {selectedRoundEvents.length === 0 ? (
+                          <div className="empty-chart">
+                            No hay acciones registradas en la ronda seleccionada.
+                          </div>
+                        ) : (
+                          selectedRoundEvents.map(renderRoundEventButton)
+                        )}
+                      </div>
                     </div>
                     <aside className="match-selected-round-map">
+                      <h5>Mapa</h5>
                       <MatchEventMapCanvas
                         mapName={mapName}
                         mapImageUrl={mapImageUrl}
@@ -7111,12 +7599,6 @@ export default function MatchDetailModal({
                 </div>
               </div>
 
-              <MatchLoadoutTimeline
-                data={roundTeamLoadoutTimeline}
-                teamALabel={teamScoreboardGroups[0]?.teamLabel ?? "Team A"}
-                teamBLabel={teamScoreboardGroups[1]?.teamLabel ?? "Team B"}
-              />
-
               <div className="match-scoreboard-teams">
                 {teamScoreboardMode === "grouped" ? (
                   teamScoreboardGroups.map((group) => (
@@ -7233,6 +7715,12 @@ export default function MatchDetailModal({
               </div>
 
             </div>
+
+            <MatchLoadoutTimeline
+              data={roundTeamLoadoutTimeline}
+              teamALabel={teamScoreboardGroups[0]?.teamLabel ?? "Team A"}
+              teamBLabel={teamScoreboardGroups[1]?.teamLabel ?? "Team B"}
+            />
 
             </section>
             )}
@@ -7447,7 +7935,6 @@ export default function MatchDetailModal({
             </div>
 
           </div>
-        )}
       </div>
       {playbackOpen && createPortal(
         <div
@@ -7466,18 +7953,58 @@ export default function MatchDetailModal({
                 <span className="stats-eyebrow">{playbackTitle}</span>
               </div>
               <button type="button" className="content-detail-close modal-close" aria-label="Cerrar reproducción" onClick={closePlayback}>
-                <span className="content-detail-close-icon modal-close-icon" aria-hidden="true" />
+                <X aria-hidden="true" />
               </button>
             </header>
 
             <div className="match-playback-body">
               <aside className="match-playback-actions">
                 <div className="match-playback-progress">
-                  Evento {playbackEvents.length === 0 ? 0 : playbackIndex + 1} de{" "}
-                  {playbackEvents.length}
+                  {playbackProgressLabel}
                 </div>
-                <div className="match-playback-action-list">
-                  {playbackEvents.map(renderPlaybackEventButton)}
+                <div
+                  ref={playbackActionListRef}
+                  className="match-playback-action-list"
+                >
+                  {playbackMode === "match"
+                    ? playbackRounds.map(([roundNum, entries]) => {
+                        const highlights = getPlaybackRoundHighlights(
+                          roundNum,
+                          entries,
+                        );
+                        const isOpen = roundNum === activePlaybackRoundNum;
+                        return (
+                          <section
+                            key={`playback-round-${roundNum}`}
+                            className={`match-playback-round-group ${
+                              isOpen ? "is-open" : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className="match-playback-round-toggle"
+                              onClick={() => setPlaybackIndex(entries[0].index)}
+                              aria-expanded={isOpen}
+                            >
+                              <span>
+                                <strong>{roundLabel(roundNum)}</strong>
+                                {highlights.length > 0 ? (
+                                  <small>{highlights.join(" · ")}</small>
+                                ) : null}
+                              </span>
+                              <small>{entries.length} acciones</small>
+                            </button>
+                            {isOpen ? (
+                              <div className="match-playback-round-events">
+                                {entries.map(({ event }) =>
+                                  renderPlaybackEventButton(event),
+                                )}
+                              </div>
+                            ) : null}
+                          </section>
+                        );
+                      })
+                    : playbackEvents.map(renderPlaybackEventButton)}
                 </div>
               </aside>
 
@@ -7493,33 +8020,56 @@ export default function MatchDetailModal({
               </div>
 
               <div className="match-playback-controls">
-                <button type="button" onClick={restartPlayback}>
-                  Reiniciar
+                <button
+                  type="button"
+                  onClick={restartPlayback}
+                  aria-label="Reiniciar"
+                  title="Reiniciar"
+                >
+                  <RotateCcw aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={previousPlaybackEvent}
                   disabled={playbackIndex === 0}
+                  aria-label="Anterior"
+                  title="Anterior"
                 >
-                  Anterior
+                  <ChevronLeft aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setPlaybackPlaying((playing) => !playing)}
                   disabled={playbackEvents.length <= 1}
+                  aria-label={playbackPlaying ? "Pausar" : "Reanudar"}
+                  title={playbackPlaying ? "Pausar" : "Reanudar"}
                 >
-                  {playbackPlaying ? "Pausar" : "Reanudar"}
+                  {playbackPlaying ? (
+                    <Pause aria-hidden="true" />
+                  ) : (
+                    <Play aria-hidden="true" />
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={nextPlaybackEvent}
                   disabled={playbackIndex >= playbackEvents.length - 1}
+                  aria-label="Siguiente acción"
+                  title="Siguiente acción"
                 >
-                  Siguiente
+                  <StepForward aria-hidden="true" />
                 </button>
-                <button type="button" onClick={closePlayback}>
-                  Cerrar
-                </button>
+                {playbackMode === "match" ? (
+                  <button
+                    type="button"
+                    onClick={nextPlaybackRound}
+                    disabled={nextPlaybackRoundIndex < 0}
+                    aria-label="Siguiente ronda"
+                    title="Siguiente ronda"
+                  >
+                    <SkipForward aria-hidden="true" />
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

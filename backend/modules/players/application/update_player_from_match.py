@@ -6,9 +6,51 @@ import logging
 from typing import Any
 
 from modules.players.infrastructure import mongo_player_repo
+from shared.combat_events import (
+    build_team_lookup,
+    is_enemy_damage,
+    is_valid_kill,
+    valid_assistants,
+)
 from shared.weapon_attribution import compute_precise_weapon_stats_core
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_player_combat_stats(
+    match_obj: dict,
+    puuid: str,
+) -> tuple[int, int, int] | None:
+    rounds = match_obj.get("roundResults") or []
+    if not rounds:
+        return None
+
+    team_by_puuid = build_team_lookup(match_obj.get("players") or [])
+    kills = 0
+    deaths = 0
+    assists = 0
+    for round_obj in rounds:
+        seen: set[tuple[Any, Any, Any, tuple[str, ...]]] = set()
+        for player_stat in round_obj.get("playerStats") or []:
+            for kill in player_stat.get("kills") or []:
+                key = (
+                    kill.get("timeSinceRoundStartMillis"),
+                    kill.get("killer"),
+                    kill.get("victim"),
+                    tuple(sorted(kill.get("assistants") or [])),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                if kill.get("victim") == puuid:
+                    deaths += 1
+                if is_valid_kill(kill, team_by_puuid):
+                    if kill.get("killer") == puuid:
+                        kills += 1
+                    if puuid in valid_assistants(kill, team_by_puuid):
+                        assists += 1
+    return kills, deaths, assists
 
 
 def _normalize_region(raw_region: Any) -> str:
@@ -19,11 +61,14 @@ def _normalize_region(raw_region: Any) -> str:
 
 def _extract_player_shots(match_obj: dict, puuid: str) -> tuple[int, int, int]:
     hs_count, body_count, leg_count = 0, 0, 0
+    team_by_puuid = build_team_lookup(match_obj.get("players") or [])
     for round_result in match_obj.get("roundResults", []) or []:
         for p_stat in round_result.get("playerStats", []) or []:
             if p_stat.get("puuid") != puuid:
                 continue
             for dmg in p_stat.get("damage", []) or []:
+                if not is_enemy_damage(puuid, dmg.get("receiver"), team_by_puuid):
+                    continue
                 hs_count += int(dmg.get("headshots", 0) or 0)
                 body_count += int(dmg.get("bodyshots", 0) or 0)
                 leg_count += int(dmg.get("legshots", 0) or 0)
@@ -34,6 +79,7 @@ def _extract_player_weapon_stats(match_obj: dict, puuid: str) -> dict[str, dict[
     precise_weapon_stats = compute_precise_weapon_stats_core(
         match_obj.get("roundResults") or [],
         puuid,
+        build_team_lookup(match_obj.get("players") or []),
     )
 
     weapon_stats: dict[str, dict[str, int]] = {}
@@ -116,9 +162,12 @@ def update_players_from_match(match_obj: dict) -> None:
         character_id = str(p.get("characterId") or "UNKNOWN")
         s = p.get("stats", {}) or {}
 
-        kills = int(s.get("kills", 0) or 0)
-        deaths = int(s.get("deaths", 0) or 0)
-        assists = int(s.get("assists", 0) or 0)
+        combat_stats = _extract_player_combat_stats(match_obj, puuid)
+        kills, deaths, assists = combat_stats or (
+            int(s.get("kills", 0) or 0),
+            int(s.get("deaths", 0) or 0),
+            int(s.get("assists", 0) or 0),
+        )
         score = int(s.get("score", 0) or 0)
         playtime = int(s.get("playtimeMillis", 0) or 0)
         rounds_played = int(s.get("roundsPlayed", 0) or 0)
