@@ -4,6 +4,8 @@ from collections import defaultdict
 from statistics import median
 from typing import Any
 
+from modules.analytics.infrastructure.reference_data import resolve_map_name
+
 from .action_profiles import observed_action_features
 from .buy_classifier import classify_team_buy_action
 from .rank_mapping import get_rank_group, get_rank_name, normalize_rank_tier
@@ -171,21 +173,29 @@ def extract_match_round_states(match: dict) -> list[dict]:
         for team_id in team_ids:
             enemy_id = next(value for value in team_ids if value != team_id)
             tiers = [normalize_rank_tier(player.get("competitiveTier")) for player in team_players[team_id]]
+            enemy_tiers = [normalize_rank_tier(player.get("competitiveTier")) for player in team_players[enemy_id]]
             valid_tiers = [tier for tier in tiers if tier is not None]
+            valid_enemy_tiers = [tier for tier in enemy_tiers if tier is not None]
             avg_tier = sum(valid_tiers) / len(valid_tiers) if valid_tiers else 0
             median_tier = median(valid_tiers) if valid_tiers else 0
+            enemy_avg_tier = sum(valid_enemy_tiers) / len(valid_enemy_tiers) if valid_enemy_tiers else 0
             rounded_tier = int(round(avg_tier)) if valid_tiers else None
+            enemy_rounded_tier = int(round(enemy_avg_tier)) if valid_enemy_tiers else None
             own_credits, enemy_credits = credits[team_id], credits[enemy_id]
+            map_id = str(match_info.get("mapId") or "UNKNOWN")
             row = {
                 "match_id": str(match_info.get("matchId") or "UNKNOWN"),
                 "game_start_millis": int(_number(match_info.get("gameStartMillis"))),
                 "round_number": round_number, "team_id": team_id, "enemy_team_id": enemy_id,
-                "map_id": str(match_info.get("mapId") or "UNKNOWN"),
+                "map_id": map_id, "map_name": resolve_map_name(map_id),
                 "season_id": str(match_info.get("seasonId") or "UNKNOWN"),
                 "queue_id": str(match_info.get("queueId") or "UNKNOWN"),
                 "is_ranked": int(bool(match_info.get("isRanked"))),
                 "rank_tier_avg": avg_tier, "rank_tier_median": median_tier,
                 "rank_name": get_rank_name(rounded_tier), "rank_group": get_rank_group(rounded_tier),
+                "rank_name_mode": get_rank_name(rounded_tier), "rank_group_mode": get_rank_group(rounded_tier),
+                "enemy_rank_tier_avg": enemy_avg_tier,
+                "enemy_rank_group_mode": get_rank_group(enemy_rounded_tier),
                 "side": _team_side(team_id, round_number, starting_attack_team),
                 "team_credit_estimate_quality": credit_quality[team_id],
                 "enemy_credit_estimate_quality": credit_quality[enemy_id],

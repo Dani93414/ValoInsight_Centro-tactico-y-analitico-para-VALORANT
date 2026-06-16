@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .content_catalog import find_weapon, gear_armor_level, weapon_has_profile
+
 BUY_ACTIONS = [
     "ECO_CLASSIC", "ECO_PISTOL_UPGRADE", "ECO_SHERIFF", "SEMI_SMG",
     "SEMI_MARSHAL", "FORCE_OUTLAW", "FORCE_RIFLE_LIGHT", "FORCE_2_RIFLES",
@@ -9,70 +11,39 @@ BUY_ACTIONS = [
     "UNKNOWN",
 ]
 
-# IDs vary between data providers. Add canonical UUIDs here as reference data is
-# ingested; normalized display names are also supported immediately.
-WEAPON_IDS: dict[str, set[str]] = {
-    "rifle": {
-        "vandal", "phantom", "bulldog", "guardian",
-        "9c82e19d-4575-0200-1a81-3eacf00cf872",
-        "ca11b433-4f09-02d4-01a1-f8b5d7ad4675",
-        "ae3de142-4d85-2547-dd26-4e90bed35cf7",
-        "4ade7faa-4cf1-8376-95ef-39884480959b",
-    },
-    "smg": {
-        "spectre", "stinger",
-        "462080d1-4035-2937-7c09-27aa2a5c27a7",
-        "f7e1b454-4ad4-1063-ec0a-159e56b58941",
-    },
-    "machine_gun": {
-        "ares", "odin",
-        "55d8a0f4-4274-ca67-fe2c-06ab45efdf58",
-        "63e6c2b6-4a8e-869c-3d4c-e38355226584",
-    },
-    "shotgun": {
-        "bucky", "judge",
-        "910be174-449b-c412-ab22-d0873436b21b",
-        "ec845bf4-4f79-ddda-a3da-0db3774b2794",
-    },
-    "operator": {"operator", "a03b24d3-4319-996d-0f8c-94bbfba1dfc7"},
-    "outlaw": {"outlaw", "5f0aaf7a-4289-3998-d5ff-eb9a5cf7ef5c"},
-    "marshal": {"marshal", "c69d76ec-4eeb-cc26-40e5-0eb9e8b1e5b6"},
-    "sheriff": {"sheriff", "e336c6b8-418d-9340-d77f-7a9e4cfe0702"},
-    "sidearm": {
-        "classic", "shorty", "frenzy", "ghost",
-        "29a0cfab-485b-f5d5-779a-b59f85e204a8",
-        "42da8ccc-40d5-affc-beec-15aa47b42eda",
-        "44d4e95c-4157-0037-81b2-17841bf2e8e3",
-        "1baa85b4-4c70-1284-64bb-6481dfc3bb4e",
-    },
-}
-ARMOR_IDS: dict[str, set[str]] = {
-    "heavy": {"heavy", "heavyshields", "heavy armor", "heavyarmor", "822bcab2-40a2-324e-c137-e09195ad7692"},
-    "light": {"light", "lightshields", "light armor", "lightarmor", "4dec83d5-4902-9ab3-bed6-a7a390761157"},
-}
-
-
 def _norm(value: Any) -> str:
     return str(value or "").strip().lower().replace("_", " ")
 
 
-def _in_set(value: Any, key: str, source: dict[str, set[str]]) -> bool:
-    normalized = _norm(value)
-    return normalized in source[key] or any(name in normalized for name in source[key])
+def _weapon_category_contains(weapon_id: Any, text: str) -> bool:
+    weapon = find_weapon(weapon_id)
+    if not weapon:
+        return False
+    haystack = " ".join([
+        _norm(weapon.get("api_category")),
+        _norm(weapon.get("categoryText")),
+        _norm(weapon.get("displayName")),
+    ])
+    return _norm(text) in haystack
 
 
-def is_rifle(weapon_id: Any) -> bool: return _in_set(weapon_id, "rifle", WEAPON_IDS)
-def is_smg(weapon_id: Any) -> bool: return _in_set(weapon_id, "smg", WEAPON_IDS)
-def is_machine_gun(weapon_id: Any) -> bool: return _in_set(weapon_id, "machine_gun", WEAPON_IDS)
-def is_shotgun(weapon_id: Any) -> bool: return _in_set(weapon_id, "shotgun", WEAPON_IDS)
-def is_operator(weapon_id: Any) -> bool: return _in_set(weapon_id, "operator", WEAPON_IDS)
-def is_outlaw(weapon_id: Any) -> bool: return _in_set(weapon_id, "outlaw", WEAPON_IDS)
-def is_marshal(weapon_id: Any) -> bool: return _in_set(weapon_id, "marshal", WEAPON_IDS)
-def is_sheriff(weapon_id: Any) -> bool: return _in_set(weapon_id, "sheriff", WEAPON_IDS)
-def is_sidearm(weapon_id: Any) -> bool: return _in_set(weapon_id, "sidearm", WEAPON_IDS) or is_sheriff(weapon_id)
+def _weapon_name_contains(weapon_id: Any, text: str) -> bool:
+    weapon = find_weapon(weapon_id)
+    return bool(weapon and _norm(text) in _norm(weapon.get("displayName")))
+
+
+def is_rifle(weapon_id: Any) -> bool: return weapon_has_profile(weapon_id, "rifle_default")
+def is_smg(weapon_id: Any) -> bool: return _weapon_category_contains(weapon_id, "smg")
+def is_machine_gun(weapon_id: Any) -> bool: return weapon_has_profile(weapon_id, "machine_gun")
+def is_shotgun(weapon_id: Any) -> bool: return weapon_has_profile(weapon_id, "shotgun")
+def is_operator(weapon_id: Any) -> bool: return _weapon_name_contains(weapon_id, "operator")
+def is_outlaw(weapon_id: Any) -> bool: return _weapon_name_contains(weapon_id, "outlaw")
+def is_marshal(weapon_id: Any) -> bool: return _weapon_name_contains(weapon_id, "marshal")
+def is_sheriff(weapon_id: Any) -> bool: return _weapon_name_contains(weapon_id, "sheriff")
+def is_sidearm(weapon_id: Any) -> bool: return weapon_has_profile(weapon_id, "sidearm")
 def is_sniper(weapon_id: Any) -> bool: return is_operator(weapon_id) or is_outlaw(weapon_id) or is_marshal(weapon_id)
-def is_heavy_armor(armor_id: Any) -> bool: return _in_set(armor_id, "heavy", ARMOR_IDS)
-def is_light_armor(armor_id: Any) -> bool: return _in_set(armor_id, "light", ARMOR_IDS)
+def is_heavy_armor(armor_id: Any) -> bool: return gear_armor_level(armor_id) == "heavy"
+def is_light_armor(armor_id: Any) -> bool: return gear_armor_level(armor_id) == "light"
 
 
 def classify_team_buy_action(

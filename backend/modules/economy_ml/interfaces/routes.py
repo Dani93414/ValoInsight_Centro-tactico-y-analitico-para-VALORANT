@@ -6,8 +6,11 @@ from threading import Lock
 
 from fastapi import APIRouter, Header, HTTPException
 
+from modules.economy_ml.analysis_reports import build_map_rank_report
+from modules.economy_ml.content_catalog import build_content_report
 from modules.economy_ml.dataset_builder import (
-    build_economy_dataset_from_matches, save_dataset, validate_dataset,
+    build_economy_dataset_from_matches, build_player_economy_dataset_from_matches,
+    save_dataset, validate_dataset,
 )
 from modules.economy_ml.model_registry import status
 from modules.economy_ml.predict import predict_match_economy_recommendations
@@ -21,6 +24,35 @@ _training_lock = Lock()
 @router.get("/status")
 def economy_ml_status():
     return status()
+
+
+@router.get("/content-report")
+def economy_ml_content_report():
+    return build_content_report()
+
+
+@router.post("/build-dataset")
+def build_economy_ml_dataset():
+    limit = int(os.getenv("ECONOMY_ML_TRAIN_MATCH_LIMIT", "10000"))
+    matches = mongo_match_repo.list_training_matches(limit)
+    team_dataset = build_economy_dataset_from_matches(matches)
+    player_dataset = build_player_economy_dataset_from_matches(matches)
+    validation = validate_dataset(team_dataset)
+    if validation["valid"]:
+        save_dataset(team_dataset)
+    return {
+        "saved": bool(validation["valid"]),
+        "team_dataset": validation,
+        "player_dataset": {
+            "rows": len(player_dataset),
+            "matches": int(player_dataset["match_id"].nunique()) if "match_id" in player_dataset else 0,
+        },
+    }
+
+
+@router.get("/map-rank-report")
+def economy_ml_map_rank_report():
+    return build_map_rank_report()
 
 
 @router.post("/train")

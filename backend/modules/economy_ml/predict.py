@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from .content_catalog import CONTENT_UNAVAILABLE_REASON, content_available
 from .dataset_builder import DEFAULT_DATASET_PATH
 from .model_registry import load_metadata, status
+from .player_recommendations import build_player_recommendations
 from .policy import recommend_economy_action
 from .similar_rounds import find_similar_rounds, summarize_similar_rounds
 from .state_extractor import extract_match_round_states
@@ -23,6 +25,8 @@ def _decision_type(real: str, recommended: str) -> str:
 def predict_match_economy_recommendations(match: dict) -> dict:
     current_status = status()
     match_id = str((match.get("matchInfo") or {}).get("matchId") or "UNKNOWN")
+    if not content_available():
+        return {"available": False, "reason": CONTENT_UNAVAILABLE_REASON, "match_id": match_id, "rounds": []}
     if not current_status["available"]:
         return {**current_status, "match_id": match_id, "rounds": []}
     dataset_path = Path(DEFAULT_DATASET_PATH)
@@ -53,6 +57,9 @@ def predict_match_economy_recommendations(match: dict) -> dict:
             ),
             "alternatives": result["alternatives"],
             "similar_rounds_summary": summarize_similar_rounds(similar),
+            "player_recommendations": build_player_recommendations(
+                match, state, result["recommended_action"]
+            ),
             "explanation": result["explanation"], "round_won": bool(state["round_won"]),
             "match_won": bool(state["match_won"]),
         })
