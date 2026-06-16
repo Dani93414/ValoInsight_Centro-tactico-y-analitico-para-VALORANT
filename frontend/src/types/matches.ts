@@ -149,6 +149,30 @@ export type EconomyMlAlternative = {
   historical_support?: number;
 };
 
+export type EconomyMlPlayerRecommendation = {
+  puuid: string;
+  player_name: string;
+  agent_id?: string;
+  agent?: string;
+  role?: string;
+  estimated_credits?: number;
+  real_weapon_id?: string | null;
+  real_weapon?: string | null;
+  real_armor_id?: string | null;
+  real_armor?: string | null;
+  recommended_weapon_id?: string | null;
+  recommended_weapon?: string | null;
+  recommended_armor_id?: string | null;
+  recommended_armor?: string | null;
+  reason?: string[];
+  confidence?: number | null;
+  player_weapon_stats?: {
+    rounds?: number;
+    kd_ratio?: number;
+    win_rate?: number;
+  } | null;
+};
+
 export type EconomyMlRoundRecommendation = {
   round_number: number;
   team_id: string;
@@ -168,6 +192,7 @@ export type EconomyMlRoundRecommendation = {
     similar_rounds_found: number;
     by_action?: Record<string, { samples: number; match_win_rate: number }>;
   };
+  player_recommendations?: EconomyMlPlayerRecommendation[];
   explanation: string[];
 };
 

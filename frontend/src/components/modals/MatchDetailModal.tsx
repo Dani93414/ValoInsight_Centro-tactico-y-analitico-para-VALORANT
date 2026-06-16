@@ -3810,6 +3810,36 @@ function EconomyOptimalPanel({
                           </li>
                         ))}
                       </ul>
+                      {(round.player_recommendations?.length ?? 0) > 0 && (
+                        <div className="match-economy-ml-players">
+                          <strong>Jugadores</strong>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Jugador</th>
+                                <th>Agente</th>
+                                <th>Créditos</th>
+                                <th>Compra real</th>
+                                <th>Recomendación</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {round.player_recommendations?.map((player) => (
+                                <tr key={player.puuid}>
+                                  <td>{player.player_name}</td>
+                                  <td>{player.agent ?? "N/D"} · {player.role ?? "N/D"}</td>
+                                  <td>{formatNumber(player.estimated_credits ?? 0)}</td>
+                                  <td>{[player.real_weapon, player.real_armor].filter(Boolean).join(" + ") || "N/D"}</td>
+                                  <td>
+                                    {[player.recommended_weapon, player.recommended_armor].filter(Boolean).join(" + ") || "Ahorrar"}
+                                    {player.reason?.[0] ? <small>{player.reason[0]}</small> : null}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </details>
                   </td>
                 </tr>

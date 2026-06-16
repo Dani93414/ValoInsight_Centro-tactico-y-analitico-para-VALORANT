@@ -57,7 +57,7 @@ class EconomyMlTests(unittest.TestCase):
             {"weapon": "910be174-449b-c412-ab22-d0873436b21b", "armor": "Light", "loadoutValue": 2500, "spent": 2500}
         ] * 5
         odin_buy = [
-            {"weapon": "Odin", "armor": "Heavy", "loadoutValue": 4500, "spent": 4500}
+            {"weapon": "Odin", "armor": "822bcab2-40a2-324e-c137-e09195ad7692", "loadoutValue": 4500, "spent": 4500}
         ] * 5
         self.assertEqual(classify_team_buy_action(bucky_buy), "SEMI_SMG")
         self.assertEqual(classify_team_buy_action(odin_buy), "FULL_RIFLES")

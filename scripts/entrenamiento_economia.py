@@ -14,10 +14,12 @@ for path in (PROJECT_ROOT, BACKEND_ROOT):
         sys.path.insert(0, value)
 
 from modules.economy_ml.dataset_builder import (  # noqa: E402
+    build_player_economy_dataset_from_matches,
     build_economy_dataset_from_matches,
     save_dataset,
     validate_dataset,
 )
+from modules.economy_ml.content_catalog import build_content_report  # noqa: E402
 from modules.economy_ml.model_registry import status  # noqa: E402
 from modules.economy_ml.train import train_models  # noqa: E402
 from modules.matches.infrastructure import mongo_match_repo  # noqa: E402
@@ -88,6 +90,16 @@ def main() -> int:
     args = parser.parse_args()
 
     print("Leyendo partidas desde MongoDB...")
+    content_report = build_content_report()
+    if not content_report.get("available"):
+        print(content_report.get("reason") or "No hay contenido de Valorant disponible.")
+        return 1
+    print(
+        "Contenido Valorant: "
+        f"{content_report.get('weapons_found')} armas, "
+        f"{content_report.get('gear_found')} gear, "
+        f"{content_report.get('maps_found')} mapas"
+    )
     matches = mongo_match_repo.list_training_matches(args.limit)
     print(f"Partidas encontradas: {len(matches)}")
     if not matches:
@@ -96,8 +108,10 @@ def main() -> int:
 
     print("Construyendo dataset de economia...")
     dataset = build_economy_dataset_from_matches(matches)
+    player_dataset = build_player_economy_dataset_from_matches(matches)
     validation = validate_dataset(dataset)
     _print_validation(validation)
+    print(f"Dataset jugador-ronda: {len(player_dataset)} filas")
 
     if not validation.get("valid") and not args.allow_invalid:
         print("Dataset invalido. No se entrena el modelo.")
