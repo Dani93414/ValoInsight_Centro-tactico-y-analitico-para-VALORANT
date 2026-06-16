@@ -17,6 +17,19 @@ def list_recent(limit: int = 20) -> list[dict[str, Any]]:
     return list(cursor)
 
 
+def list_training_matches(limit: int = 10000) -> list[dict[str, Any]]:
+    """Return ranked matches with round economy for offline model training."""
+    cursor = (
+        matches_collection.find(
+            {"matchInfo.isRanked": True, "roundResults.playerStats.economy": {"$exists": True}},
+            {"_id": 0},
+        )
+        .sort("matchInfo.gameStartMillis", -1)
+        .limit(limit)
+    )
+    return list(cursor)
+
+
 def find_by_id(match_id: str) -> Optional[dict[str, Any]]:
     """Return a single match document by matchInfo.matchId, or None."""
     return matches_collection.find_one(

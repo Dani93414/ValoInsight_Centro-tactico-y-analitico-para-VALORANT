@@ -14,6 +14,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Bar,
@@ -30,6 +31,7 @@ import {
 } from "recharts";
 import {
   useMatchById,
+  useMatchEconomyMl,
   useAgentes,
   useArmas,
   useMapasGeo,
@@ -84,6 +86,7 @@ import type {
   RawPlayer,
   RawPlayerLocation,
   RawRound,
+  EconomyMlResponse,
 } from "../../types/matches";
 import { TRADE_WINDOW_MS } from "../../constants/stats";
 import {
@@ -352,6 +355,11 @@ type RoundScoreboardRow = {
   armorName?: string;
 };
 
+type PartyMarker = {
+  partyId: string;
+  color: string;
+};
+
 type MatchPerspective = {
   selectedPlayer: RawPlayer;
   selectedPlayerId: string;
@@ -422,12 +430,50 @@ type EventMapState = {
 type MatchResultState = "win" | "loss" | "draw";
 
 const WEAPON_ICON_ID_RE = /\/content\/weapons\/([^/]+)\/displayIcon\.png/i;
+const PARTY_MARKER_COLORS = [
+  "#f5c451",
+  "#a78bfa",
+  "#60a5fa",
+  "#fb7185",
+  "#34d399",
+  "#f97316",
+  "#22d3ee",
+  "#e879f9",
+] as const;
 
 function cleanId(value?: string | null): string {
   const text = String(value ?? "").trim();
   if (!text) return "";
   if (text.toLowerCase() === "string") return "";
   return text;
+}
+
+function buildPartyMarkerMap(players: RawPlayer[]): Map<string, PartyMarker> {
+  const playersByParty = new Map<string, Set<string>>();
+
+  for (const player of players) {
+    const partyId = cleanId(player.partyId);
+    const puuid = cleanId(player.puuid);
+    if (!partyId || !puuid) continue;
+
+    const partyPlayers = playersByParty.get(partyId) ?? new Set<string>();
+    partyPlayers.add(puuid);
+    playersByParty.set(partyId, partyPlayers);
+  }
+
+  const markerByPuuid = new Map<string, PartyMarker>();
+  [...playersByParty.entries()]
+    .filter(([, puuids]) => puuids.size >= 2)
+    .sort(([partyA], [partyB]) => partyA.localeCompare(partyB))
+    .forEach(([partyId, puuids], index) => {
+      const marker = {
+        partyId,
+        color: PARTY_MARKER_COLORS[index % PARTY_MARKER_COLORS.length],
+      };
+      puuids.forEach((puuid) => markerByPuuid.set(puuid, marker));
+    });
+
+  return markerByPuuid;
 }
 
 function cleanSite(value?: string | null): string | undefined {
@@ -1066,6 +1112,20 @@ function formatMomentumDelta(value: number): string {
   return value > 0
     ? `+${formatNumber(value, 1)} para tu equipo`
     : `${formatNumber(value, 1)} hacia el rival`;
+}
+
+function formatMomentumContribution(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+
+  const sign = value < 0 ? "-" : "";
+  const maxDecimals = 4;
+  const factor = 10 ** maxDecimals;
+  const truncated = Math.trunc(Math.abs(value) * factor) / factor;
+
+  return `${sign}${new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxDecimals,
+  }).format(truncated)}`;
 }
 
 function getMomentumEventCategory(event: RoundMomentumTicketEvent): string {
@@ -2993,6 +3053,17 @@ function buildRoundMomentumViewModels({
           contribution: contributionValue,
         };
       });
+    const playerNetAccountingEvent: RoundMomentumTicketEvent = {
+      id: "accounting-player-net",
+      label: "Balance neto por aportación de jugadores",
+      detail:
+        "Suma neta de las aportaciones individuales de los jugadores en esta ronda.",
+      teamLabel:
+        playerAccountingContribution >= 0
+          ? ("Tu equipo" as const)
+          : ("Rival" as const),
+      contribution: playerAccountingContribution,
+    };
     const accountingLabels = new Set(
       accountingEvents.map((event) => event.label.toLowerCase()),
     );
@@ -3003,6 +3074,7 @@ function buildRoundMomentumViewModels({
     );
     const ticketEvents = [
       ...accountingEvents,
+      playerNetAccountingEvent,
       ...contextualTicketEvents.filter(
         (event) => {
           const semanticFamily = getMomentumTicketSemanticFamily(event);
@@ -3156,6 +3228,8 @@ function MatchMomentumPanel({
   teamAId,
   selectedTeamId,
   opponentTeamId,
+  agentById,
+  agentNameMap,
   mode = "summary",
   selectedRoundNumber,
 }: {
@@ -3166,6 +3240,8 @@ function MatchMomentumPanel({
   teamAId: string;
   selectedTeamId: string;
   opponentTeamId: string;
+  agentById: Map<string, AgentContent>;
+  agentNameMap: Record<string, string>;
   mode?: "summary" | "explorer";
   selectedRoundNumber?: number;
 }) {
@@ -3190,11 +3266,49 @@ function MatchMomentumPanel({
     return primary?.roundNumber ?? 1;
   }, [roundViewModels]);
   const [internalSelectedRoundNumber, setInternalSelectedRoundNumber] = useState(defaultSelectedRound);
+  const [activePlayerTooltip, setActivePlayerTooltip] = useState<{
+    player: RoundMomentumTicketPlayer;
+    top: number;
+    left: number;
+  } | null>(null);
+  const playersByPuuid = useMemo(
+    () =>
+      new Map(
+        (match?.players ?? [])
+          .map((player) => [cleanId(player.puuid), player] as const)
+          .filter(([puuid]) => Boolean(puuid)),
+      ),
+    [match],
+  );
 
   useEffect(() => {
     setInternalSelectedRoundNumber(defaultSelectedRound);
   }, [defaultSelectedRound]);
   const activeRoundNumber = selectedRoundNumber ?? internalSelectedRoundNumber;
+  useEffect(() => {
+    setActivePlayerTooltip(null);
+  }, [activeRoundNumber]);
+  useEffect(() => {
+    if (!activePlayerTooltip) return;
+    const closeTooltip = () => setActivePlayerTooltip(null);
+    window.addEventListener("scroll", closeTooltip, true);
+    window.addEventListener("resize", closeTooltip);
+    return () => {
+      window.removeEventListener("scroll", closeTooltip, true);
+      window.removeEventListener("resize", closeTooltip);
+    };
+  }, [activePlayerTooltip]);
+  const showPlayerTooltip = (
+    player: RoundMomentumTicketPlayer,
+    target: HTMLElement,
+  ) => {
+    const rect = target.getBoundingClientRect();
+    setActivePlayerTooltip({
+      player,
+      top: Math.max(8, Math.min(rect.top, window.innerHeight - 280)),
+      left: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 300)),
+    });
+  };
 
   if (!momentum || momentum.rounds.length === 0) {
     return (
@@ -3297,12 +3411,6 @@ function MatchMomentumPanel({
       },
     ];
   });
-  const finalDominance =
-    selectedControlPercentage === opponentControlPercentage
-      ? "Equilibrado"
-      : selectedControlPercentage > opponentControlPercentage
-        ? "Tu equipo"
-        : "Rival";
   const keyRoundLabel = selectedRound?.isKeyRound
     ? `Ronda ${selectedRound.roundNumber}`
     : "Sin punto único";
@@ -3327,11 +3435,6 @@ function MatchMomentumPanel({
           </div>
 
           <div className="match-momentum-summary-grid">
-            <article>
-              <span>Dominio final</span>
-              <strong>{finalDominance}</strong>
-              <small>Dominó el tramo decisivo</small>
-            </article>
             <article>
               <span>Ronda clave</span>
               <strong>{keyRoundLabel}</strong>
@@ -3464,10 +3567,7 @@ function MatchMomentumPanel({
               <small>{formatMomentumDelta(selectedRound.momentumChange)}</small>
             </div>
             <div className="round-analysis-hero-metrics">
-              <div><span>Dominio final</span><strong>{dominanceLabel(selectedRound.dominanceAfter)}</strong></div>
               <div><span>Economía</span><strong>{selectedRound.selectedTeamEconomy ?? "Sin datos"}</strong></div>
-              <div><span>Impacto de ronda</span><strong>{formatNumber(selectedRound.roundImpact, 1)}</strong></div>
-              <div><span>Confianza</span><strong>{selectedRound.confidenceLabel}</strong></div>
             </div>
           </header>
 
@@ -3490,11 +3590,19 @@ function MatchMomentumPanel({
                 <small>Ordenado por impacto absoluto</small>
               </header>
               <div className="round-impact-player-list">
-                {selectedRound.ticketPlayers.map((player) => (
+                {selectedRound.ticketPlayers.map((player) => {
+                  const fallbackAgent = getAgentMeta(
+                    playersByPuuid.get(cleanId(player.playerId)),
+                    agentById,
+                    agentNameMap,
+                  );
+                  const agentIcon = player.agentIcon ?? fallbackAgent.icon;
+                  const agentName = player.agentName ?? fallbackAgent.name;
+                  return (
                   <article key={`round-impact-player-${player.playerId}`}>
                     <div className="round-impact-player-name">
-                      {player.agentIcon ? <img src={player.agentIcon} alt="" /> : <i>{(player.agentName ?? player.playerName).charAt(0)}</i>}
-                      <div><strong>{player.playerName}</strong><span>{player.agentName ?? player.teamLabel}</span></div>
+                      {agentIcon ? <img src={agentIcon} alt={agentName} /> : <i>{(agentName || player.playerName).charAt(0)}</i>}
+                      <div><strong>{player.playerName}</strong><span>{agentName || player.teamLabel}</span></div>
                     </div>
                     <div className="round-impact-player-bar">
                       <i
@@ -3503,19 +3611,22 @@ function MatchMomentumPanel({
                       />
                     </div>
                     <b className={player.contribution >= 0 ? "is-positive" : "is-negative"}>
-                      {player.contribution > 0 ? "+" : ""}{formatNumber(player.contribution, 2)}
+                      {player.contribution > 0 ? "+" : ""}{formatMomentumContribution(player.contribution)}
                     </b>
-                    <div className="match-momentum-ticket-info" tabIndex={0}>
+                    <button
+                      type="button"
+                      className="match-momentum-ticket-info"
+                      aria-label={`Ver descomposición de ${player.playerName}`}
+                      onPointerEnter={(event) => showPlayerTooltip(player, event.currentTarget)}
+                      onPointerLeave={() => setActivePlayerTooltip(null)}
+                      onFocus={(event) => showPlayerTooltip(player, event.currentTarget)}
+                      onBlur={() => setActivePlayerTooltip(null)}
+                    >
                       <Info aria-hidden="true" />
-                      <div role="tooltip">
-                        <strong>Descomposición</strong>
-                        {player.breakdown.map((item, itemIndex) => (
-                          <span key={`${player.playerId}-${item.label}-${itemIndex}`}>{item.label}<b>{item.value > 0 ? "+" : ""}{formatNumber(item.value, 2)}</b></span>
-                        ))}
-                      </div>
-                    </div>
+                    </button>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
@@ -3530,7 +3641,7 @@ function MatchMomentumPanel({
                     <em data-category={getMomentumEventCategory(event)}>{getMomentumEventCategory(event)}</em>
                     <div><strong>{event.label}</strong><span>{event.teamLabel} · {event.detail}</span></div>
                     <b className={event.contribution >= 0 ? "is-positive" : "is-negative"}>
-                      {event.isContext ? "Contexto" : `${event.contribution > 0 ? "+" : ""}${formatNumber(event.contribution, 2)}`}
+                      {event.isContext ? "Contexto" : `${event.contribution > 0 ? "+" : ""}${formatMomentumContribution(event.contribution)}`}
                     </b>
                   </article>
                 )) : <p>Sin eventos extraordinarios; el resultado de ronda explica la mayor parte del cambio.</p>}
@@ -3565,6 +3676,31 @@ function MatchMomentumPanel({
       ) : null}
         </>
       )}
+      {activePlayerTooltip &&
+        createPortal(
+          <div
+            className="round-impact-player-tooltip"
+            role="tooltip"
+            style={{
+              top: activePlayerTooltip.top,
+              left: activePlayerTooltip.left,
+            }}
+          >
+            <strong>Descomposición · {activePlayerTooltip.player.playerName}</strong>
+            {activePlayerTooltip.player.breakdown.map((item, itemIndex) => (
+              <span
+                key={`${activePlayerTooltip.player.playerId}-${item.label}-${itemIndex}`}
+              >
+                {item.label}
+                <b className={item.value >= 0 ? "is-positive" : "is-negative"}>
+                  {item.value > 0 ? "+" : ""}
+                  {formatMomentumContribution(item.value)}
+                </b>
+              </span>
+            ))}
+          </div>,
+          document.body,
+        )}
     </section>
   );
 }
@@ -3585,26 +3721,114 @@ function getEfficiencyLabel(efficiency: EconomyEfficiency): string {
 }
 
 function EconomyOptimalPanel({
+  ml,
   analysis,
   momentum,
+  teamAId,
+  teamBId,
   teamALabel,
   teamBLabel,
   selectedTeamKey,
 }: {
+  ml: EconomyMlResponse | undefined;
   analysis: EconomyEfficiencyAnalysis | null;
   momentum: MatchMomentumResult | null;
+  teamAId: string;
+  teamBId: string;
   teamALabel: string;
   teamBLabel: string;
   selectedTeamKey: "teamA" | "teamB";
 }) {
+  if (ml?.available && ml.rounds.length > 0) {
+    const different = ml.rounds.filter(
+      (round) => round.real_buy_action !== round.recommended_action,
+    );
+    const validDeltas = ml.rounds
+      .map((round) => round.delta_vs_real)
+      .filter((value): value is number => typeof value === "number");
+    const averageConfidence = safeDivide(
+      ml.rounds.reduce((sum, round) => sum + round.confidence, 0),
+      ml.rounds.length,
+    );
+    const similarRounds = ml.rounds.reduce(
+      (sum, round) => sum + round.similar_rounds_summary.similar_rounds_found,
+      0,
+    );
+    const scopes = [...new Set(ml.rounds.map((round) => round.model_scope))].join(", ");
+    const ranks = [...new Set(ml.rounds.map((round) => round.rank_name))].join(", ");
+    const teamLabel = (teamId: string) =>
+      teamId === teamAId ? teamALabel : teamId === teamBId ? teamBLabel : teamId;
+
+    return (
+      <section className="match-economy-optimal-panel">
+        <div className="panel-header">
+          <div>
+            <h3 className="panel-title">Predicción de economía útil</h3>
+            <p className="panel-subtitle">
+              Estimación observacional calibrada para mejorar el valor de partida. Solo compara acciones viables con soporte histórico suficiente.
+            </p>
+          </div>
+        </div>
+        <div className="match-economy-optimal-summary">
+          <article><span>Modelo usado</span><strong>{scopes} · calibrado</strong></article>
+          <article><span>Rango analizado</span><strong>{ranks}</strong></article>
+          <article><span>Recomendaciones distintas</span><strong>{different.length}</strong></article>
+          <article><span>Mayor mejora estimada</span><strong>{formatPercent(Math.max(0, ...validDeltas) * 100, 1)}</strong></article>
+          <article><span>Confianza media</span><strong>{formatPercent(averageConfidence * 100, 1)}</strong></article>
+          <article><span>Rondas similares usadas</span><strong>{formatNumber(similarRounds)}</strong></article>
+        </div>
+        <div className="match-economy-optimal-table-wrap">
+          <table className="match-economy-optimal-table">
+            <thead><tr>
+              <th>Ronda</th><th>Equipo</th><th>Rango</th><th>Compra real</th>
+              <th>Recomendación</th><th>Valor real</th><th>Valor recomendado</th>
+              <th>Diferencia</th><th>Confianza</th><th>Motivo</th>
+            </tr></thead>
+            <tbody>
+              {ml.rounds.map((round) => (
+                <tr key={`${round.round_number}-${round.team_id}`}>
+                  <td>{round.round_number}</td>
+                  <td>{teamLabel(round.team_id)}</td>
+                  <td>{round.rank_name}</td>
+                  <td>{round.real_buy_action}</td>
+                  <td>{round.recommended_action}</td>
+                  <td>{round.real_action_estimated_match_win_probability === null ? "N/D" : formatPercent(round.real_action_estimated_match_win_probability * 100, 1)}</td>
+                  <td>{formatPercent(round.estimated_match_win_probability * 100, 1)}</td>
+                  <td>{round.delta_vs_real === null ? "N/D" : `${round.delta_vs_real >= 0 ? "+" : ""}${formatPercent(round.delta_vs_real * 100, 1)}`}</td>
+                  <td>{formatPercent(round.confidence * 100, 1)}</td>
+                  <td>
+                    <details className="match-economy-ml-detail">
+                      <summary>{round.explanation[0] ?? "Ver explicación"}</summary>
+                      <p>{round.explanation.join(" ")}</p>
+                      <small>Scope: {round.model_scope} · Similares: {round.similar_rounds_summary.similar_rounds_found}</small>
+                      <ul>
+                        {round.alternatives.map((alternative) => (
+                          <li key={alternative.action}>
+                            {alternative.action}: {alternative.estimated_match_win_probability === null
+                              ? alternative.reason_if_unavailable ?? "No disponible"
+                              : `${formatPercent(alternative.estimated_match_win_probability * 100, 1)} · soporte ${alternative.historical_support ?? "N/D"}`}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  }
+
   if (!analysis || analysis.rounds.length === 0) {
     return (
       <section className="match-economy-optimal-panel">
         <div className="panel-header">
           <div>
-            <h3 className="panel-title">Economía óptima vs real</h3>
+            <h3 className="panel-title">Predicción de economía útil</h3>
             <p className="panel-subtitle">
-              No hay datos de economía por ronda suficientes.
+              {ml?.reason ?? "No hay modelo entrenado ni datos heurísticos suficientes."}
             </p>
           </div>
         </div>
@@ -3624,14 +3848,14 @@ function EconomyOptimalPanel({
     {
       key: "teamA" as const,
       roundNumber: round.roundNumber,
-      team: `${teamALabel}${selectedTeamKey === "teamA" ? " · Equipo seleccionado" : " · Rival"}`,
+      team: `${teamALabel}${selectedTeamKey === "teamA" ? " · Tu equipo" : " · Rival"}`,
       data: round.teamA,
       momentum: momentumByRound.get(round.roundNumber),
     },
     {
       key: "teamB" as const,
       roundNumber: round.roundNumber,
-      team: `${teamBLabel}${selectedTeamKey === "teamB" ? " · Equipo seleccionado" : " · Rival"}`,
+      team: `${teamBLabel}${selectedTeamKey === "teamB" ? " · Tu equipo" : " · Rival"}`,
       data: round.teamB,
       momentum: momentumByRound.get(round.roundNumber),
     },
@@ -3648,16 +3872,16 @@ function EconomyOptimalPanel({
     <section className="match-economy-optimal-panel">
       <div className="panel-header">
         <div>
-          <h3 className="panel-title">Economía óptima vs real</h3>
+          <h3 className="panel-title">Predicción de economía útil</h3>
           <p className="panel-subtitle">
-            Compra real comparada con una recomendación explicable por ronda.
+            {ml?.reason ?? "Modelo no disponible."} Mostrando heurística actual como fallback visual.
           </p>
         </div>
       </div>
 
       <div className="match-economy-optimal-summary">
         <article>
-          <span>Eficiencia equipo seleccionado</span>
+          <span>Eficiencia de tu equipo</span>
           <strong>
             {formatPercent(
               selectedTeamKey === "teamA"
@@ -4725,6 +4949,7 @@ export default function MatchDetailModal({
   const matchDetailPanelRef = useRef<HTMLDivElement | null>(null);
   const playbackActionListRef = useRef<HTMLDivElement | null>(null);
   const { data: matchData, isLoading: matchLoading } = useMatchById(matchId);
+  const { data: economyMlData } = useMatchEconomyMl(matchId);
   const { data: agentsData, isLoading: agentsLoading } = useAgentes();
   const { data: weaponsData, isLoading: weaponsLoading } = useArmas();
   const { data: mapsData, isLoading: mapsLoading } = useMapasGeo();
@@ -4820,6 +5045,8 @@ export default function MatchDetailModal({
     }
     return map;
   }, [players]);
+
+  const partyMarkerByPuuid = useMemo(() => buildPartyMarkerMap(players), [players]);
 
   const playersByTeam = useMemo(() => {
     return getStableTeamEntries(currentMatch);
@@ -5632,15 +5859,15 @@ export default function MatchDetailModal({
       summarizeTeamEconomy(
         roundTeamLoadoutTimeline,
         "teamA",
-        `${teamALabel}${selectedTeamKey === "teamA" ? " · Equipo seleccionado" : " · Rival"}`,
+        teamALabel,
       ),
       summarizeTeamEconomy(
         roundTeamLoadoutTimeline,
         "teamB",
-        `${teamBLabel}${selectedTeamKey === "teamB" ? " · Equipo seleccionado" : " · Rival"}`,
+        teamBLabel,
       ),
     ];
-  }, [roundTeamLoadoutTimeline, teamALabel, teamBLabel, selectedTeamKey]);
+  }, [roundTeamLoadoutTimeline, teamALabel, teamBLabel]);
 
   const momentumAnalysis = useMemo<MatchMomentumResult | null>(() => {
     if (!currentMatch || !teamAId || !teamBId) return null;
@@ -6198,14 +6425,9 @@ export default function MatchDetailModal({
         name: economyBuyLabels[key],
         rounds: summary.rounds,
         wins: summary.wins,
-        losses: Math.max(0, summary.rounds - summary.wins),
         winRate: summary.winRate,
         acs: safeDivide(
           rounds.reduce((sum, round) => sum + round.playerScore, 0),
-          Math.max(rounds.length, 1),
-        ),
-        adr: safeDivide(
-          rounds.reduce((sum, round) => sum + round.playerDamage, 0),
           Math.max(rounds.length, 1),
         ),
         color: economyBuyColors[key],
@@ -6726,15 +6948,20 @@ export default function MatchDetailModal({
           const playerTag = row.player.tagLine?.trim();
           const accountLevel = toNumber(row.player.accountLevel);
           const isSelected = row.puuid === effectiveSelectedPlayerId;
+          const partyMarker = partyMarkerByPuuid.get(row.puuid);
+          const partyMarkerStyle = partyMarker
+            ? ({ "--party-marker-color": partyMarker.color } as CSSProperties)
+            : undefined;
 
           return (
             <button
               key={`scoreboard-row-${row.puuid}`}
               type="button"
-              className={`match-scoreboard-row is-${teamTone} ${isSelected ? "is-selected" : ""}`}
+              className={`match-scoreboard-row is-${teamTone} ${partyMarker ? "has-party-marker" : ""} ${isSelected ? "is-selected" : ""}`}
+              style={partyMarkerStyle}
               onClick={() => handlePlayerSelect(row.puuid)}
-              aria-label={`Ver partida desde la perspectiva de ${playerName}`}
-              title={`Score: ${formatNumber(row.score)}`}
+              aria-label={`Ver partida desde la perspectiva de ${playerName}${partyMarker ? `, jugador en party ${partyMarker.partyId}` : ""}`}
+              title={`Score: ${formatNumber(row.score)}${partyMarker ? ` · Party ${partyMarker.partyId}` : ""}`}
             >
               <span className="match-scoreboard-cell-player">
                 {row.agentIcon ? (
@@ -6815,6 +7042,28 @@ export default function MatchDetailModal({
       <span className="match-duel-player">
         {agent.icon ? <img src={agent.icon} alt="" /> : <i>{agent.name.charAt(0)}</i>}
         <strong>{getPlayerShortDisplay(player)}</strong>
+      </span>
+    );
+  };
+
+  const renderDuelAgentIcon = (player: RawPlayer) => {
+    const agent = getAgentMeta(player, agentById, agentNameMap);
+    const title = `${getPlayerShortDisplay(player)} · ${agent.name}`;
+
+    return agent.icon ? (
+      <img
+        className="match-duel-score-agent-icon"
+        src={agent.icon}
+        alt={agent.name}
+        title={title}
+        loading="lazy"
+      />
+    ) : (
+      <span
+        className="match-duel-score-agent-icon match-duel-score-agent-fallback"
+        title={title}
+      >
+        {agent.name.charAt(0).toUpperCase()}
       </span>
     );
   };
@@ -7242,6 +7491,8 @@ export default function MatchDetailModal({
                     teamAId={teamAId}
                     selectedTeamId={playerTeam}
                     opponentTeamId={opponentTeamId}
+                    agentById={agentById}
+                    agentNameMap={agentNameMap}
                   />
                 </section>
               )}
@@ -7323,8 +7574,30 @@ export default function MatchDetailModal({
                                 row.teamId === playerTeam
                                   ? "is-selected-team"
                                   : ""
+                              } ${
+                                partyMarkerByPuuid.has(row.playerId)
+                                  ? "has-party-marker"
+                                  : ""
                               }`}
+                              style={
+                                partyMarkerByPuuid.has(row.playerId)
+                                  ? ({
+                                      "--party-marker-color":
+                                        partyMarkerByPuuid.get(row.playerId)?.color,
+                                    } as CSSProperties)
+                                  : undefined
+                              }
                               role="row"
+                              aria-label={
+                                partyMarkerByPuuid.has(row.playerId)
+                                  ? `${row.playerName}, jugador en party ${partyMarkerByPuuid.get(row.playerId)?.partyId}`
+                                  : row.playerName
+                              }
+                              title={
+                                partyMarkerByPuuid.has(row.playerId)
+                                  ? `Party ${partyMarkerByPuuid.get(row.playerId)?.partyId}`
+                                  : undefined
+                              }
                             >
                               <span title={row.agentName}>
                                 {row.agentIcon ? (
@@ -7390,6 +7663,8 @@ export default function MatchDetailModal({
                 teamAId={teamAId}
                 selectedTeamId={playerTeam}
                 opponentTeamId={opponentTeamId}
+                agentById={agentById}
+                agentNameMap={agentNameMap}
                 mode="explorer"
                 selectedRoundNumber={(selectedRound?.roundNum ?? 0) + 1}
               />
@@ -7461,6 +7736,10 @@ export default function MatchDetailModal({
                     <span className="match-round-legend-item">
                       <b className="match-round-legend-symbol">—</b> Sin duelos
                     </span>
+                    <span className="match-round-legend-item">
+                      <b className="match-round-legend-symbol">Icono</b>
+                      El icono indica qué agente hizo esas kills
+                    </span>
                   </div>
                 </div>
 
@@ -7516,14 +7795,21 @@ export default function MatchDetailModal({
                                     }`}
                                     title={
                                       cell
-                                        ? `${getPlayerShortDisplay(cell.teamAPlayer)} ${cell.teamAKillsOnB} - ${cell.teamBKillsOnA} ${getPlayerShortDisplay(cell.teamBPlayer)}`
+                                        ? `${getPlayerShortDisplay(cell.teamAPlayer)} (${getAgentMeta(cell.teamAPlayer, agentById, agentNameMap).name}) ${cell.teamAKillsOnB} - ${cell.teamBKillsOnA} ${getPlayerShortDisplay(cell.teamBPlayer)} (${getAgentMeta(cell.teamBPlayer, agentById, agentNameMap).name})`
                                         : "Sin duelos"
                                     }
                                   >
                                     {cell && cell.total > 0 ? (
-                                      <span className="match-duel-score-pill">
-                                        <strong>{cell.teamAKillsOnB}</strong>
-                                        <em>{cell.teamBKillsOnA}</em>
+                                      <span className="match-duel-score-pill match-duel-score-pill--with-icons">
+                                        <span className="match-duel-score-side match-duel-score-side--team-a">
+                                          {renderDuelAgentIcon(cell.teamAPlayer)}
+                                          <strong>{cell.teamAKillsOnB}</strong>
+                                        </span>
+                                        <span className="match-duel-score-separator">-</span>
+                                        <span className="match-duel-score-side match-duel-score-side--team-b">
+                                          <strong>{cell.teamBKillsOnA}</strong>
+                                          {renderDuelAgentIcon(cell.teamBPlayer)}
+                                        </span>
                                       </span>
                                     ) : (
                                       <span className="match-duel-empty">—</span>
@@ -7742,28 +8028,16 @@ export default function MatchDetailModal({
 
               <div className="match-economy-cards">
                 <div>
-                  <span>Gasto total</span>
+                  <span>Tu gasto total</span>
                   <strong>{formatNumber(matchAnalysis.totalSpent)}</strong>
                 </div>
                 <div>
-                  <span>Gasto medio/ronda</span>
+                  <span>Tu gasto medio/ronda</span>
                   <strong>{formatNumber(matchAnalysis.avgSpent)}</strong>
                 </div>
                 <div>
-                  <span>Loadout medio</span>
+                  <span>Tu loadout medio/ronda</span>
                   <strong>{formatNumber(matchAnalysis.avgLoadout)}</strong>
-                </div>
-                <div>
-                  <span>Eco rounds ganadas</span>
-                  <strong>
-                    {matchAnalysis.ecoWins}/{matchAnalysis.ecoRounds}
-                  </strong>
-                </div>
-                <div>
-                  <span>Full buy ganadas</span>
-                  <strong>
-                    {matchAnalysis.fullBuyWins}/{matchAnalysis.fullBuyRounds}
-                  </strong>
                 </div>
               </div>
 
@@ -7795,30 +8069,6 @@ export default function MatchDetailModal({
                 ))}
               </div>
 
-              <div className="match-buy-type-grid">
-                <article>
-                  <span>ECO</span>
-                  <strong>
-                    {buyTypeSummary.eco.wins}/{buyTypeSummary.eco.rounds} ganadas
-                  </strong>
-                  <small>{formatPercent(buyTypeSummary.eco.winRate, 1)}</small>
-                </article>
-                <article>
-                  <span>SEMIECO</span>
-                  <strong>
-                    {buyTypeSummary.semiEco.wins}/{buyTypeSummary.semiEco.rounds} ganadas
-                  </strong>
-                  <small>{formatPercent(buyTypeSummary.semiEco.winRate, 1)}</small>
-                </article>
-                <article>
-                  <span>FULL</span>
-                  <strong>
-                    {buyTypeSummary.fullBuy.wins}/{buyTypeSummary.fullBuy.rounds} ganadas
-                  </strong>
-                  <small>{formatPercent(buyTypeSummary.fullBuy.winRate, 1)}</small>
-                </article>
-              </div>
-
               <div className="match-economy-chart-grid">
                 <article className="match-economy-chart-card">
                   <header>
@@ -7826,7 +8076,7 @@ export default function MatchDetailModal({
                     <span>Comparativa por equipo</span>
                   </header>
                   <div className="match-economy-chart">
-                    <ResponsiveContainer width="100%" height={220}>
+                    <ResponsiveContainer width="100%" height={190}>
                       <BarChart data={teamEconomyDistributionData}>
                         <CartesianGrid stroke="rgba(255,255,255,0.07)" vertical={false} />
                         <XAxis dataKey="name" stroke="#9ea8b8" tickLine={false} axisLine={false} />
@@ -7860,13 +8110,15 @@ export default function MatchDetailModal({
                 <article className="match-economy-chart-card">
                   <header>
                     <h4>Rendimiento por compra</h4>
-                    <span>Winrate y ACS aproximado</span>
+                    <span>Winrate y ACS exacto por tipo de compra</span>
                   </header>
                   <div className="match-economy-performance-list">
                     {economyChartData.map((entry) => (
                       <div key={`economy-performance-${entry.key}`} className="match-economy-performance-row">
-                        <span>{entry.name}</span>
-                        <div>
+                        <span className="match-economy-performance-name">
+                          {entry.name}
+                        </span>
+                        <div className="match-economy-performance-bar">
                           <i
                             style={{
                               width: `${Math.max(4, Math.min(100, entry.winRate))}%`,
@@ -7874,8 +8126,22 @@ export default function MatchDetailModal({
                             }}
                           />
                         </div>
-                        <strong>{formatPercent(entry.winRate, 1)}</strong>
-                        <small>{formatNumber(entry.acs)} ACS</small>
+                        <div className="match-economy-performance-metrics">
+                          <span>
+                            <small>Ganadas</small>
+                            <strong>
+                              {entry.wins}/{entry.rounds}
+                            </strong>
+                          </span>
+                          <span>
+                            <small>Winrate</small>
+                            <strong>{formatPercent(entry.winRate, 1)}</strong>
+                          </span>
+                          <span>
+                            <small>ACS</small>
+                            <strong>{formatNumber(entry.acs)}</strong>
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -7924,8 +8190,11 @@ export default function MatchDetailModal({
               </div>
 
               <EconomyOptimalPanel
+                ml={economyMlData}
                 analysis={economyEfficiencyAnalysis}
                 momentum={momentumAnalysis}
+                teamAId={teamAId}
+                teamBId={teamBId}
                 teamALabel={teamALabel}
                 teamBLabel={teamBLabel}
                 selectedTeamKey={selectedTeamKey}

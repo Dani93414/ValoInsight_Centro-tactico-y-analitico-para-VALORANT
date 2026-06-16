@@ -3,6 +3,7 @@ import type {
   DashboardPayload,
   RankComparisonPayload,
 } from "../types/dashboard";
+import type { EconomyMlResponse } from "../types/matches";
 
 type PlayerSummary = {
   puuid: string;
@@ -105,4 +106,12 @@ export async function getMatchById(matchId: string) {
   if (res.status === 404) return null;
   if (!res.ok) throw new Error("Error match detail");
   return res.json();
+}
+
+export async function getMatchEconomyMl(matchId: string): Promise<EconomyMlResponse> {
+  const res = await fetch(apiUrl(`/matches/${encodeURIComponent(matchId)}/economy-ml`), {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Error economy ML");
+  return (await res.json()) as EconomyMlResponse;
 }

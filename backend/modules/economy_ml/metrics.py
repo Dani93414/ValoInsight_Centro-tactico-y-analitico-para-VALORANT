@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
+
+
+def expected_calibration_error(y_true: Any, probabilities: Any, bins: int = 10) -> float:
+    truth = np.asarray(y_true, dtype=int)
+    probs = np.asarray(probabilities, dtype=float)
+    edges = np.linspace(0, 1, bins + 1)
+    error = 0.0
+    for index in range(bins):
+        upper = probs < edges[index + 1] if index < bins - 1 else probs <= 1
+        mask = (probs >= edges[index]) & upper
+        if mask.any():
+            error += float(mask.mean()) * abs(float(truth[mask].mean()) - float(probs[mask].mean()))
+    return error
+
+
+def classification_metrics(y_true: Any, probabilities: Any) -> dict:
+    truth = np.asarray(y_true, dtype=int)
+    probs = np.clip(np.asarray(probabilities, dtype=float), 1e-7, 1 - 1e-7)
+    result = {
+        "accuracy": float(accuracy_score(truth, probs >= 0.5)),
+        "log_loss": float(log_loss(truth, probs, labels=[0, 1])),
+        "brier_score": float(brier_score_loss(truth, probs)),
+        "expected_calibration_error": expected_calibration_error(truth, probs),
+        "samples": int(len(truth)),
+        "positive_rate": float(truth.mean()) if len(truth) else 0.0,
+    }
+    result["roc_auc"] = float(roc_auc_score(truth, probs)) if len(set(truth)) > 1 else None
+    return result
+
+
+def evaluate_slices(frame: pd.DataFrame, probabilities: Any) -> dict:
+    evaluated = frame.copy()
+    evaluated["_probability"] = probabilities
+    result: dict[str, Any] = {"global": classification_metrics(evaluated["match_won"], evaluated["_probability"])}
+    for column in ("rank_group", "rank_name", "real_buy_action"):
+        result[column] = {
+            str(value): classification_metrics(group["match_won"], group["_probability"])
+            for value, group in evaluated.groupby(column, dropna=False)
+        }
+    return result

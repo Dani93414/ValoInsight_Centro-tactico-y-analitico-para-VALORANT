@@ -19,6 +19,7 @@ import uvicorn
 from modules.analytics.interfaces.routes import router as analytics_router
 from modules.auth.interfaces.routes import router as auth_router
 from modules.content.interfaces.routes import router as content_router
+from modules.economy_ml.interfaces.routes import router as economy_ml_router
 from modules.leaderboards.interfaces.routes import router as leaderboards_router
 from modules.matches.interfaces.routes import router as matches_router
 from modules.players.interfaces.routes import router as players_router
@@ -106,6 +107,7 @@ app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(players_router, prefix="/players", tags=["Players"])
 app.include_router(regions_router, prefix="/regions", tags=["Regions"])
 app.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])
+app.include_router(economy_ml_router, prefix="/economy-ml", tags=["Economy ML"])
 
 # -------------------------
 # ROOT
