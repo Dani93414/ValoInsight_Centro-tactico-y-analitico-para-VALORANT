@@ -1,0 +1,2961 @@
+{
+  "schema_version": 2,
+  "created_at": "2026-06-16T09:10:24.759095+00:00",
+  "dataset_rows": 74256,
+  "features": [
+    "round_number",
+    "is_ranked",
+    "rank_tier_avg",
+    "rank_tier_median",
+    "team_score_before",
+    "enemy_score_before",
+    "score_diff",
+    "previous_round_won",
+    "win_streak",
+    "loss_streak",
+    "enemy_win_streak",
+    "enemy_loss_streak",
+    "is_pistol_round",
+    "is_second_round",
+    "is_bonus_candidate",
+    "is_last_round_before_switch",
+    "is_match_point",
+    "is_overtime",
+    "team_estimated_credits_before_buy",
+    "enemy_estimated_credits_before_buy",
+    "credits_before_buy_diff",
+    "team_players_can_full_buy_estimate",
+    "enemy_players_can_full_buy_estimate",
+    "team_players_low_money",
+    "enemy_players_low_money",
+    "action_total_loadout",
+    "action_total_remaining",
+    "action_heavy_armor_count",
+    "action_light_armor_count",
+    "action_no_armor_count",
+    "action_rifle_count",
+    "action_smg_count",
+    "action_sniper_count",
+    "action_operator_count",
+    "action_outlaw_count",
+    "action_marshal_count",
+    "action_sheriff_count",
+    "action_players_without_heavy_armor",
+    "map_id",
+    "season_id",
+    "queue_id",
+    "rank_name",
+    "rank_group",
+    "side",
+    "team_credit_estimate_quality",
+    "enemy_credit_estimate_quality",
+    "buy_action"
+  ],
+  "categorical_features": [
+    "map_id",
+    "season_id",
+    "queue_id",
+    "rank_name",
+    "rank_group",
+    "side",
+    "team_credit_estimate_quality",
+    "enemy_credit_estimate_quality",
+    "buy_action"
+  ],
+  "numeric_features": [
+    "round_number",
+    "is_ranked",
+    "rank_tier_avg",
+    "rank_tier_median",
+    "team_score_before",
+    "enemy_score_before",
+    "score_diff",
+    "previous_round_won",
+    "win_streak",
+    "loss_streak",
+    "enemy_win_streak",
+    "enemy_loss_streak",
+    "is_pistol_round",
+    "is_second_round",
+    "is_bonus_candidate",
+    "is_last_round_before_switch",
+    "is_match_point",
+    "is_overtime",
+    "team_estimated_credits_before_buy",
+    "enemy_estimated_credits_before_buy",
+    "credits_before_buy_diff",
+    "team_players_can_full_buy_estimate",
+    "enemy_players_can_full_buy_estimate",
+    "team_players_low_money",
+    "enemy_players_low_money",
+    "action_total_loadout",
+    "action_total_remaining",
+    "action_heavy_armor_count",
+    "action_light_armor_count",
+    "action_no_armor_count",
+    "action_rifle_count",
+    "action_smg_count",
+    "action_sniper_count",
+    "action_operator_count",
+    "action_outlaw_count",
+    "action_marshal_count",
+    "action_sheriff_count",
+    "action_players_without_heavy_armor"
+  ],
+  "estimation_type": "observational_off_policy_ipw",
+  "limitations": [
+    "Las estimaciones no prueban causalidad.",
+    "Solo se recomiendan acciones con soporte histórico suficiente.",
+    "Las alternativas usan perfiles de compra simulados y auditables."
+  ],
+  "models": {
+    "global": {
+      "samples": 74256,
+      "train_samples": 44574,
+      "calibration_samples": 14774,
+      "test_samples": 14908,
+      "action_support": {
+        "FORCE_2_RIFLES": 12205,
+        "FULL_RIFLES": 9609,
+        "FULL_OPERATOR": 6039,
+        "ECO_PISTOL_UPGRADE": 5362,
+        "BONUS_KEEP_WEAPONS": 4666,
+        "FORCE_RIFLE_LIGHT": 2679,
+        "ECO_SHERIFF": 2134,
+        "MIXED_LOW_BUY": 728,
+        "SEMI_SMG": 695,
+        "FORCE_OUTLAW": 331,
+        "ECO_CLASSIC": 126
+      },
+      "propensity": {
+        "available": true,
+        "classes": [
+          "BONUS_KEEP_WEAPONS",
+          "ECO_CLASSIC",
+          "ECO_PISTOL_UPGRADE",
+          "ECO_SHERIFF",
+          "FORCE_2_RIFLES",
+          "FORCE_OUTLAW",
+          "FORCE_RIFLE_LIGHT",
+          "FULL_OPERATOR",
+          "FULL_RIFLES",
+          "MIXED_LOW_BUY",
+          "SEMI_SMG"
+        ],
+        "min_observed_probability": 8.145750005011586e-06,
+        "max_weight": 10.0
+      },
+      "metrics": {
+        "global": {
+          "accuracy": 0.7219613630265629,
+          "log_loss": 0.5443397585653504,
+          "brier_score": 0.18300895701578163,
+          "expected_calibration_error": 0.021754001190224824,
+          "samples": 14908,
+          "positive_rate": 0.48819425811644757,
+          "roc_auc": 0.8001207160522907
+        },
+        "rank_group": {
+          "Ascendant": {
+            "accuracy": 0.7490573152337858,
+            "log_loss": 0.511582508063385,
+            "brier_score": 0.1687207174043756,
+            "expected_calibration_error": 0.06900145738757288,
+            "samples": 5304,
+            "positive_rate": 0.5024509803921569,
+            "roc_auc": 0.8393876098670043
+          },
+          "Diamond": {
+            "accuracy": 0.7156460591854673,
+            "log_loss": 0.550961895445997,
+            "brier_score": 0.18602224389936553,
+            "expected_calibration_error": 0.017016988780593132,
+            "samples": 6826,
+            "positive_rate": 0.47392323469088776,
+            "roc_auc": 0.7919770661412247
+          },
+          "Gold": {
+            "accuracy": 0.8555555555555555,
+            "log_loss": 0.367104246800235,
+            "brier_score": 0.10736512919672134,
+            "expected_calibration_error": 0.16793040548551685,
+            "samples": 90,
+            "positive_rate": 0.7777777777777778,
+            "roc_auc": 0.9371428571428573
+          },
+          "Platinum": {
+            "accuracy": 0.6800595238095238,
+            "log_loss": 0.5980945749247224,
+            "brier_score": 0.20608338824170017,
+            "expected_calibration_error": 0.0612561759654921,
+            "samples": 2688,
+            "positive_rate": 0.48660714285714285,
+            "roc_auc": 0.7551292492133137
+          }
+        },
+        "rank_name": {
+          "Ascendant 1": {
+            "accuracy": 0.7421174057933864,
+            "log_loss": 0.5125372082730131,
+            "brier_score": 0.169706318959773,
+            "expected_calibration_error": 0.08715041391695035,
+            "samples": 3901,
+            "positive_rate": 0.5014098948987439,
+            "roc_auc": 0.843030343652909
+          },
+          "Ascendant 2": {
+            "accuracy": 0.7982998454404946,
+            "log_loss": 0.46894890177935017,
+            "brier_score": 0.14915702830539077,
+            "expected_calibration_error": 0.0898297185677788,
+            "samples": 1294,
+            "positive_rate": 0.4853168469860896,
+            "roc_auc": 0.8765971385398138
+          },
+          "Ascendant 3": {
+            "accuracy": 0.41284403669724773,
+            "log_loss": 0.9835421503916674,
+            "brier_score": 0.36569853416108455,
+            "expected_calibration_error": 0.3784678340079709,
+            "samples": 109,
+            "positive_rate": 0.7431192660550459,
+            "roc_auc": 0.28880070546737213
+          },
+          "Diamond 1": {
+            "accuracy": 0.6318181818181818,
+            "log_loss": 0.6499636077375862,
+            "brier_score": 0.22848329494268038,
+            "expected_calibration_error": 0.08494895414776314,
+            "samples": 1100,
+            "positive_rate": 0.49272727272727274,
+            "roc_auc": 0.6981344813448136
+          },
+          "Diamond 2": {
+            "accuracy": 0.7331606217616581,
+            "log_loss": 0.5258129187352487,
+            "brier_score": 0.17514711941676472,
+            "expected_calibration_error": 0.04806760282797156,
+            "samples": 1930,
+            "positive_rate": 0.5259067357512953,
+            "roc_auc": 0.8218778432797653
+          },
+          "Diamond 3": {
+            "accuracy": 0.7310326659641728,
+            "log_loss": 0.5350597989051635,
+            "brier_score": 0.17924717385294126,
+            "expected_calibration_error": 0.05212218909353411,
+            "samples": 3796,
+            "positive_rate": 0.44204425711275025,
+            "roc_auc": 0.8121966097955996
+          },
+          "Gold 2": {
+            "accuracy": 1.0,
+            "log_loss": 0.21254728017884555,
+            "brier_score": 0.04155298701361728,
+            "expected_calibration_error": 0.18677076003725734,
+            "samples": 20,
+            "positive_rate": 1.0,
+            "roc_auc": null
+          },
+          "Gold 3": {
+            "accuracy": 0.8142857142857143,
+            "log_loss": 0.41126338012063207,
+            "brier_score": 0.12616859839189395,
+            "expected_calibration_error": 0.16254744704216248,
+            "samples": 70,
+            "positive_rate": 0.7142857142857143,
+            "roc_auc": 0.915
+          },
+          "Platinum 1": {
+            "accuracy": 0.6612903225806451,
+            "log_loss": 0.647273573706155,
+            "brier_score": 0.2244070844224957,
+            "expected_calibration_error": 0.13622777935774677,
+            "samples": 372,
+            "positive_rate": 0.43548387096774194,
+            "roc_auc": 0.6940917107583775
+          },
+          "Platinum 2": {
+            "accuracy": 0.7508503401360545,
+            "log_loss": 0.5188051275635895,
+            "brier_score": 0.17164081910471637,
+            "expected_calibration_error": 0.028839885717229518,
+            "samples": 1176,
+            "positive_rate": 0.3937074829931973,
+            "roc_auc": 0.8130037956009802
+          },
+          "Platinum 3": {
+            "accuracy": 0.6131578947368421,
+            "log_loss": 0.663840015758055,
+            "brier_score": 0.23563430607138175,
+            "expected_calibration_error": 0.14762377208186472,
+            "samples": 1140,
+            "positive_rate": 0.5991228070175438,
+            "roc_auc": 0.6923999859033547
+          }
+        },
+        "real_buy_action": {
+          "BONUS_KEEP_WEAPONS": {
+            "accuracy": 0.7538265306122449,
+            "log_loss": 0.5170386980883804,
+            "brier_score": 0.1709745709345875,
+            "expected_calibration_error": 0.03496948360462869,
+            "samples": 1568,
+            "positive_rate": 0.6913265306122449,
+            "roc_auc": 0.7691706565825989
+          },
+          "ECO_CLASSIC": {
+            "accuracy": 0.9852941176470589,
+            "log_loss": 0.18876353993664563,
+            "brier_score": 0.03572328687098818,
+            "expected_calibration_error": 0.16444637266296291,
+            "samples": 68,
+            "positive_rate": 0.5,
+            "roc_auc": 1.0
+          },
+          "ECO_PISTOL_UPGRADE": {
+            "accuracy": 0.6472708547888775,
+            "log_loss": 0.6102770096643686,
+            "brier_score": 0.21221989580742395,
+            "expected_calibration_error": 0.03459589989546947,
+            "samples": 1942,
+            "positive_rate": 0.46343975283213185,
+            "roc_auc": 0.7096155896779697
+          },
+          "ECO_SHERIFF": {
+            "accuracy": 0.7346278317152104,
+            "log_loss": 0.5340056354796477,
+            "brier_score": 0.17784580856821652,
+            "expected_calibration_error": 0.028444873486431464,
+            "samples": 618,
+            "positive_rate": 0.36084142394822005,
+            "roc_auc": 0.775290912187092
+          },
+          "FORCE_2_RIFLES": {
+            "accuracy": 0.7336327109430395,
+            "log_loss": 0.5329535517017355,
+            "brier_score": 0.17821218356970298,
+            "expected_calibration_error": 0.02350139443431803,
+            "samples": 4231,
+            "positive_rate": 0.4313401087213425,
+            "roc_auc": 0.8047655974219702
+          },
+          "FORCE_OUTLAW": {
+            "accuracy": 0.6666666666666666,
+            "log_loss": 0.5733580526855631,
+            "brier_score": 0.19710725317160233,
+            "expected_calibration_error": 0.0850494156077609,
+            "samples": 144,
+            "positive_rate": 0.5069444444444444,
+            "roc_auc": 0.7648080262396295
+          },
+          "FORCE_RIFLE_LIGHT": {
+            "accuracy": 0.71413390010627,
+            "log_loss": 0.5425606394421376,
+            "brier_score": 0.18260111507173785,
+            "expected_calibration_error": 0.048871096594503005,
+            "samples": 941,
+            "positive_rate": 0.43358129649309246,
+            "roc_auc": 0.7975894860758563
+          },
+          "FULL_OPERATOR": {
+            "accuracy": 0.7419056429232193,
+            "log_loss": 0.5285671794901861,
+            "brier_score": 0.17564513690837355,
+            "expected_calibration_error": 0.03466072121627528,
+            "samples": 2162,
+            "positive_rate": 0.5407030527289547,
+            "roc_auc": 0.8155230324848791
+          },
+          "FULL_RIFLES": {
+            "accuracy": 0.7230483271375465,
+            "log_loss": 0.5500492122108639,
+            "brier_score": 0.18501669748836352,
+            "expected_calibration_error": 0.021150416966418662,
+            "samples": 2690,
+            "positive_rate": 0.4877323420074349,
+            "roc_auc": 0.7948033005593118
+          },
+          "MIXED_LOW_BUY": {
+            "accuracy": 0.7194029850746269,
+            "log_loss": 0.572668063401966,
+            "brier_score": 0.19437807667570525,
+            "expected_calibration_error": 0.023279475407937577,
+            "samples": 335,
+            "positive_rate": 0.4507462686567164,
+            "roc_auc": 0.7640728476821191
+          },
+          "SEMI_SMG": {
+            "accuracy": 0.6746411483253588,
+            "log_loss": 0.5455170487218484,
+            "brier_score": 0.18639843424327737,
+            "expected_calibration_error": 0.10298669852593316,
+            "samples": 209,
+            "positive_rate": 0.47368421052631576,
+            "roc_auc": 0.8011937557392104
+          }
+        },
+        "baseline_global": {
+          "accuracy": 0.72980949825597,
+          "log_loss": 0.5289096207518028,
+          "brier_score": 0.1781186584745626,
+          "expected_calibration_error": 0.017012125591286707,
+          "samples": 14908,
+          "positive_rate": 0.48819425811644757,
+          "roc_auc": 0.8098643932035252
+        },
+        "calibrated": true
+      }
+    },
+    "rank_groups": {
+      "Ascendant": {
+        "samples": 24042,
+        "train_samples": 14677,
+        "calibration_samples": 4385,
+        "test_samples": 4980,
+        "action_support": {
+          "FORCE_2_RIFLES": 4228,
+          "FULL_RIFLES": 3227,
+          "FULL_OPERATOR": 1805,
+          "ECO_PISTOL_UPGRADE": 1677,
+          "BONUS_KEEP_WEAPONS": 1471,
+          "FORCE_RIFLE_LIGHT": 876,
+          "ECO_SHERIFF": 823,
+          "MIXED_LOW_BUY": 228,
+          "SEMI_SMG": 177,
+          "FORCE_OUTLAW": 99,
+          "ECO_CLASSIC": 66
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.00010240751536674139,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.7311244979919679,
+            "log_loss": 0.5378747983553128,
+            "brier_score": 0.1799702520676237,
+            "expected_calibration_error": 0.019767925247006123,
+            "samples": 4980,
+            "positive_rate": 0.5002008032128514,
+            "roc_auc": 0.8065806691151222
+          },
+          "rank_group": {
+            "Ascendant": {
+              "accuracy": 0.7311244979919679,
+              "log_loss": 0.5378747983553128,
+              "brier_score": 0.1799702520676237,
+              "expected_calibration_error": 0.019767925247006123,
+              "samples": 4980,
+              "positive_rate": 0.5002008032128514,
+              "roc_auc": 0.8065806691151222
+            }
+          },
+          "rank_name": {
+            "Ascendant 1": {
+              "accuracy": 0.7289898713386258,
+              "log_loss": 0.5318368316143758,
+              "brier_score": 0.17820061558806588,
+              "expected_calibration_error": 0.030998659828681517,
+              "samples": 3653,
+              "positive_rate": 0.5045168354776896,
+              "roc_auc": 0.812182875026605
+            },
+            "Ascendant 2": {
+              "accuracy": 0.7701149425287356,
+              "log_loss": 0.5009272785273011,
+              "brier_score": 0.16357861018209627,
+              "expected_calibration_error": 0.06559100425584462,
+              "samples": 1218,
+              "positive_rate": 0.46551724137931033,
+              "roc_auc": 0.8458700086964296
+            },
+            "Ascendant 3": {
+              "accuracy": 0.3669724770642202,
+              "log_loss": 1.1530928869347743,
+              "brier_score": 0.4224427463464979,
+              "expected_calibration_error": 0.440664297919189,
+              "samples": 109,
+              "positive_rate": 0.7431192660550459,
+              "roc_auc": 0.30158730158730157
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.7620817843866171,
+              "log_loss": 0.4873168193280318,
+              "brier_score": 0.1589491204774055,
+              "expected_calibration_error": 0.03737620982983615,
+              "samples": 538,
+              "positive_rate": 0.724907063197026,
+              "roc_auc": 0.7797990297990298
+            },
+            "ECO_CLASSIC": {
+              "accuracy": 0.8461538461538461,
+              "log_loss": 0.3276493424924779,
+              "brier_score": 0.09760837389413564,
+              "expected_calibration_error": 0.23841304956186143,
+              "samples": 26,
+              "positive_rate": 0.8461538461538461,
+              "roc_auc": 1.0
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.6435331230283912,
+              "log_loss": 0.6176657923150229,
+              "brier_score": 0.21505598847045035,
+              "expected_calibration_error": 0.04285227699799675,
+              "samples": 634,
+              "positive_rate": 0.46529968454258674,
+              "roc_auc": 0.7100544972751363
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.7336244541484717,
+              "log_loss": 0.5580908278578093,
+              "brier_score": 0.1878748456940414,
+              "expected_calibration_error": 0.0800564233789916,
+              "samples": 229,
+              "positive_rate": 0.35807860262008734,
+              "roc_auc": 0.7639372822299652
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.7575091575091575,
+              "log_loss": 0.5079687857470648,
+              "brier_score": 0.16716509699769827,
+              "expected_calibration_error": 0.033812151964881534,
+              "samples": 1365,
+              "positive_rate": 0.43956043956043955,
+              "roc_auc": 0.8306579520697168
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.6296296296296297,
+              "log_loss": 0.7254750037050607,
+              "brier_score": 0.25724061974070117,
+              "expected_calibration_error": 0.18804278927593138,
+              "samples": 54,
+              "positive_rate": 0.5370370370370371,
+              "roc_auc": 0.6579310344827586
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.7483443708609272,
+              "log_loss": 0.5389754052020778,
+              "brier_score": 0.18083942953756063,
+              "expected_calibration_error": 0.07966121982154652,
+              "samples": 302,
+              "positive_rate": 0.45695364238410596,
+              "roc_auc": 0.8104012018381054
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.7088607594936709,
+              "log_loss": 0.5603904269738128,
+              "brier_score": 0.1891890160472996,
+              "expected_calibration_error": 0.04402545619300709,
+              "samples": 790,
+              "positive_rate": 0.5556962025316455,
+              "roc_auc": 0.7843648800368618
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.748868778280543,
+              "log_loss": 0.5237379650040552,
+              "brier_score": 0.17350635448172527,
+              "expected_calibration_error": 0.0321443770617305,
+              "samples": 884,
+              "positive_rate": 0.47737556561085975,
+              "roc_auc": 0.8186844750825792
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.7777777777777778,
+              "log_loss": 0.5673607548953676,
+              "brier_score": 0.1890233734775309,
+              "expected_calibration_error": 0.09524507413194126,
+              "samples": 90,
+              "positive_rate": 0.45555555555555555,
+              "roc_auc": 0.7675460428073668
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.6911764705882353,
+              "log_loss": 0.5358730995541963,
+              "brier_score": 0.18080400241300829,
+              "expected_calibration_error": 0.16184153641745838,
+              "samples": 68,
+              "positive_rate": 0.4852941176470588,
+              "roc_auc": 0.8207792207792208
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.7251004016064257,
+            "log_loss": 0.5386053292740218,
+            "brier_score": 0.18224549882764896,
+            "expected_calibration_error": 0.11418040022410003,
+            "samples": 4980,
+            "positive_rate": 0.5002008032128514,
+            "roc_auc": 0.8352081152252568
+          },
+          "calibrated": true
+        }
+      },
+      "Diamond": {
+        "samples": 35727,
+        "train_samples": 21223,
+        "calibration_samples": 7251,
+        "test_samples": 7253,
+        "action_support": {
+          "FORCE_2_RIFLES": 5732,
+          "FULL_RIFLES": 4924,
+          "FULL_OPERATOR": 2703,
+          "ECO_PISTOL_UPGRADE": 2533,
+          "BONUS_KEEP_WEAPONS": 2235,
+          "FORCE_RIFLE_LIGHT": 1299,
+          "ECO_SHERIFF": 1035,
+          "MIXED_LOW_BUY": 268,
+          "SEMI_SMG": 259,
+          "FORCE_OUTLAW": 186,
+          "ECO_CLASSIC": 49
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 2.1601340485020145e-05,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.7045360540466014,
+            "log_loss": 0.5647342387342741,
+            "brier_score": 0.19147223944555583,
+            "expected_calibration_error": 0.03742299710551992,
+            "samples": 7253,
+            "positive_rate": 0.4730456362884324,
+            "roc_auc": 0.7808353774440296
+          },
+          "rank_group": {
+            "Diamond": {
+              "accuracy": 0.7045360540466014,
+              "log_loss": 0.5647342387342741,
+              "brier_score": 0.19147223944555583,
+              "expected_calibration_error": 0.03742299710551992,
+              "samples": 7253,
+              "positive_rate": 0.4730456362884324,
+              "roc_auc": 0.7808353774440296
+            }
+          },
+          "rank_name": {
+            "Diamond 1": {
+              "accuracy": 0.6336363636363637,
+              "log_loss": 0.6546837339349998,
+              "brier_score": 0.23045131738588884,
+              "expected_calibration_error": 0.08409648737579585,
+              "samples": 1100,
+              "positive_rate": 0.49272727272727274,
+              "roc_auc": 0.6871817508497665
+            },
+            "Diamond 2": {
+              "accuracy": 0.7242479489516864,
+              "log_loss": 0.5513127129090093,
+              "brier_score": 0.18512755691888644,
+              "expected_calibration_error": 0.04894065833024829,
+              "samples": 2194,
+              "positive_rate": 0.5227894257064722,
+              "roc_auc": 0.7996684178401527
+            },
+            "Diamond 3": {
+              "accuracy": 0.7133114422834049,
+              "log_loss": 0.5471799025230675,
+              "brier_score": 0.18415808125640357,
+              "expected_calibration_error": 0.06264245857544229,
+              "samples": 3959,
+              "positive_rate": 0.44001010356150544,
+              "roc_auc": 0.8009093182986907
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.7327249022164276,
+              "log_loss": 0.5440240547667429,
+              "brier_score": 0.18200966386936182,
+              "expected_calibration_error": 0.05447947220723658,
+              "samples": 767,
+              "positive_rate": 0.666232073011734,
+              "roc_auc": 0.7643331090998043
+            },
+            "ECO_CLASSIC": {
+              "accuracy": 1.0,
+              "log_loss": 0.16360151032151252,
+              "brier_score": 0.023908887253313155,
+              "expected_calibration_error": 0.15000253006078748,
+              "samples": 24,
+              "positive_rate": 0.125,
+              "roc_auc": 1.0
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.628177966101695,
+              "log_loss": 0.6244590113041124,
+              "brier_score": 0.21839888214262862,
+              "expected_calibration_error": 0.05648841063809063,
+              "samples": 944,
+              "positive_rate": 0.4555084745762712,
+              "roc_auc": 0.6912157270835219
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.714765100671141,
+              "log_loss": 0.5581115342269168,
+              "brier_score": 0.1884422181528006,
+              "expected_calibration_error": 0.06316978654127144,
+              "samples": 298,
+              "positive_rate": 0.348993288590604,
+              "roc_auc": 0.7457127279936558
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.7199406234537358,
+              "log_loss": 0.5523548744285344,
+              "brier_score": 0.18588575752754663,
+              "expected_calibration_error": 0.04296897555982772,
+              "samples": 2021,
+              "positive_rate": 0.41019297377535874,
+              "roc_auc": 0.7833040535617426
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.6923076923076923,
+              "log_loss": 0.6022874962721991,
+              "brier_score": 0.20789069562924636,
+              "expected_calibration_error": 0.07965891097914865,
+              "samples": 65,
+              "positive_rate": 0.47692307692307695,
+              "roc_auc": 0.7333965844402277
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.7100213219616205,
+              "log_loss": 0.5543658254325992,
+              "brier_score": 0.18694573835713155,
+              "expected_calibration_error": 0.0859538379166139,
+              "samples": 469,
+              "positive_rate": 0.42217484008528783,
+              "roc_auc": 0.7822319132282233
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.7118483412322275,
+              "log_loss": 0.5488780534907182,
+              "brier_score": 0.18459957946768843,
+              "expected_calibration_error": 0.05015973935562348,
+              "samples": 1055,
+              "positive_rate": 0.5412322274881517,
+              "roc_auc": 0.7988160541894024
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.7028404952658412,
+              "log_loss": 0.5764227001980331,
+              "brier_score": 0.19635408198279167,
+              "expected_calibration_error": 0.040566448283625066,
+              "samples": 1373,
+              "positive_rate": 0.4806991988346686,
+              "roc_auc": 0.7684240724212674
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.74375,
+              "log_loss": 0.5602059126575615,
+              "brier_score": 0.18857381648065846,
+              "expected_calibration_error": 0.11106359068704164,
+              "samples": 160,
+              "positive_rate": 0.375,
+              "roc_auc": 0.7593333333333334
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.6493506493506493,
+              "log_loss": 0.5640893893469028,
+              "brier_score": 0.19304568127666544,
+              "expected_calibration_error": 0.10539060996706552,
+              "samples": 77,
+              "positive_rate": 0.44155844155844154,
+              "roc_auc": 0.7708618331053351
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.707707155659727,
+            "log_loss": 0.557102595039166,
+            "brier_score": 0.18969612780869222,
+            "expected_calibration_error": 0.06365041371487783,
+            "samples": 7253,
+            "positive_rate": 0.4730456362884324,
+            "roc_auc": 0.7924785724885655
+          },
+          "calibrated": true
+        }
+      },
+      "Gold": {
+        "samples": 2181,
+        "train_samples": 1437,
+        "calibration_samples": 376,
+        "test_samples": 368,
+        "action_support": {
+          "FORCE_2_RIFLES": 364,
+          "FULL_RIFLES": 298,
+          "FULL_OPERATOR": 227,
+          "ECO_PISTOL_UPGRADE": 183,
+          "BONUS_KEEP_WEAPONS": 166,
+          "FORCE_RIFLE_LIGHT": 91,
+          "ECO_SHERIFF": 47,
+          "SEMI_SMG": 33,
+          "MIXED_LOW_BUY": 18,
+          "FORCE_OUTLAW": 10
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.0003850676545975628,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.6331521739130435,
+            "log_loss": 0.6467306514871981,
+            "brier_score": 0.22711116495274855,
+            "expected_calibration_error": 0.034696875010781864,
+            "samples": 368,
+            "positive_rate": 0.5407608695652174,
+            "roc_auc": 0.6868960185543099
+          },
+          "rank_group": {
+            "Gold": {
+              "accuracy": 0.6331521739130435,
+              "log_loss": 0.6467306514871981,
+              "brier_score": 0.22711116495274855,
+              "expected_calibration_error": 0.034696875010781864,
+              "samples": 368,
+              "positive_rate": 0.5407608695652174,
+              "roc_auc": 0.6868960185543099
+            }
+          },
+          "rank_name": {
+            "Gold 1": {
+              "accuracy": 1.0,
+              "log_loss": 0.41899792889577786,
+              "brier_score": 0.11717396944351935,
+              "expected_calibration_error": 0.342280720479439,
+              "samples": 23,
+              "positive_rate": 0.0,
+              "roc_auc": null
+            },
+            "Gold 2": {
+              "accuracy": 0.5686274509803921,
+              "log_loss": 0.6168372970639701,
+              "brier_score": 0.2166030766044422,
+              "expected_calibration_error": 0.2936440719660796,
+              "samples": 102,
+              "positive_rate": 0.8235294117647058,
+              "roc_auc": 0.796957671957672
+            },
+            "Gold 3": {
+              "accuracy": 0.6255144032921811,
+              "log_loss": 0.6808334283216505,
+              "brier_score": 0.24192754564509222,
+              "expected_calibration_error": 0.1126736899104386,
+              "samples": 243,
+              "positive_rate": 0.4732510288065844,
+              "roc_auc": 0.6582201086956522
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.7380952380952381,
+              "log_loss": 0.5128832928162657,
+              "brier_score": 0.16653103179496886,
+              "expected_calibration_error": 0.18095267785509278,
+              "samples": 42,
+              "positive_rate": 0.8095238095238095,
+              "roc_auc": 0.6544117647058824
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.5098039215686274,
+              "log_loss": 0.7398916558847762,
+              "brier_score": 0.27063786517065563,
+              "expected_calibration_error": 0.16890708500261178,
+              "samples": 51,
+              "positive_rate": 0.5882352941176471,
+              "roc_auc": 0.5587301587301587
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.7777777777777778,
+              "log_loss": 0.6317239848159354,
+              "brier_score": 0.21724087649580287,
+              "expected_calibration_error": 0.3917141737206446,
+              "samples": 9,
+              "positive_rate": 0.1111111111111111,
+              "roc_auc": 1.0
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.7021276595744681,
+              "log_loss": 0.5956335353387389,
+              "brier_score": 0.20272045915353357,
+              "expected_calibration_error": 0.11733349038437697,
+              "samples": 94,
+              "positive_rate": 0.4574468085106383,
+              "roc_auc": 0.7751937984496123
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 1.0,
+              "log_loss": 0.49497046237840137,
+              "brier_score": 0.15645698243208758,
+              "expected_calibration_error": 0.3834767415922882,
+              "samples": 4,
+              "positive_rate": 0.5,
+              "roc_auc": 1.0
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.5217391304347826,
+              "log_loss": 0.8015958120302134,
+              "brier_score": 0.2954385955298036,
+              "expected_calibration_error": 0.28376569216916925,
+              "samples": 23,
+              "positive_rate": 0.2608695652173913,
+              "roc_auc": 0.5980392156862745
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.48214285714285715,
+              "log_loss": 0.760802147492192,
+              "brier_score": 0.2813969292285778,
+              "expected_calibration_error": 0.23868851685814768,
+              "samples": 56,
+              "positive_rate": 0.6607142857142857,
+              "roc_auc": 0.4879089615931721
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.7931034482758621,
+              "log_loss": 0.49659365225232405,
+              "brier_score": 0.1579027220520404,
+              "expected_calibration_error": 0.17531813957609804,
+              "samples": 58,
+              "positive_rate": 0.5172413793103449,
+              "roc_auc": 0.9083333333333333
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.375,
+              "log_loss": 0.8994659116677144,
+              "brier_score": 0.34184385335103806,
+              "expected_calibration_error": 0.299420748843511,
+              "samples": 16,
+              "positive_rate": 0.4375,
+              "roc_auc": 0.3333333333333333
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.5333333333333333,
+              "log_loss": 0.7220564407071889,
+              "brier_score": 0.2641453332183861,
+              "expected_calibration_error": 0.16439060721506302,
+              "samples": 15,
+              "positive_rate": 0.6,
+              "roc_auc": 0.46296296296296297
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.592391304347826,
+            "log_loss": 0.8540558315429656,
+            "brier_score": 0.27504722036150453,
+            "expected_calibration_error": 0.21273056659553063,
+            "samples": 368,
+            "positive_rate": 0.5407608695652174,
+            "roc_auc": 0.6538907555529125
+          },
+          "calibrated": true
+        }
+      },
+      "Platinum": {
+        "samples": 11584,
+        "train_samples": 6984,
+        "calibration_samples": 2096,
+        "test_samples": 2504,
+        "action_support": {
+          "FORCE_2_RIFLES": 1754,
+          "FULL_OPERATOR": 1261,
+          "FULL_RIFLES": 1156,
+          "ECO_PISTOL_UPGRADE": 923,
+          "BONUS_KEEP_WEAPONS": 753,
+          "FORCE_RIFLE_LIGHT": 415,
+          "ECO_SHERIFF": 239,
+          "SEMI_SMG": 222,
+          "MIXED_LOW_BUY": 198,
+          "FORCE_OUTLAW": 43,
+          "ECO_CLASSIC": 20
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 3.0803079969010224e-05,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.6765175718849841,
+            "log_loss": 0.6066153623406527,
+            "brier_score": 0.20923888344027344,
+            "expected_calibration_error": 0.058889742091966464,
+            "samples": 2504,
+            "positive_rate": 0.4860223642172524,
+            "roc_auc": 0.7480994765300434
+          },
+          "rank_group": {
+            "Platinum": {
+              "accuracy": 0.6765175718849841,
+              "log_loss": 0.6066153623406527,
+              "brier_score": 0.20923888344027344,
+              "expected_calibration_error": 0.058889742091966464,
+              "samples": 2504,
+              "positive_rate": 0.4860223642172524,
+              "roc_auc": 0.7480994765300434
+            }
+          },
+          "rank_name": {
+            "Platinum 1": {
+              "accuracy": 0.6617647058823529,
+              "log_loss": 0.6475849533357925,
+              "brier_score": 0.22604531521542587,
+              "expected_calibration_error": 0.12735361582738508,
+              "samples": 340,
+              "positive_rate": 0.4264705882352941,
+              "roc_auc": 0.6364633068081343
+            },
+            "Platinum 2": {
+              "accuracy": 0.7709923664122137,
+              "log_loss": 0.5184052833133933,
+              "brier_score": 0.1690889044361512,
+              "expected_calibration_error": 0.06635174873698735,
+              "samples": 1048,
+              "positive_rate": 0.39408396946564883,
+              "roc_auc": 0.8292406245829441
+            },
+            "Platinum 3": {
+              "accuracy": 0.5922939068100358,
+              "log_loss": 0.6769688586508861,
+              "brier_score": 0.241822208881822,
+              "expected_calibration_error": 0.13761334364040628,
+              "samples": 1116,
+              "positive_rate": 0.5905017921146953,
+              "roc_auc": 0.6634480331249191
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.6680161943319838,
+              "log_loss": 0.6354112789799198,
+              "brier_score": 0.22251231176193867,
+              "expected_calibration_error": 0.1157700848022488,
+              "samples": 247,
+              "positive_rate": 0.6558704453441295,
+              "roc_auc": 0.6572258533042847
+            },
+            "ECO_CLASSIC": {
+              "accuracy": 1.0,
+              "log_loss": 0.27932685427792403,
+              "brier_score": 0.06024361417122527,
+              "expected_calibration_error": 0.24287385034220432,
+              "samples": 18,
+              "positive_rate": 0.5,
+              "roc_auc": 1.0
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.6130952380952381,
+              "log_loss": 0.6466709860991025,
+              "brier_score": 0.22785845787065526,
+              "expected_calibration_error": 0.09632135939613716,
+              "samples": 336,
+              "positive_rate": 0.47619047619047616,
+              "roc_auc": 0.6933416193181818
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.7777777777777778,
+              "log_loss": 0.5396887378741761,
+              "brier_score": 0.17798782051139325,
+              "expected_calibration_error": 0.14182442232863074,
+              "samples": 81,
+              "positive_rate": 0.35802469135802467,
+              "roc_auc": 0.7692307692307692
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.6937738246505718,
+              "log_loss": 0.5841054947611102,
+              "brier_score": 0.19889629965227923,
+              "expected_calibration_error": 0.03422859799880646,
+              "samples": 787,
+              "positive_rate": 0.45616264294790343,
+              "roc_auc": 0.7672467654179576
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.8260869565217391,
+              "log_loss": 0.5120425644688834,
+              "brier_score": 0.1645316015787204,
+              "expected_calibration_error": 0.21291609722643773,
+              "samples": 23,
+              "positive_rate": 0.5217391304347826,
+              "roc_auc": 0.8787878787878788
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.7577639751552795,
+              "log_loss": 0.5304068134314421,
+              "brier_score": 0.17435050490869175,
+              "expected_calibration_error": 0.08330202969774896,
+              "samples": 161,
+              "positive_rate": 0.40993788819875776,
+              "roc_auc": 0.8266347687400319
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.6758620689655173,
+              "log_loss": 0.6053048173284463,
+              "brier_score": 0.20896607552061325,
+              "expected_calibration_error": 0.0767168971893488,
+              "samples": 290,
+              "positive_rate": 0.4689655172413793,
+              "roc_auc": 0.7501909854851031
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.6533018867924528,
+              "log_loss": 0.6429186841172008,
+              "brier_score": 0.22514261328868976,
+              "expected_calibration_error": 0.09164200734356774,
+              "samples": 424,
+              "positive_rate": 0.5165094339622641,
+              "roc_auc": 0.7093217507517542
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.5753424657534246,
+              "log_loss": 0.7094842859321546,
+              "brier_score": 0.2568156005228609,
+              "expected_calibration_error": 0.13729586079113648,
+              "samples": 73,
+              "positive_rate": 0.5068493150684932,
+              "roc_auc": 0.6539039039039038
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.625,
+              "log_loss": 0.6125372911346081,
+              "brier_score": 0.21433700065149833,
+              "expected_calibration_error": 0.165452666160822,
+              "samples": 64,
+              "positive_rate": 0.4375,
+              "roc_auc": 0.7569444444444444
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.700479233226837,
+            "log_loss": 0.5669950703830446,
+            "brier_score": 0.19470823468967702,
+            "expected_calibration_error": 0.06581011618624918,
+            "samples": 2504,
+            "positive_rate": 0.4860223642172524,
+            "roc_auc": 0.7815255136536977
+          },
+          "calibrated": true
+        }
+      }
+    },
+    "rank_names": {
+      "Ascendant 1": {
+        "samples": 16339,
+        "train_samples": 9708,
+        "calibration_samples": 3232,
+        "test_samples": 3399,
+        "action_support": {
+          "FORCE_2_RIFLES": 2840,
+          "FULL_RIFLES": 2042,
+          "FULL_OPERATOR": 1185,
+          "ECO_PISTOL_UPGRADE": 1106,
+          "BONUS_KEEP_WEAPONS": 1002,
+          "FORCE_RIFLE_LIGHT": 588,
+          "ECO_SHERIFF": 518,
+          "MIXED_LOW_BUY": 163,
+          "SEMI_SMG": 142,
+          "FORCE_OUTLAW": 73,
+          "ECO_CLASSIC": 49
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.0005817576216160981,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.6922624301265078,
+            "log_loss": 0.5787579986953972,
+            "brier_score": 0.19718987422933568,
+            "expected_calibration_error": 0.028663777618718807,
+            "samples": 3399,
+            "positive_rate": 0.5119152691968226,
+            "roc_auc": 0.7661338709789167
+          },
+          "rank_group": {
+            "Ascendant": {
+              "accuracy": 0.6922624301265078,
+              "log_loss": 0.5787579986953972,
+              "brier_score": 0.19718987422933568,
+              "expected_calibration_error": 0.028663777618718807,
+              "samples": 3399,
+              "positive_rate": 0.5119152691968226,
+              "roc_auc": 0.7661338709789167
+            }
+          },
+          "rank_name": {
+            "Ascendant 1": {
+              "accuracy": 0.6922624301265078,
+              "log_loss": 0.5787579986953972,
+              "brier_score": 0.19718987422933568,
+              "expected_calibration_error": 0.028663777618718807,
+              "samples": 3399,
+              "positive_rate": 0.5119152691968226,
+              "roc_auc": 0.7661338709789167
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.7453083109919572,
+              "log_loss": 0.542223699289467,
+              "brier_score": 0.18125543797379864,
+              "expected_calibration_error": 0.09028955722157068,
+              "samples": 373,
+              "positive_rate": 0.739946380697051,
+              "roc_auc": 0.7331166890781413
+            },
+            "ECO_CLASSIC": {
+              "accuracy": 0.9230769230769231,
+              "log_loss": 0.28783706821982763,
+              "brier_score": 0.07194128690725977,
+              "expected_calibration_error": 0.20689560576426402,
+              "samples": 26,
+              "positive_rate": 0.8461538461538461,
+              "roc_auc": 0.9886363636363636
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.6213151927437641,
+              "log_loss": 0.6443868836257485,
+              "brier_score": 0.22659798195061495,
+              "expected_calibration_error": 0.05217323151075465,
+              "samples": 441,
+              "positive_rate": 0.46938775510204084,
+              "roc_auc": 0.6726949915355713
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.6842105263157895,
+              "log_loss": 0.5889355744815153,
+              "brier_score": 0.20209420811566928,
+              "expected_calibration_error": 0.10671963014182174,
+              "samples": 152,
+              "positive_rate": 0.3684210526315789,
+              "roc_auc": 0.7127976190476191
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.7055674518201285,
+              "log_loss": 0.5543617407337618,
+              "brier_score": 0.18669372226532197,
+              "expected_calibration_error": 0.049444713858617505,
+              "samples": 934,
+              "positive_rate": 0.45717344753747324,
+              "roc_auc": 0.7909639750749462
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.5128205128205128,
+              "log_loss": 0.7438816926999822,
+              "brier_score": 0.27219903228045184,
+              "expected_calibration_error": 0.1975714112506111,
+              "samples": 39,
+              "positive_rate": 0.5128205128205128,
+              "roc_auc": 0.6026315789473684
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.7,
+              "log_loss": 0.579245101263008,
+              "brier_score": 0.19747677401827057,
+              "expected_calibration_error": 0.04304906588611362,
+              "samples": 210,
+              "positive_rate": 0.47619047619047616,
+              "roc_auc": 0.767
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.7080152671755725,
+              "log_loss": 0.5591909683540176,
+              "brier_score": 0.18883120885981133,
+              "expected_calibration_error": 0.040155165086873536,
+              "samples": 524,
+              "positive_rate": 0.5534351145038168,
+              "roc_auc": 0.7841732979664013
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.6935749588138386,
+              "log_loss": 0.5992508844530355,
+              "brier_score": 0.20468966969023902,
+              "expected_calibration_error": 0.06184054913060224,
+              "samples": 607,
+              "positive_rate": 0.4794069192751236,
+              "roc_auc": 0.7400822132324156
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.6153846153846154,
+              "log_loss": 0.6039014943199895,
+              "brier_score": 0.20771244501050923,
+              "expected_calibration_error": 0.18718390356304826,
+              "samples": 52,
+              "positive_rate": 0.5384615384615384,
+              "roc_auc": 0.8035714285714286
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.5609756097560976,
+              "log_loss": 0.6629623377029612,
+              "brier_score": 0.23581828107915812,
+              "expected_calibration_error": 0.16393379623352627,
+              "samples": 41,
+              "positive_rate": 0.5609756097560976,
+              "roc_auc": 0.6956521739130436
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.706972639011474,
+            "log_loss": 0.5729985747953202,
+            "brier_score": 0.19395533009379684,
+            "expected_calibration_error": 0.056204341273082416,
+            "samples": 3399,
+            "positive_rate": 0.5119152691968226,
+            "roc_auc": 0.7816033062432015
+          },
+          "calibrated": true
+        }
+      },
+      "Ascendant 2": {
+        "samples": 6610,
+        "train_samples": 4012,
+        "calibration_samples": 1266,
+        "test_samples": 1332,
+        "action_support": {
+          "FORCE_2_RIFLES": 1118,
+          "FULL_RIFLES": 943,
+          "FULL_OPERATOR": 529,
+          "ECO_PISTOL_UPGRADE": 458,
+          "BONUS_KEEP_WEAPONS": 359,
+          "ECO_SHERIFF": 252,
+          "FORCE_RIFLE_LIGHT": 225,
+          "MIXED_LOW_BUY": 52,
+          "SEMI_SMG": 33,
+          "FORCE_OUTLAW": 24,
+          "ECO_CLASSIC": 19
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.00019745265384679152,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.7597597597597597,
+            "log_loss": 0.5129818801979521,
+            "brier_score": 0.16961413947966197,
+            "expected_calibration_error": 0.06830660456443781,
+            "samples": 1332,
+            "positive_rate": 0.5,
+            "roc_auc": 0.8396245344443543
+          },
+          "rank_group": {
+            "Ascendant": {
+              "accuracy": 0.7597597597597597,
+              "log_loss": 0.5129818801979521,
+              "brier_score": 0.16961413947966197,
+              "expected_calibration_error": 0.06830660456443781,
+              "samples": 1332,
+              "positive_rate": 0.5,
+              "roc_auc": 0.8396245344443543
+            }
+          },
+          "rank_name": {
+            "Ascendant 2": {
+              "accuracy": 0.7597597597597597,
+              "log_loss": 0.5129818801979521,
+              "brier_score": 0.16961413947966197,
+              "expected_calibration_error": 0.06830660456443781,
+              "samples": 1332,
+              "positive_rate": 0.5,
+              "roc_auc": 0.8396245344443543
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.8671875,
+              "log_loss": 0.3875681797281946,
+              "brier_score": 0.11679059230016708,
+              "expected_calibration_error": 0.10892218462960312,
+              "samples": 128,
+              "positive_rate": 0.71875,
+              "roc_auc": 0.9057971014492753
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.7098765432098766,
+              "log_loss": 0.5955727158370371,
+              "brier_score": 0.20406425871764433,
+              "expected_calibration_error": 0.09198606730988432,
+              "samples": 162,
+              "positive_rate": 0.4691358024691358,
+              "roc_auc": 0.763234394124847
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.7741935483870968,
+              "log_loss": 0.49357529377999454,
+              "brier_score": 0.15975446704657015,
+              "expected_calibration_error": 0.11485184749032303,
+              "samples": 62,
+              "positive_rate": 0.41935483870967744,
+              "roc_auc": 0.8621794871794871
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.784366576819407,
+              "log_loss": 0.47401241377642733,
+              "brier_score": 0.15242756660918264,
+              "expected_calibration_error": 0.10487646950746148,
+              "samples": 371,
+              "positive_rate": 0.42587601078167114,
+              "roc_auc": 0.8664051821477387
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.75,
+              "log_loss": 0.5285075156095083,
+              "brier_score": 0.17909893220879677,
+              "expected_calibration_error": 0.16858324697982396,
+              "samples": 12,
+              "positive_rate": 0.5833333333333334,
+              "roc_auc": 0.8857142857142857
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.7910447761194029,
+              "log_loss": 0.48916534336168616,
+              "brier_score": 0.1556986548935589,
+              "expected_calibration_error": 0.12085437626986105,
+              "samples": 67,
+              "positive_rate": 0.417910447761194,
+              "roc_auc": 0.8681318681318682
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.7468879668049793,
+              "log_loss": 0.5346874419620141,
+              "brier_score": 0.18013744298912435,
+              "expected_calibration_error": 0.11858425454215389,
+              "samples": 241,
+              "positive_rate": 0.5560165975103735,
+              "roc_auc": 0.8231970986190543
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.6794871794871795,
+              "log_loss": 0.6048948349235858,
+              "brier_score": 0.2095203977908545,
+              "expected_calibration_error": 0.12141497591089372,
+              "samples": 234,
+              "positive_rate": 0.5085470085470085,
+              "roc_auc": 0.7689440993788821
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.8275862068965517,
+              "log_loss": 0.3822025021980297,
+              "brier_score": 0.11583673785645911,
+              "expected_calibration_error": 0.14702623984417812,
+              "samples": 29,
+              "positive_rate": 0.4827586206896552,
+              "roc_auc": 0.9428571428571428
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.8461538461538461,
+              "log_loss": 0.38980684946902716,
+              "brier_score": 0.1185332532956016,
+              "expected_calibration_error": 0.19267663251875067,
+              "samples": 26,
+              "positive_rate": 0.46153846153846156,
+              "roc_auc": 0.9285714285714286
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.7417417417417418,
+            "log_loss": 0.5635198983826318,
+            "brier_score": 0.17957028197552213,
+            "expected_calibration_error": 0.10347659640437813,
+            "samples": 1332,
+            "positive_rate": 0.5,
+            "roc_auc": 0.8130360089819549
+          },
+          "calibrated": true
+        }
+      },
+      "Ascendant 3": {
+        "samples": 1093,
+        "train_samples": 682,
+        "calibration_samples": 205,
+        "test_samples": 206,
+        "action_support": {
+          "FORCE_2_RIFLES": 183,
+          "FULL_RIFLES": 166,
+          "BONUS_KEEP_WEAPONS": 79,
+          "ECO_PISTOL_UPGRADE": 78,
+          "FULL_OPERATOR": 66,
+          "ECO_SHERIFF": 45,
+          "FORCE_RIFLE_LIGHT": 37,
+          "MIXED_LOW_BUY": 11,
+          "SEMI_SMG": 7,
+          "ECO_CLASSIC": 7,
+          "FORCE_OUTLAW": 3
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.010749144525883976,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.4563106796116505,
+            "log_loss": 0.8127269094116475,
+            "brier_score": 0.30418219763975524,
+            "expected_calibration_error": 0.241997545844103,
+            "samples": 206,
+            "positive_rate": 0.616504854368932,
+            "roc_auc": 0.5360310973786504
+          },
+          "rank_group": {
+            "Ascendant": {
+              "accuracy": 0.4563106796116505,
+              "log_loss": 0.8127269094116475,
+              "brier_score": 0.30418219763975524,
+              "expected_calibration_error": 0.241997545844103,
+              "samples": 206,
+              "positive_rate": 0.616504854368932,
+              "roc_auc": 0.5360310973786504
+            }
+          },
+          "rank_name": {
+            "Ascendant 3": {
+              "accuracy": 0.4563106796116505,
+              "log_loss": 0.8127269094116475,
+              "brier_score": 0.30418219763975524,
+              "expected_calibration_error": 0.241997545844103,
+              "samples": 206,
+              "positive_rate": 0.616504854368932,
+              "roc_auc": 0.5360310973786504
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.39285714285714285,
+              "log_loss": 0.8146580024749822,
+              "brier_score": 0.3060840939937555,
+              "expected_calibration_error": 0.2518227233650928,
+              "samples": 28,
+              "positive_rate": 0.5714285714285714,
+              "roc_auc": 0.4739583333333333
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.3333333333333333,
+              "log_loss": 0.8882278679196377,
+              "brier_score": 0.34009719137317257,
+              "expected_calibration_error": 0.32753953330304425,
+              "samples": 21,
+              "positive_rate": 0.6666666666666666,
+              "roc_auc": 0.42857142857142855
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.5555555555555556,
+              "log_loss": 0.7034574576606274,
+              "brier_score": 0.25373345680464887,
+              "expected_calibration_error": 0.21900323847936903,
+              "samples": 9,
+              "positive_rate": 0.3333333333333333,
+              "roc_auc": 0.4444444444444445
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.5573770491803278,
+              "log_loss": 0.7626842661579903,
+              "brier_score": 0.2803324003687062,
+              "expected_calibration_error": 0.27302506628578627,
+              "samples": 61,
+              "positive_rate": 0.6557377049180327,
+              "roc_auc": 0.6583333333333333
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.0,
+              "log_loss": 1.3113123600878953,
+              "brier_score": 0.5336317238749032,
+              "expected_calibration_error": 0.7304815731421572,
+              "samples": 3,
+              "positive_rate": 1.0,
+              "roc_auc": null
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.4444444444444444,
+              "log_loss": 0.7710236998776531,
+              "brier_score": 0.286065649199829,
+              "expected_calibration_error": 0.24417062176041424,
+              "samples": 18,
+              "positive_rate": 0.4444444444444444,
+              "roc_auc": 0.5375
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.4074074074074074,
+              "log_loss": 0.9335995194138567,
+              "brier_score": 0.358816384854165,
+              "expected_calibration_error": 0.46063050006684764,
+              "samples": 27,
+              "positive_rate": 0.8148148148148148,
+              "roc_auc": 0.3545454545454546
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.4583333333333333,
+              "log_loss": 0.8118929911215504,
+              "brier_score": 0.30350314563809505,
+              "expected_calibration_error": 0.3034790036084972,
+              "samples": 24,
+              "positive_rate": 0.6666666666666666,
+              "roc_auc": 0.5234375
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.5833333333333334,
+              "log_loss": 0.6331477643824902,
+              "brier_score": 0.22146755487666644,
+              "expected_calibration_error": 0.116762603231461,
+              "samples": 12,
+              "positive_rate": 0.3333333333333333,
+              "roc_auc": 0.5
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.0,
+              "log_loss": 1.0003070089539303,
+              "brier_score": 0.3951513757588396,
+              "expected_calibration_error": 0.6243912997128105,
+              "samples": 3,
+              "positive_rate": 0.3333333333333333,
+              "roc_auc": 0.0
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.441747572815534,
+            "log_loss": 1.3741725453545461,
+            "brier_score": 0.39926494833774845,
+            "expected_calibration_error": 0.36745867470856897,
+            "samples": 206,
+            "positive_rate": 0.616504854368932,
+            "roc_auc": 0.4220073756603209
+          },
+          "calibrated": true
+        }
+      },
+      "Diamond 1": {
+        "samples": 5592,
+        "train_samples": 3482,
+        "calibration_samples": 1010,
+        "test_samples": 1100,
+        "action_support": {
+          "FORCE_2_RIFLES": 976,
+          "FULL_RIFLES": 880,
+          "ECO_PISTOL_UPGRADE": 407,
+          "BONUS_KEEP_WEAPONS": 367,
+          "FULL_OPERATOR": 365,
+          "FORCE_RIFLE_LIGHT": 212,
+          "ECO_SHERIFF": 155,
+          "SEMI_SMG": 62,
+          "MIXED_LOW_BUY": 32,
+          "FORCE_OUTLAW": 20,
+          "ECO_CLASSIC": 6
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.00011039929058432646,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.62,
+            "log_loss": 0.6465751961957391,
+            "brier_score": 0.22752452328662487,
+            "expected_calibration_error": 0.05933256501826174,
+            "samples": 1100,
+            "positive_rate": 0.49272727272727274,
+            "roc_auc": 0.6879901863534765
+          },
+          "rank_group": {
+            "Diamond": {
+              "accuracy": 0.62,
+              "log_loss": 0.6465751961957391,
+              "brier_score": 0.22752452328662487,
+              "expected_calibration_error": 0.05933256501826174,
+              "samples": 1100,
+              "positive_rate": 0.49272727272727274,
+              "roc_auc": 0.6879901863534765
+            }
+          },
+          "rank_name": {
+            "Diamond 1": {
+              "accuracy": 0.62,
+              "log_loss": 0.6465751961957391,
+              "brier_score": 0.22752452328662487,
+              "expected_calibration_error": 0.05933256501826174,
+              "samples": 1100,
+              "positive_rate": 0.49272727272727274,
+              "roc_auc": 0.6879901863534765
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.6698113207547169,
+              "log_loss": 0.6176665798861556,
+              "brier_score": 0.213583269004723,
+              "expected_calibration_error": 0.09438492067231632,
+              "samples": 106,
+              "positive_rate": 0.6509433962264151,
+              "roc_auc": 0.6509988249118683
+            },
+            "ECO_CLASSIC": {
+              "accuracy": 1.0,
+              "log_loss": 0.321699990586519,
+              "brier_score": 0.07567306916330441,
+              "expected_calibration_error": 0.27508251339323203,
+              "samples": 3,
+              "positive_rate": 0.0,
+              "roc_auc": null
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.539568345323741,
+              "log_loss": 0.702661052328821,
+              "brier_score": 0.25447513489222784,
+              "expected_calibration_error": 0.12317193293562526,
+              "samples": 139,
+              "positive_rate": 0.460431654676259,
+              "roc_auc": 0.580625
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.7,
+              "log_loss": 0.5704982438768965,
+              "brier_score": 0.19196750906923396,
+              "expected_calibration_error": 0.1869492660279156,
+              "samples": 40,
+              "positive_rate": 0.4,
+              "roc_auc": 0.78125
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.6677631578947368,
+              "log_loss": 0.6126259552358119,
+              "brier_score": 0.2114403526786371,
+              "expected_calibration_error": 0.06706489763661948,
+              "samples": 304,
+              "positive_rate": 0.45723684210526316,
+              "roc_auc": 0.7446261172879877
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.75,
+              "log_loss": 0.5624456128144641,
+              "brier_score": 0.18822774863324931,
+              "expected_calibration_error": 0.33127296630329184,
+              "samples": 8,
+              "positive_rate": 0.5,
+              "roc_auc": 1.0
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.5555555555555556,
+              "log_loss": 0.6663263707711189,
+              "brier_score": 0.23738737405915689,
+              "expected_calibration_error": 0.15498836750948264,
+              "samples": 72,
+              "positive_rate": 0.4166666666666667,
+              "roc_auc": 0.6579365079365079
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.6190476190476191,
+              "log_loss": 0.6477423681733603,
+              "brier_score": 0.2280259458917554,
+              "expected_calibration_error": 0.054137017362077,
+              "samples": 168,
+              "positive_rate": 0.5416666666666666,
+              "roc_auc": 0.6713286713286712
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.5929203539823009,
+              "log_loss": 0.6741002116245539,
+              "brier_score": 0.2402797012454839,
+              "expected_calibration_error": 0.06448007820698055,
+              "samples": 226,
+              "positive_rate": 0.5,
+              "roc_auc": 0.6357584775628476
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.42857142857142855,
+              "log_loss": 0.8043104423483991,
+              "brier_score": 0.3014458561107526,
+              "expected_calibration_error": 0.2637141908686987,
+              "samples": 21,
+              "positive_rate": 0.47619047619047616,
+              "roc_auc": 0.4
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.6923076923076923,
+              "log_loss": 0.5795310298096725,
+              "brier_score": 0.1955285596351339,
+              "expected_calibration_error": 0.24456383789810876,
+              "samples": 13,
+              "positive_rate": 0.46153846153846156,
+              "roc_auc": 0.7619047619047619
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.6018181818181818,
+            "log_loss": 0.7477556912754787,
+            "brier_score": 0.2582378860268746,
+            "expected_calibration_error": 0.13823705955408855,
+            "samples": 1100,
+            "positive_rate": 0.49272727272727274,
+            "roc_auc": 0.6412431059794469
+          },
+          "calibrated": true
+        }
+      },
+      "Diamond 2": {
+        "samples": 11199,
+        "train_samples": 6783,
+        "calibration_samples": 2222,
+        "test_samples": 2194,
+        "action_support": {
+          "FORCE_2_RIFLES": 1812,
+          "FULL_RIFLES": 1600,
+          "FULL_OPERATOR": 871,
+          "ECO_PISTOL_UPGRADE": 798,
+          "BONUS_KEEP_WEAPONS": 730,
+          "FORCE_RIFLE_LIGHT": 401,
+          "ECO_SHERIFF": 311,
+          "MIXED_LOW_BUY": 100,
+          "SEMI_SMG": 77,
+          "FORCE_OUTLAW": 65,
+          "ECO_CLASSIC": 18
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.0002501484459896961,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.6900638103919782,
+            "log_loss": 0.6015405117787235,
+            "brier_score": 0.20607968308431004,
+            "expected_calibration_error": 0.06747229259040548,
+            "samples": 2194,
+            "positive_rate": 0.5227894257064722,
+            "roc_auc": 0.763102366623949
+          },
+          "rank_group": {
+            "Diamond": {
+              "accuracy": 0.6900638103919782,
+              "log_loss": 0.6015405117787235,
+              "brier_score": 0.20607968308431004,
+              "expected_calibration_error": 0.06747229259040548,
+              "samples": 2194,
+              "positive_rate": 0.5227894257064722,
+              "roc_auc": 0.763102366623949
+            }
+          },
+          "rank_name": {
+            "Diamond 2": {
+              "accuracy": 0.6900638103919782,
+              "log_loss": 0.6015405117787235,
+              "brier_score": 0.20607968308431004,
+              "expected_calibration_error": 0.06747229259040548,
+              "samples": 2194,
+              "positive_rate": 0.5227894257064722,
+              "roc_auc": 0.763102366623949
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.7081339712918661,
+              "log_loss": 0.5905462551685418,
+              "brier_score": 0.20101835439581345,
+              "expected_calibration_error": 0.06632477647382257,
+              "samples": 209,
+              "positive_rate": 0.6794258373205742,
+              "roc_auc": 0.7127391212949338
+            },
+            "ECO_CLASSIC": {
+              "accuracy": 1.0,
+              "log_loss": 0.36041602558012237,
+              "brier_score": 0.09171802688854132,
+              "expected_calibration_error": 0.30242109476678963,
+              "samples": 11,
+              "positive_rate": 0.2727272727272727,
+              "roc_auc": 1.0
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.6219931271477663,
+              "log_loss": 0.6386257092011325,
+              "brier_score": 0.22388848155714272,
+              "expected_calibration_error": 0.06264894059082209,
+              "samples": 291,
+              "positive_rate": 0.5223367697594502,
+              "roc_auc": 0.6884939416887544
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.5903614457831325,
+              "log_loss": 0.6895018798533525,
+              "brier_score": 0.2481953426237491,
+              "expected_calibration_error": 0.22053605666495674,
+              "samples": 83,
+              "positive_rate": 0.3614457831325301,
+              "roc_auc": 0.5616352201257861
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.7181008902077152,
+              "log_loss": 0.5947899775126329,
+              "brier_score": 0.20265799346438454,
+              "expected_calibration_error": 0.0875729011790138,
+              "samples": 674,
+              "positive_rate": 0.5074183976261127,
+              "roc_auc": 0.771515888113859
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.5263157894736842,
+              "log_loss": 0.6532891153644881,
+              "brier_score": 0.2313384630492081,
+              "expected_calibration_error": 0.23890086829028917,
+              "samples": 19,
+              "positive_rate": 0.5789473684210527,
+              "roc_auc": 0.6704545454545454
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.6802721088435374,
+              "log_loss": 0.6000688306280898,
+              "brier_score": 0.2052698376775527,
+              "expected_calibration_error": 0.11521889396915182,
+              "samples": 147,
+              "positive_rate": 0.42857142857142855,
+              "roc_auc": 0.7569916855631141
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.7515337423312883,
+              "log_loss": 0.5607234159830466,
+              "brier_score": 0.1866458861685285,
+              "expected_calibration_error": 0.11475494166530661,
+              "samples": 326,
+              "positive_rate": 0.5460122699386503,
+              "roc_auc": 0.8308153659277254
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.66,
+              "log_loss": 0.6098085388930873,
+              "brier_score": 0.21008432062883972,
+              "expected_calibration_error": 0.06978623327291456,
+              "samples": 350,
+              "positive_rate": 0.54,
+              "roc_auc": 0.7450129810378258
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.6617647058823529,
+              "log_loss": 0.6093602030883937,
+              "brier_score": 0.2097907618256926,
+              "expected_calibration_error": 0.10816355875141617,
+              "samples": 68,
+              "positive_rate": 0.4117647058823529,
+              "roc_auc": 0.7571428571428572
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.625,
+              "log_loss": 0.6341268534200923,
+              "brier_score": 0.22261883155412363,
+              "expected_calibration_error": 0.2510290452857078,
+              "samples": 16,
+              "positive_rate": 0.5625,
+              "roc_auc": 0.7142857142857142
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.7041932543299909,
+            "log_loss": 0.5680898927255874,
+            "brier_score": 0.1935992718045226,
+            "expected_calibration_error": 0.04187195926347138,
+            "samples": 2194,
+            "positive_rate": 0.5227894257064722,
+            "roc_auc": 0.7774793926933681
+          },
+          "calibrated": true
+        }
+      },
+      "Diamond 3": {
+        "samples": 18936,
+        "train_samples": 11028,
+        "calibration_samples": 3990,
+        "test_samples": 3918,
+        "action_support": {
+          "FORCE_2_RIFLES": 2973,
+          "FULL_RIFLES": 2470,
+          "FULL_OPERATOR": 1461,
+          "ECO_PISTOL_UPGRADE": 1336,
+          "BONUS_KEEP_WEAPONS": 1146,
+          "FORCE_RIFLE_LIGHT": 695,
+          "ECO_SHERIFF": 563,
+          "MIXED_LOW_BUY": 136,
+          "SEMI_SMG": 123,
+          "FORCE_OUTLAW": 100,
+          "ECO_CLASSIC": 25
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 1.085211766990039e-05,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.7169474221541603,
+            "log_loss": 0.5390732900714277,
+            "brier_score": 0.18102629829654138,
+            "expected_calibration_error": 0.04683509097752784,
+            "samples": 3918,
+            "positive_rate": 0.4387442572741195,
+            "roc_auc": 0.8054090639856659
+          },
+          "rank_group": {
+            "Diamond": {
+              "accuracy": 0.7169474221541603,
+              "log_loss": 0.5390732900714277,
+              "brier_score": 0.18102629829654138,
+              "expected_calibration_error": 0.04683509097752784,
+              "samples": 3918,
+              "positive_rate": 0.4387442572741195,
+              "roc_auc": 0.8054090639856659
+            }
+          },
+          "rank_name": {
+            "Diamond 3": {
+              "accuracy": 0.7169474221541603,
+              "log_loss": 0.5390732900714277,
+              "brier_score": 0.18102629829654138,
+              "expected_calibration_error": 0.04683509097752784,
+              "samples": 3918,
+              "positive_rate": 0.4387442572741195,
+              "roc_auc": 0.8054090639856659
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.75,
+              "log_loss": 0.511424001471838,
+              "brier_score": 0.16755254720006493,
+              "expected_calibration_error": 0.06312373248426292,
+              "samples": 448,
+              "positive_rate": 0.6607142857142857,
+              "roc_auc": 0.8061655405405406
+            },
+            "ECO_CLASSIC": {
+              "accuracy": 1.0,
+              "log_loss": 0.14191328955495516,
+              "brier_score": 0.017659497223528282,
+              "expected_calibration_error": 0.13219636726222794,
+              "samples": 10,
+              "positive_rate": 0.0,
+              "roc_auc": null
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.656188605108055,
+              "log_loss": 0.592010181419747,
+              "brier_score": 0.20451738909509024,
+              "expected_calibration_error": 0.0594254367572061,
+              "samples": 509,
+              "positive_rate": 0.4165029469548134,
+              "roc_auc": 0.721713995298901
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.7251461988304093,
+              "log_loss": 0.5268092198644839,
+              "brier_score": 0.1748516031988904,
+              "expected_calibration_error": 0.08063147948885979,
+              "samples": 171,
+              "positive_rate": 0.3333333333333333,
+              "roc_auc": 0.7773930440135426
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.7036679536679536,
+              "log_loss": 0.5505301995331808,
+              "brier_score": 0.1869930065935375,
+              "expected_calibration_error": 0.0912083555032732,
+              "samples": 1036,
+              "positive_rate": 0.33204633204633205,
+              "roc_auc": 0.7779775507460681
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.6052631578947368,
+              "log_loss": 0.6225145309265658,
+              "brier_score": 0.22010111834763835,
+              "expected_calibration_error": 0.20006850001290002,
+              "samples": 38,
+              "positive_rate": 0.42105263157894735,
+              "roc_auc": 0.7073863636363636
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.708,
+              "log_loss": 0.5373236408327634,
+              "brier_score": 0.18048469531294425,
+              "expected_calibration_error": 0.07907906648158913,
+              "samples": 250,
+              "positive_rate": 0.42,
+              "roc_auc": 0.8036781609195403
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.770197486535009,
+              "log_loss": 0.508394959149375,
+              "brier_score": 0.16667748948761296,
+              "expected_calibration_error": 0.08819229620990844,
+              "samples": 557,
+              "positive_rate": 0.5385996409335727,
+              "roc_auc": 0.8389234760051881
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.7044585987261146,
+              "log_loss": 0.5428540105490146,
+              "brier_score": 0.18255517157659024,
+              "expected_calibration_error": 0.05822370132521894,
+              "samples": 785,
+              "positive_rate": 0.445859872611465,
+              "roc_auc": 0.8037635467980296
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.8309859154929577,
+              "log_loss": 0.45172690449521635,
+              "brier_score": 0.14218782214608242,
+              "expected_calibration_error": 0.14054453791518087,
+              "samples": 71,
+              "positive_rate": 0.30985915492957744,
+              "roc_auc": 0.8747680890538033
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.813953488372093,
+              "log_loss": 0.4746454920774015,
+              "brier_score": 0.15282901280527286,
+              "expected_calibration_error": 0.1251669330513785,
+              "samples": 43,
+              "positive_rate": 0.3953488372093023,
+              "roc_auc": 0.8710407239819005
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.700357325165901,
+            "log_loss": 0.5629575201180411,
+            "brier_score": 0.1913740833588831,
+            "expected_calibration_error": 0.11851794311091898,
+            "samples": 3918,
+            "positive_rate": 0.4387442572741195,
+            "roc_auc": 0.8091178469456077
+          },
+          "calibrated": true
+        }
+      },
+      "Gold 3": {
+        "samples": 1432,
+        "train_samples": 941,
+        "calibration_samples": 271,
+        "test_samples": 220,
+        "action_support": {
+          "FORCE_2_RIFLES": 245,
+          "FULL_RIFLES": 178,
+          "FULL_OPERATOR": 161,
+          "ECO_PISTOL_UPGRADE": 116,
+          "BONUS_KEEP_WEAPONS": 108,
+          "FORCE_RIFLE_LIGHT": 59,
+          "ECO_SHERIFF": 32,
+          "SEMI_SMG": 24,
+          "MIXED_LOW_BUY": 12,
+          "FORCE_OUTLAW": 6
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.0032688526541514626,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.4681818181818182,
+            "log_loss": 0.8059464597154556,
+            "brier_score": 0.3018722666014316,
+            "expected_calibration_error": 0.2526528068037309,
+            "samples": 220,
+            "positive_rate": 0.5227272727272727,
+            "roc_auc": 0.41540372670807457
+          },
+          "rank_group": {
+            "Gold": {
+              "accuracy": 0.4681818181818182,
+              "log_loss": 0.8059464597154556,
+              "brier_score": 0.3018722666014316,
+              "expected_calibration_error": 0.2526528068037309,
+              "samples": 220,
+              "positive_rate": 0.5227272727272727,
+              "roc_auc": 0.41540372670807457
+            }
+          },
+          "rank_name": {
+            "Gold 3": {
+              "accuracy": 0.4681818181818182,
+              "log_loss": 0.8059464597154556,
+              "brier_score": 0.3018722666014316,
+              "expected_calibration_error": 0.2526528068037309,
+              "samples": 220,
+              "positive_rate": 0.5227272727272727,
+              "roc_auc": 0.41540372670807457
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.6842105263157895,
+              "log_loss": 0.6281681978124523,
+              "brier_score": 0.21800730895778106,
+              "expected_calibration_error": 0.2830951906157796,
+              "samples": 19,
+              "positive_rate": 0.7894736842105263,
+              "roc_auc": 0.3666666666666667
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.41935483870967744,
+              "log_loss": 0.8285675025012182,
+              "brier_score": 0.31334230412098363,
+              "expected_calibration_error": 0.2730272310312265,
+              "samples": 31,
+              "positive_rate": 0.5806451612903226,
+              "roc_auc": 0.34615384615384615
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.4,
+              "log_loss": 0.8457350743993206,
+              "brier_score": 0.318489246773721,
+              "expected_calibration_error": 0.5428652799327018,
+              "samples": 5,
+              "positive_rate": 0.0,
+              "roc_auc": null
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.5161290322580645,
+              "log_loss": 0.7675718328218363,
+              "brier_score": 0.28385615943620573,
+              "expected_calibration_error": 0.223607654383993,
+              "samples": 62,
+              "positive_rate": 0.5645161290322581,
+              "roc_auc": 0.471957671957672
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.0,
+              "log_loss": 1.272358732213474,
+              "brier_score": 0.518154317236001,
+              "expected_calibration_error": 0.7198289605327695,
+              "samples": 2,
+              "positive_rate": 0.0,
+              "roc_auc": null
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.3333333333333333,
+              "log_loss": 0.9736148724871844,
+              "brier_score": 0.3794517880411338,
+              "expected_calibration_error": 0.4601021236304871,
+              "samples": 15,
+              "positive_rate": 0.2,
+              "roc_auc": 0.2222222222222222
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.3225806451612903,
+              "log_loss": 0.9076724452146876,
+              "brier_score": 0.3503885001275941,
+              "expected_calibration_error": 0.4064479274911788,
+              "samples": 31,
+              "positive_rate": 0.5161290322580645,
+              "roc_auc": 0.2583333333333333
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.6216216216216216,
+              "log_loss": 0.6747623511021421,
+              "brier_score": 0.24032877985169238,
+              "expected_calibration_error": 0.12971496007175473,
+              "samples": 37,
+              "positive_rate": 0.5675675675675675,
+              "roc_auc": 0.6726190476190477
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.16666666666666666,
+              "log_loss": 1.0730498807989017,
+              "brier_score": 0.42654841160919044,
+              "expected_calibration_error": 0.5817257550237536,
+              "samples": 12,
+              "positive_rate": 0.3333333333333333,
+              "roc_auc": 0.125
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.5,
+              "log_loss": 0.7899519801198881,
+              "brier_score": 0.2939575804309879,
+              "expected_calibration_error": 0.21347975662449015,
+              "samples": 6,
+              "positive_rate": 0.5,
+              "roc_auc": 0.5555555555555556
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.5409090909090909,
+            "log_loss": 1.0121226581942553,
+            "brier_score": 0.3195105705944326,
+            "expected_calibration_error": 0.27428135301078554,
+            "samples": 220,
+            "positive_rate": 0.5227272727272727,
+            "roc_auc": 0.6052173913043479
+          },
+          "calibrated": true
+        }
+      },
+      "Platinum 1": {
+        "samples": 3717,
+        "train_samples": 2229,
+        "calibration_samples": 712,
+        "test_samples": 776,
+        "action_support": {
+          "FORCE_2_RIFLES": 503,
+          "FULL_OPERATOR": 497,
+          "FULL_RIFLES": 332,
+          "ECO_PISTOL_UPGRADE": 294,
+          "BONUS_KEEP_WEAPONS": 223,
+          "FORCE_RIFLE_LIGHT": 135,
+          "ECO_SHERIFF": 82,
+          "SEMI_SMG": 80,
+          "MIXED_LOW_BUY": 74,
+          "FORCE_OUTLAW": 9
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 9.090449369562292e-06,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.6778350515463918,
+            "log_loss": 0.620840578986344,
+            "brier_score": 0.21468065112551396,
+            "expected_calibration_error": 0.08504132331607824,
+            "samples": 776,
+            "positive_rate": 0.44329896907216493,
+            "roc_auc": 0.7167312661498709
+          },
+          "rank_group": {
+            "Platinum": {
+              "accuracy": 0.6778350515463918,
+              "log_loss": 0.620840578986344,
+              "brier_score": 0.21468065112551396,
+              "expected_calibration_error": 0.08504132331607824,
+              "samples": 776,
+              "positive_rate": 0.44329896907216493,
+              "roc_auc": 0.7167312661498709
+            }
+          },
+          "rank_name": {
+            "Platinum 1": {
+              "accuracy": 0.6778350515463918,
+              "log_loss": 0.620840578986344,
+              "brier_score": 0.21468065112551396,
+              "expected_calibration_error": 0.08504132331607824,
+              "samples": 776,
+              "positive_rate": 0.44329896907216493,
+              "roc_auc": 0.7167312661498709
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.6086956521739131,
+              "log_loss": 0.6723206627959069,
+              "brier_score": 0.23878801252434204,
+              "expected_calibration_error": 0.17940354125412517,
+              "samples": 92,
+              "positive_rate": 0.6630434782608695,
+              "roc_auc": 0.668958223162348
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.6699029126213593,
+              "log_loss": 0.6391132096878804,
+              "brier_score": 0.2230478593775005,
+              "expected_calibration_error": 0.12867216454304803,
+              "samples": 103,
+              "positive_rate": 0.44660194174757284,
+              "roc_auc": 0.6967963386727689
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.7307692307692307,
+              "log_loss": 0.5394978499578751,
+              "brier_score": 0.17788118220338328,
+              "expected_calibration_error": 0.16148189900882895,
+              "samples": 26,
+              "positive_rate": 0.23076923076923078,
+              "roc_auc": 0.6916666666666667
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.6516393442622951,
+              "log_loss": 0.6470111189977674,
+              "brier_score": 0.2266273533311489,
+              "expected_calibration_error": 0.10618067427849026,
+              "samples": 244,
+              "positive_rate": 0.42213114754098363,
+              "roc_auc": 0.6451146457343524
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.625,
+              "log_loss": 0.7082673029387901,
+              "brier_score": 0.25302367554203364,
+              "expected_calibration_error": 0.27754456513071657,
+              "samples": 8,
+              "positive_rate": 0.5,
+              "roc_auc": 0.625
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.7804878048780488,
+              "log_loss": 0.5706877696136068,
+              "brier_score": 0.19057449156356288,
+              "expected_calibration_error": 0.134046601144621,
+              "samples": 41,
+              "positive_rate": 0.4878048780487805,
+              "roc_auc": 0.8238095238095238
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.7833333333333333,
+              "log_loss": 0.5436349733593453,
+              "brier_score": 0.17863184244989502,
+              "expected_calibration_error": 0.14061547896654758,
+              "samples": 120,
+              "positive_rate": 0.43333333333333335,
+              "roc_auc": 0.8399321266968326
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.6226415094339622,
+              "log_loss": 0.6314819982085003,
+              "brier_score": 0.220505844918819,
+              "expected_calibration_error": 0.11225459989642098,
+              "samples": 106,
+              "positive_rate": 0.33962264150943394,
+              "roc_auc": 0.6734126984126985
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.65,
+              "log_loss": 0.629274943916412,
+              "brier_score": 0.21818776475617385,
+              "expected_calibration_error": 0.14023110961787882,
+              "samples": 20,
+              "positive_rate": 0.5,
+              "roc_auc": 0.8
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.8125,
+              "log_loss": 0.5230841321718074,
+              "brier_score": 0.16980213414002987,
+              "expected_calibration_error": 0.2393499652449938,
+              "samples": 16,
+              "positive_rate": 0.375,
+              "roc_auc": 0.8999999999999999
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.6945876288659794,
+            "log_loss": 0.6018614817815161,
+            "brier_score": 0.20403171219351457,
+            "expected_calibration_error": 0.0955907128773051,
+            "samples": 776,
+            "positive_rate": 0.44329896907216493,
+            "roc_auc": 0.7656048126614987
+          },
+          "calibrated": true
+        }
+      },
+      "Platinum 2": {
+        "samples": 4269,
+        "train_samples": 2511,
+        "calibration_samples": 846,
+        "test_samples": 912,
+        "action_support": {
+          "FORCE_2_RIFLES": 641,
+          "FULL_OPERATOR": 442,
+          "FULL_RIFLES": 407,
+          "ECO_PISTOL_UPGRADE": 336,
+          "BONUS_KEEP_WEAPONS": 270,
+          "FORCE_RIFLE_LIGHT": 163,
+          "ECO_SHERIFF": 83,
+          "SEMI_SMG": 75,
+          "MIXED_LOW_BUY": 64,
+          "FORCE_OUTLAW": 20,
+          "ECO_CLASSIC": 10
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.0010382993570841011,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.7302631578947368,
+            "log_loss": 0.576748491796966,
+            "brier_score": 0.1943787870144198,
+            "expected_calibration_error": 0.03637674154500855,
+            "samples": 912,
+            "positive_rate": 0.41228070175438597,
+            "roc_auc": 0.7693836336932359
+          },
+          "rank_group": {
+            "Platinum": {
+              "accuracy": 0.7302631578947368,
+              "log_loss": 0.576748491796966,
+              "brier_score": 0.1943787870144198,
+              "expected_calibration_error": 0.03637674154500855,
+              "samples": 912,
+              "positive_rate": 0.41228070175438597,
+              "roc_auc": 0.7693836336932359
+            }
+          },
+          "rank_name": {
+            "Platinum 2": {
+              "accuracy": 0.7302631578947368,
+              "log_loss": 0.576748491796966,
+              "brier_score": 0.1943787870144198,
+              "expected_calibration_error": 0.03637674154500855,
+              "samples": 912,
+              "positive_rate": 0.41228070175438597,
+              "roc_auc": 0.7693836336932359
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.6666666666666666,
+              "log_loss": 0.6304296861652792,
+              "brier_score": 0.2196156270095773,
+              "expected_calibration_error": 0.10475414177047358,
+              "samples": 75,
+              "positive_rate": 0.56,
+              "roc_auc": 0.7604617604617605
+            },
+            "ECO_CLASSIC": {
+              "accuracy": 1.0,
+              "log_loss": 0.3460418158458215,
+              "brier_score": 0.08604774878896854,
+              "expected_calibration_error": 0.29188419100378155,
+              "samples": 18,
+              "positive_rate": 0.5,
+              "roc_auc": 1.0
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.6929133858267716,
+              "log_loss": 0.6138174727702644,
+              "brier_score": 0.21176158409422882,
+              "expected_calibration_error": 0.04739030732634071,
+              "samples": 127,
+              "positive_rate": 0.3937007874015748,
+              "roc_auc": 0.7237662337662337
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.7666666666666667,
+              "log_loss": 0.5597436054077829,
+              "brier_score": 0.18586523041589453,
+              "expected_calibration_error": 0.08644571956811586,
+              "samples": 30,
+              "positive_rate": 0.36666666666666664,
+              "roc_auc": 0.7272727272727273
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.7467105263157895,
+              "log_loss": 0.5522520872852956,
+              "brier_score": 0.1832030171277589,
+              "expected_calibration_error": 0.09025503298783115,
+              "samples": 304,
+              "positive_rate": 0.39473684210526316,
+              "roc_auc": 0.8020380434782609
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.75,
+              "log_loss": 0.5618331726147832,
+              "brier_score": 0.1870972445473275,
+              "expected_calibration_error": 0.20833518143327046,
+              "samples": 8,
+              "positive_rate": 0.5,
+              "roc_auc": 0.875
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.75,
+              "log_loss": 0.5623540661395543,
+              "brier_score": 0.187869371402844,
+              "expected_calibration_error": 0.10553467367774073,
+              "samples": 64,
+              "positive_rate": 0.328125,
+              "roc_auc": 0.7707641196013288
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.8172043010752689,
+              "log_loss": 0.49080132704644536,
+              "brier_score": 0.15407977552687288,
+              "expected_calibration_error": 0.17900711809735992,
+              "samples": 93,
+              "positive_rate": 0.3010752688172043,
+              "roc_auc": 0.8456043956043956
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.6855345911949685,
+              "log_loss": 0.6383806805599616,
+              "brier_score": 0.2226928892733524,
+              "expected_calibration_error": 0.10583654431400362,
+              "samples": 159,
+              "positive_rate": 0.4591194968553459,
+              "roc_auc": 0.6798343421471806
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.6153846153846154,
+              "log_loss": 0.6610799866825529,
+              "brier_score": 0.233210759828231,
+              "expected_calibration_error": 0.2291117796691236,
+              "samples": 13,
+              "positive_rate": 0.5384615384615384,
+              "roc_auc": 0.7857142857142857
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.6190476190476191,
+              "log_loss": 0.6488317413023414,
+              "brier_score": 0.22858480150279434,
+              "expected_calibration_error": 0.13889678787311574,
+              "samples": 21,
+              "positive_rate": 0.5238095238095238,
+              "roc_auc": 0.7999999999999999
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.7192982456140351,
+            "log_loss": 0.602224246831529,
+            "brier_score": 0.19800044157286598,
+            "expected_calibration_error": 0.11993235345581976,
+            "samples": 912,
+            "positive_rate": 0.41228070175438597,
+            "roc_auc": 0.792761590981264
+          },
+          "calibrated": true
+        }
+      },
+      "Platinum 3": {
+        "samples": 3598,
+        "train_samples": 2194,
+        "calibration_samples": 723,
+        "test_samples": 681,
+        "action_support": {
+          "FORCE_2_RIFLES": 599,
+          "FULL_RIFLES": 416,
+          "FULL_OPERATOR": 308,
+          "ECO_PISTOL_UPGRADE": 297,
+          "BONUS_KEEP_WEAPONS": 249,
+          "FORCE_RIFLE_LIGHT": 112,
+          "ECO_SHERIFF": 77,
+          "SEMI_SMG": 62,
+          "MIXED_LOW_BUY": 48,
+          "FORCE_OUTLAW": 17,
+          "ECO_CLASSIC": 9
+        },
+        "propensity": {
+          "available": true,
+          "classes": [
+            "BONUS_KEEP_WEAPONS",
+            "ECO_CLASSIC",
+            "ECO_PISTOL_UPGRADE",
+            "ECO_SHERIFF",
+            "FORCE_2_RIFLES",
+            "FORCE_OUTLAW",
+            "FORCE_RIFLE_LIGHT",
+            "FULL_OPERATOR",
+            "FULL_RIFLES",
+            "MIXED_LOW_BUY",
+            "SEMI_SMG"
+          ],
+          "min_observed_probability": 0.003053869796578564,
+          "max_weight": 10.0
+        },
+        "metrics": {
+          "global": {
+            "accuracy": 0.5080763582966226,
+            "log_loss": 0.9524364408117103,
+            "brier_score": 0.3264731320413164,
+            "expected_calibration_error": 0.2456625312563372,
+            "samples": 681,
+            "positive_rate": 0.5183553597650514,
+            "roc_auc": 0.5236647550611484
+          },
+          "rank_group": {
+            "Platinum": {
+              "accuracy": 0.5080763582966226,
+              "log_loss": 0.9524364408117103,
+              "brier_score": 0.3264731320413164,
+              "expected_calibration_error": 0.2456625312563372,
+              "samples": 681,
+              "positive_rate": 0.5183553597650514,
+              "roc_auc": 0.5236647550611484
+            }
+          },
+          "rank_name": {
+            "Platinum 3": {
+              "accuracy": 0.5080763582966226,
+              "log_loss": 0.9524364408117103,
+              "brier_score": 0.3264731320413164,
+              "expected_calibration_error": 0.2456625312563372,
+              "samples": 681,
+              "positive_rate": 0.5183553597650514,
+              "roc_auc": 0.5236647550611484
+            }
+          },
+          "real_buy_action": {
+            "BONUS_KEEP_WEAPONS": {
+              "accuracy": 0.56,
+              "log_loss": 0.8464559991147284,
+              "brier_score": 0.2837879340028207,
+              "expected_calibration_error": 0.2359021102948682,
+              "samples": 75,
+              "positive_rate": 0.6,
+              "roc_auc": 0.5733333333333333
+            },
+            "ECO_PISTOL_UPGRADE": {
+              "accuracy": 0.45054945054945056,
+              "log_loss": 0.9321328922514092,
+              "brier_score": 0.3240452729575131,
+              "expected_calibration_error": 0.26350558427039417,
+              "samples": 91,
+              "positive_rate": 0.5274725274725275,
+              "roc_auc": 0.4714147286821705
+            },
+            "ECO_SHERIFF": {
+              "accuracy": 0.35,
+              "log_loss": 1.2992598261407549,
+              "brier_score": 0.44034334532738023,
+              "expected_calibration_error": 0.40881928921714017,
+              "samples": 20,
+              "positive_rate": 0.35,
+              "roc_auc": 0.4835164835164835
+            },
+            "FORCE_2_RIFLES": {
+              "accuracy": 0.5145631067961165,
+              "log_loss": 0.9704347225538795,
+              "brier_score": 0.33201688914427496,
+              "expected_calibration_error": 0.24739898045760894,
+              "samples": 206,
+              "positive_rate": 0.47572815533980584,
+              "roc_auc": 0.5904195011337868
+            },
+            "FORCE_OUTLAW": {
+              "accuracy": 0.3333333333333333,
+              "log_loss": 0.7497675246000742,
+              "brier_score": 0.2775841941983903,
+              "expected_calibration_error": 0.21337185532070652,
+              "samples": 6,
+              "positive_rate": 0.5,
+              "roc_auc": 0.4444444444444445
+            },
+            "FORCE_RIFLE_LIGHT": {
+              "accuracy": 0.4375,
+              "log_loss": 1.2405599899685114,
+              "brier_score": 0.4145164131095714,
+              "expected_calibration_error": 0.35159638468174775,
+              "samples": 32,
+              "positive_rate": 0.375,
+              "roc_auc": 0.44166666666666665
+            },
+            "FULL_OPERATOR": {
+              "accuracy": 0.6630434782608695,
+              "log_loss": 0.8683602195397632,
+              "brier_score": 0.2921175415728752,
+              "expected_calibration_error": 0.2827025941771491,
+              "samples": 92,
+              "positive_rate": 0.5978260869565217,
+              "roc_auc": 0.5764127764127764
+            },
+            "FULL_RIFLES": {
+              "accuracy": 0.48717948717948717,
+              "log_loss": 0.8708311235004804,
+              "brier_score": 0.30865656083467574,
+              "expected_calibration_error": 0.27184729050455725,
+              "samples": 117,
+              "positive_rate": 0.5213675213675214,
+              "roc_auc": 0.5333723653395784
+            },
+            "MIXED_LOW_BUY": {
+              "accuracy": 0.34782608695652173,
+              "log_loss": 1.0836369923597113,
+              "brier_score": 0.37761957854168104,
+              "expected_calibration_error": 0.3810975605666015,
+              "samples": 23,
+              "positive_rate": 0.5652173913043478,
+              "roc_auc": 0.20769230769230768
+            },
+            "SEMI_SMG": {
+              "accuracy": 0.42105263157894735,
+              "log_loss": 1.2373482314366884,
+              "brier_score": 0.4079331487897962,
+              "expected_calibration_error": 0.43591621406209113,
+              "samples": 19,
+              "positive_rate": 0.5789473684210527,
+              "roc_auc": 0.21590909090909088
+            }
+          },
+          "baseline_global": {
+            "accuracy": 0.49926578560939794,
+            "log_loss": 0.9375525125687333,
+            "brier_score": 0.32646497721257567,
+            "expected_calibration_error": 0.2614059574824323,
+            "samples": 681,
+            "positive_rate": 0.5183553597650514,
+            "roc_auc": 0.526290333724867
+          },
+          "calibrated": true
+        }
+      }
+    }
+  }
+}

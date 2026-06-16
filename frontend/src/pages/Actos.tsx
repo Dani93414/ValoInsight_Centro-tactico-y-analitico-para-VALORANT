@@ -389,6 +389,7 @@ export default function Actos() {
   const [displayLeaderboardData, setDisplayLeaderboardData] = useState<LeaderboardContent | null>(null);
   const [pageInput, setPageInput] = useState("1");
   const skipNextSearchResetRef = useRef(false);
+  const hasAutoSelectedActiveActRef = useRef(false);
 
   const acts = useMemo(
     () => [...(actosQuery.data ?? [])],
@@ -400,13 +401,23 @@ export default function Actos() {
   const activeAct = realActs.find((act) => act.isActive) ?? null;
   const activeEpisodeId = activeAct?.parentId ?? "";
   useEffect(() => {
+    if (
+      hasAutoSelectedActiveActRef.current ||
+      !activeAct?.id ||
+      !activeEpisodeId
+    ) {
+      return;
+    }
+
+    const activeActId = activeAct.id;
     const timeoutId = window.setTimeout(() => {
-      if (!selectedEpisodeId && activeEpisodeId) setSelectedEpisodeId(activeEpisodeId);
-      if (!selectedActId && activeAct?.id) setSelectedActId(activeAct.id);
+      hasAutoSelectedActiveActRef.current = true;
+      setSelectedEpisodeId((current) => current || activeEpisodeId);
+      setSelectedActId((current) => current ?? activeActId);
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeAct?.id, activeEpisodeId, selectedActId, selectedEpisodeId]);
+  }, [activeAct?.id, activeEpisodeId]);
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setDisplayLeaderboardData(null);

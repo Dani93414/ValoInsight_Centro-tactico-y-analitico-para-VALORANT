@@ -3,6 +3,7 @@ import {
   getPlayerDashboard,
   getPlayerRankComparison,
   getMatchById,
+  getMatchEconomyMl,
   searchPlayers,
   type DashboardFilters,
   type RankComparisonFilters,
@@ -59,5 +60,15 @@ export function useMatchById(matchId: string | null) {
     queryFn: () => getMatchById(matchId!),
     enabled: !!matchId,
     staleTime: MATCH_STALE,
+  });
+}
+
+export function useMatchEconomyMl(matchId: string | null) {
+  return useQuery({
+    queryKey: ["match", matchId, "economy-ml"],
+    queryFn: () => getMatchEconomyMl(matchId!),
+    enabled: !!matchId,
+    staleTime: DASHBOARD_STALE,
+    retry: false,
   });
 }

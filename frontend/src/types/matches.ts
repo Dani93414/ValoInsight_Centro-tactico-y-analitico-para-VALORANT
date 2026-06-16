@@ -140,3 +140,46 @@ export type RawMatchDetail = {
   teams?: RawTeam[];
   roundResults?: RawRound[];
 };
+
+export type EconomyMlAlternative = {
+  action: string;
+  estimated_match_win_probability: number | null;
+  is_available: boolean;
+  reason_if_unavailable?: string | null;
+  historical_support?: number;
+};
+
+export type EconomyMlRoundRecommendation = {
+  round_number: number;
+  team_id: string;
+  team_label: string;
+  rank_name: string;
+  rank_group: string;
+  real_buy_action: string;
+  recommended_action: string;
+  decision_type: string;
+  model_scope: string;
+  confidence: number;
+  estimated_match_win_probability: number;
+  real_action_estimated_match_win_probability: number | null;
+  delta_vs_real: number | null;
+  alternatives: EconomyMlAlternative[];
+  similar_rounds_summary: {
+    similar_rounds_found: number;
+    by_action?: Record<string, { samples: number; match_win_rate: number }>;
+  };
+  explanation: string[];
+};
+
+export type EconomyMlResponse = {
+  available: boolean;
+  reason?: string;
+  match_id: string;
+  model_metadata?: {
+    created_at?: string | null;
+    dataset_rows?: number | null;
+    estimation_type?: string | null;
+    limitations?: string[];
+  };
+  rounds: EconomyMlRoundRecommendation[];
+};

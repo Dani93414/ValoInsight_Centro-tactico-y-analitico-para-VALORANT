@@ -36,6 +36,7 @@ export {
   usePlayerRankComparison,
   useSearchPlayers,
   useMatchById,
+  useMatchEconomyMl,
 } from "./usePlayerQueries";
 
 export {
