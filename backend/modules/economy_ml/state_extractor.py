@@ -7,7 +7,10 @@ from typing import Any
 from modules.analytics.infrastructure.reference_data import resolve_map_name
 
 from .action_profiles import observed_action_features
+from .agent_utility import build_utility_diff_features, summarize_team_agent_utility
 from .buy_classifier import classify_team_buy_action
+from .economy_cases import classify_economy_case
+from .future_economy import add_future_economy_labels
 from .rank_mapping import get_rank_group, get_rank_name, normalize_rank_tier
 
 
@@ -183,6 +186,33 @@ def extract_match_round_states(match: dict) -> list[dict]:
             enemy_rounded_tier = int(round(enemy_avg_tier)) if valid_enemy_tiers else None
             own_credits, enemy_credits = credits[team_id], credits[enemy_id]
             map_id = str(match_info.get("mapId") or "UNKNOWN")
+            side = _team_side(team_id, round_number, starting_attack_team)
+            enemy_side = _opposite_side(side)
+            team_utility = summarize_team_agent_utility(
+                team_players[team_id],
+                side=side,
+                estimated_credits=float(own_credits["estimated_credits_before_buy"]),
+                prefix="team",
+            )
+            enemy_utility = summarize_team_agent_utility(
+                team_players[enemy_id],
+                side=enemy_side,
+                estimated_credits=float(enemy_credits["estimated_credits_before_buy"]),
+                prefix="enemy",
+            )
+            real_buy_action = classify_team_buy_action(
+                stats_by_team[team_id], {"won": streaks[team_id]["previous_won"]}
+            )
+            current_max_score = max((scores[value] for value in team_ids), default=0)
+            case = classify_economy_case({
+                "is_overtime": int(round_number >= 25),
+                "is_match_point": int(current_max_score >= 12),
+                "is_last_round_before_switch": int(round_number in {12, 24}),
+                "is_bonus_candidate": int(round_number in {3, 15} and streaks[team_id]["win"] >= 2),
+                "team_estimated_credits_before_buy": own_credits["estimated_credits_before_buy"],
+                "team_players_can_full_buy_estimate": own_credits["players_can_full_buy_estimate"],
+                "team_players_low_money": own_credits["players_low_money"],
+            }, real_buy_action)
             row = {
                 "match_id": str(match_info.get("matchId") or "UNKNOWN"),
                 "game_start_millis": int(_number(match_info.get("gameStartMillis"))),
@@ -196,7 +226,7 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 "rank_name_mode": get_rank_name(rounded_tier), "rank_group_mode": get_rank_group(rounded_tier),
                 "enemy_rank_tier_avg": enemy_avg_tier,
                 "enemy_rank_group_mode": get_rank_group(enemy_rounded_tier),
-                "side": _team_side(team_id, round_number, starting_attack_team),
+                "side": side,
                 "team_credit_estimate_quality": credit_quality[team_id],
                 "enemy_credit_estimate_quality": credit_quality[enemy_id],
                 "team_score_before": scores[team_id], "enemy_score_before": scores[enemy_id],
@@ -207,7 +237,7 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 "is_pistol_round": int(round_number in {1, 13}), "is_second_round": int(round_number in {2, 14}),
                 "is_bonus_candidate": int(round_number in {3, 15} and streaks[team_id]["win"] >= 2),
                 "is_last_round_before_switch": int(round_number in {12, 24}),
-                "is_match_point": int(max(scores.values()) >= 12), "is_overtime": int(round_number >= 25),
+                "is_match_point": int(current_max_score >= 12), "is_overtime": int(round_number >= 25),
                 "team_estimated_credits_before_buy": own_credits["estimated_credits_before_buy"],
                 "enemy_estimated_credits_before_buy": enemy_credits["estimated_credits_before_buy"],
                 "credits_before_buy_diff": own_credits["estimated_credits_before_buy"] - enemy_credits["estimated_credits_before_buy"],
@@ -215,11 +245,13 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 "enemy_players_can_full_buy_estimate": enemy_credits["players_can_full_buy_estimate"],
                 "team_players_low_money": own_credits["players_low_money"],
                 "enemy_players_low_money": enemy_credits["players_low_money"],
-                "real_buy_action": classify_team_buy_action(
-                    stats_by_team[team_id], {"won": streaks[team_id]["previous_won"]}
-                ),
+                "real_buy_action": real_buy_action,
+                **case,
                 "round_won": int(str(round_obj.get("winningTeam")) == team_id),
                 "match_won": int(team_won_match.get(team_id, False)),
+                **team_utility,
+                **enemy_utility,
+                **build_utility_diff_features(team_utility, enemy_utility),
                 **observed_action_features(stats_by_team[team_id]),
             }
             rows.append(row)
@@ -228,4 +260,4 @@ def extract_match_round_states(match: dict) -> list[dict]:
             player_credits, credit_quality,
         )
         _advance_round_context(round_obj, team_ids, scores, streaks)
-    return rows
+    return add_future_economy_labels(rows)

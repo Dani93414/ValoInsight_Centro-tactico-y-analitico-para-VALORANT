@@ -3206,6 +3206,42 @@
   padding-left: 1rem;
 }
 
+.match-economy-ml-utility,
+.match-economy-ml-plan {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+.match-economy-ml-utility span,
+.match-economy-ml-plan span {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #98a4b5;
+  font-size: 0.7rem;
+}
+
+.match-economy-ml-utility strong,
+.match-economy-ml-plan strong {
+  color: #e5edf7;
+  font-size: 0.8rem;
+}
+
+.match-economy-ml-warning {
+  color: #f3c567;
+  margin-top: 0.65rem;
+}
+
+.match-economy-ml-warnings,
+.match-economy-ml-limitations {
+  color: #c8d0dc;
+}
+
 .match-economy-ml-players {
   display: grid;
   gap: 0.5rem;

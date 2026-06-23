@@ -6,10 +6,10 @@ import pandas as pd
 
 from .action_profiles import minimum_action_credits, simulate_action_features
 from .buy_classifier import BUY_ACTIONS
+from .config import MIN_PROPENSITY
 from .model_registry import load_model_candidates
 from .schemas import MODEL_FEATURES, PROPENSITY_FEATURES
-
-MIN_PROPENSITY = 0.03
+from .team_plan import evaluate_team_plan_from_action
 
 
 def _availability(action: str, state: dict, bundle: dict) -> tuple[bool, str | None, int]:
@@ -38,12 +38,36 @@ def _availability(action: str, state: dict, bundle: dict) -> tuple[bool, str | N
     return True, None, support
 
 
-def _predict_probability(bundle: dict, scenario: dict) -> float:
-    raw = float(bundle["pipeline"].predict_proba(pd.DataFrame([scenario]))[0, 1])
-    calibrator = bundle.get("calibrator")
+def _predict_probability(bundle: dict, scenario: dict, model_key: str = "match_win_model") -> float | None:
+    model_bundle = (bundle.get("models") or {}).get(model_key)
+    if model_bundle is None:
+        if model_key != "match_win_model":
+            return None
+        model_bundle = bundle
+    raw = float(model_bundle["pipeline"].predict_proba(pd.DataFrame([scenario]))[0, 1])
+    calibrator = model_bundle.get("calibrator")
     if calibrator is None:
         return raw
     return float(calibrator.predict_proba([[raw]])[0, 1])
+
+
+def _utility_explanations(state: dict) -> list[str]:
+    explanations: list[str] = []
+    utility = float(state.get("team_total_utility_score") or 0)
+    utility_diff = float(state.get("utility_score_diff") or 0)
+    low_resilience = float(state.get("team_low_economy_resilience") or 0)
+    weapon_dependency = float(state.get("team_weapon_dependency_score") or 0)
+    if utility >= 0.68:
+        explanations.append(
+            "La composicion aliada tiene alta utilidad potencial pre-ronda; no se asume compra real de habilidades."
+        )
+    if utility_diff >= 0.12:
+        explanations.append("La composicion aliada muestra ventaja de utilidad potencial frente al rival.")
+    if low_resilience >= 0.68:
+        explanations.append("El equipo conserva valor potencial incluso con economia baja por su perfil de utilidad.")
+    if weapon_dependency >= 0.62:
+        explanations.append("La composicion depende mas del impacto con arma, lo que puede favorecer compras mas fuertes.")
+    return explanations
 
 
 def _recommend_with_bundle(
@@ -53,22 +77,38 @@ def _recommend_with_bundle(
     for action in actions:
         viable, reason, support = _availability(action, state, bundle)
         probability = None
+        team_plan = None
+        round_probability = None
+        fullbuy_probability = None
         if viable:
             scenario = {feature: state.get(feature) for feature in MODEL_FEATURES}
             scenario.update(simulate_action_features(state, action))
             scenario["buy_action"] = action
-            probability = _predict_probability(bundle, scenario)
+            probability = _predict_probability(bundle, scenario, "match_win_model")
+            round_probability = _predict_probability(bundle, scenario, "round_win_model")
+            fullbuy_probability = _predict_probability(bundle, scenario, "fullbuy_next_round_model")
+            team_plan = evaluate_team_plan_from_action(state, action, probability)
+            if round_probability is not None:
+                team_plan["predicted_round_win"] = round_probability
+            if fullbuy_probability is not None:
+                team_plan["next_round_fullbuy_probability"] = fullbuy_probability
+                team_plan["future_economy_score"] = fullbuy_probability
+            from .plan_evaluator import evaluate_plan_value
+            team_plan.update(evaluate_plan_value(team_plan, state))
         alternatives.append({
             "action": action, "estimated_match_win_probability": probability,
+            "estimated_round_win_probability": round_probability,
+            "estimated_fullbuy_next_round_probability": fullbuy_probability,
             "is_available": viable, "reason_if_unavailable": reason, "historical_support": support,
+            "team_plan": team_plan,
         })
     viable = [item for item in alternatives if item["is_available"]]
     if not viable:
         return None
-    best = max(viable, key=lambda item: item["estimated_match_win_probability"])
-    ordered = sorted(viable, key=lambda item: item["estimated_match_win_probability"], reverse=True)
+    best = max(viable, key=lambda item: item["team_plan"]["team_plan_value"])
+    ordered = sorted(viable, key=lambda item: item["team_plan"]["team_plan_value"], reverse=True)
     margin = (
-        ordered[0]["estimated_match_win_probability"] - ordered[1]["estimated_match_win_probability"]
+        ordered[0]["team_plan"]["team_plan_value"] - ordered[1]["team_plan"]["team_plan_value"]
         if len(ordered) > 1 else 0.0
     )
     support_factor = min(1.0, best["historical_support"] / 200)
@@ -77,11 +117,19 @@ def _recommend_with_bundle(
         "available": True, "recommended_action": best["action"], "model_scope": scope,
         "confidence": float(confidence), "confidence_kind": "support_adjusted_margin",
         "estimated_match_win_probability": best["estimated_match_win_probability"],
+        "team_plan": best["team_plan"],
         "alternatives": alternatives,
         "explanation": [
             f"Recomendación observacional calibrada con modelo {scope}; no constituye una garantía causal ni una acción óptima demostrada.",
             f"La acción recomendada tiene {best['historical_support']} observaciones de soporte en entrenamiento.",
-            "Cada alternativa se evaluó con un perfil de compra contrafactual coherente.",
+            "Cada alternativa se evaluo como plan de equipo: armas, escudos, utilidad potencial, ahorro y riesgo futuro.",
+            "La compra de habilidades se modela como inversion potencial; no se afirma que esas habilidades se compraran historicamente.",
+            "La eleccion final usa team_plan_value, no solo la probabilidad estimada de ganar partida.",
+            *_utility_explanations(state),
+        ],
+        "limitations": [
+            "Modelo observacional: no prueba causalidad.",
+            "Compra historica de habilidades no observable salvo dato explicito verificable.",
         ],
     }
 

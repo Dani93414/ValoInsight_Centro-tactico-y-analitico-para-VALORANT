@@ -3756,6 +3756,15 @@ function EconomyOptimalPanel({
     );
     const scopes = [...new Set(ml.rounds.map((round) => round.model_scope))].join(", ");
     const ranks = [...new Set(ml.rounds.map((round) => round.rank_name))].join(", ");
+    const metadata = ml.model_metadata;
+    const modelCounts = metadata?.model_counts;
+    const globalMetrics = metadata?.global_metrics;
+    const trainedAt = metadata?.created_at
+      ? new Date(metadata.created_at).toLocaleString("es-ES", {
+          dateStyle: "short",
+          timeStyle: "short",
+        })
+      : "N/D";
     const teamLabel = (teamId: string) =>
       teamId === teamAId ? teamALabel : teamId === teamBId ? teamBLabel : teamId;
 
@@ -3776,6 +3785,23 @@ function EconomyOptimalPanel({
           <article><span>Mayor mejora estimada</span><strong>{formatPercent(Math.max(0, ...validDeltas) * 100, 1)}</strong></article>
           <article><span>Confianza media</span><strong>{formatPercent(averageConfidence * 100, 1)}</strong></article>
           <article><span>Rondas similares usadas</span><strong>{formatNumber(similarRounds)}</strong></article>
+          <article><span>Filas entrenamiento</span><strong>{formatNumber(metadata?.dataset_rows ?? 0)}</strong></article>
+          <article><span>Entrenado</span><strong>{trainedAt}</strong></article>
+          <article><span>Schema</span><strong>{metadata?.schema_version ? `v${metadata.schema_version}` : "N/D"}</strong></article>
+          <article>
+            <span>Modelos entrenados</span>
+            <strong>
+              G {modelCounts?.global ?? 0} · Gr {modelCounts?.rank_groups ?? 0} · R {modelCounts?.rank_names ?? 0}
+            </strong>
+          </article>
+          <article>
+            <span>Utilidad agentes</span>
+            <strong>{metadata?.includes_agent_utility ? `Sí · ${metadata.agent_utility_features_count ?? 0} señales` : "No"}</strong>
+          </article>
+          <article>
+            <span>ROC AUC global</span>
+            <strong>{globalMetrics?.roc_auc == null ? "N/D" : formatNumber(globalMetrics.roc_auc, 3)}</strong>
+          </article>
         </div>
         <div className="match-economy-optimal-table-wrap">
           <table className="match-economy-optimal-table">
@@ -3801,6 +3827,47 @@ function EconomyOptimalPanel({
                       <summary>{round.explanation[0] ?? "Ver explicación"}</summary>
                       <p>{round.explanation.join(" ")}</p>
                       <small>Scope: {round.model_scope} · Similares: {round.similar_rounds_summary.similar_rounds_found}</small>
+                      {round.utility_summary && (
+                        <div className="match-economy-ml-utility">
+                          <span>Utilidad de composición: <strong>{formatPercent((round.utility_summary.team_total_utility_score ?? 0) * 100, 1)}</strong></span>
+                          <span>Resiliencia baja economía: <strong>{formatPercent((round.utility_summary.team_low_economy_resilience ?? 0) * 100, 1)}</strong></span>
+                          <span>Dependencia de armas: <strong>{formatPercent((round.utility_summary.team_weapon_dependency_score ?? 0) * 100, 1)}</strong></span>
+                          <span>Ventaja utilidad: <strong>{`${(round.utility_summary.utility_score_diff ?? 0) >= 0 ? "+" : ""}${formatPercent((round.utility_summary.utility_score_diff ?? 0) * 100, 1)}`}</strong></span>
+                        </div>
+                      )}
+                      {round.recommended_team_plan && (
+                        <div className="match-economy-ml-plan">
+                          <span>Estrategia <strong>{round.recommended_team_plan.macro_case ?? round.recommended_team_plan.team_buy_case ?? round.recommended_action}</strong></span>
+                          <span>Subtipo <strong>{round.recommended_team_plan.subtype ?? round.recommended_team_plan.team_buy_subtype ?? "N/D"}</strong></span>
+                          <span>Valor plan <strong>{formatPercent((round.recommended_team_plan.team_plan_value ?? 0) * 100, 1)}</strong></span>
+                          <span>Ganar ronda <strong>{round.recommended_team_plan.predicted_round_win == null ? "N/D" : formatPercent(round.recommended_team_plan.predicted_round_win * 100, 1)}</strong></span>
+                          <span>Ganar partida <strong>{round.recommended_team_plan.predicted_match_win == null ? formatPercent(round.estimated_match_win_probability * 100, 1) : formatPercent(round.recommended_team_plan.predicted_match_win * 100, 1)}</strong></span>
+                          <span>Fullbuy sig. <strong>{round.recommended_team_plan.next_round_fullbuy_probability == null ? "N/D" : formatPercent(round.recommended_team_plan.next_round_fullbuy_probability * 100, 1)}</strong></span>
+                          <span>Coherencia <strong>{formatPercent((round.recommended_team_plan.coherence_score ?? 0) * 100, 1)}</strong></span>
+                          <span>Riesgo <strong>{formatPercent((round.recommended_team_plan.economic_risk_score ?? 0) * 100, 1)}</strong></span>
+                          <span>Armas <strong>{formatNumber(round.recommended_team_plan.estimated_weapon_spend ?? round.recommended_team_plan.weapon_spend_estimate ?? 0)}</strong></span>
+                          <span>Escudos <strong>{formatNumber(round.recommended_team_plan.estimated_armor_spend ?? round.recommended_team_plan.armor_spend_estimate ?? 0)}</strong></span>
+                          <span>Utilidad <strong>{round.recommended_team_plan.estimated_ability_spend == null ? "N/D" : formatNumber(round.recommended_team_plan.estimated_ability_spend)}</strong></span>
+                          <span>Restante <strong>{formatNumber(round.recommended_team_plan.expected_remaining ?? round.recommended_team_plan.expected_remaining_after_buy ?? 0)}</strong></span>
+                        </div>
+                      )}
+                      {round.recommended_team_plan?.ability_budget_unknown ? (
+                        <p className="match-economy-ml-warning">Coste de habilidades no disponible. Se muestra foco de utilidad, no presupuesto exacto.</p>
+                      ) : null}
+                      {(round.recommended_team_plan?.warnings?.length ?? 0) > 0 ? (
+                        <ul className="match-economy-ml-warnings">
+                          {round.recommended_team_plan?.warnings?.map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {(round.limitations?.length ?? 0) > 0 ? (
+                        <ul className="match-economy-ml-limitations">
+                          {round.limitations?.map((limitation) => (
+                            <li key={limitation}>{limitation}</li>
+                          ))}
+                        </ul>
+                      ) : null}
                       <ul>
                         {round.alternatives.map((alternative) => (
                           <li key={alternative.action}>
@@ -3821,6 +3888,7 @@ function EconomyOptimalPanel({
                                 <th>Créditos</th>
                                 <th>Compra real</th>
                                 <th>Recomendación</th>
+                                <th>Utilidad / ajuste</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -3832,7 +3900,25 @@ function EconomyOptimalPanel({
                                   <td>{[player.real_weapon, player.real_armor].filter(Boolean).join(" + ") || "N/D"}</td>
                                   <td>
                                     {[player.recommended_weapon, player.recommended_armor].filter(Boolean).join(" + ") || "Ahorrar"}
+                                    <small>
+                                      Utilidad {formatPercent((player.agent_utility_score ?? 0) * 100, 1)}
+                                      {" · "}
+                                      Dep. arma {formatPercent((player.agent_weapon_dependency_score ?? 0) * 100, 1)}
+                                    </small>
                                     {player.reason?.[0] ? <small>{player.reason[0]}</small> : null}
+                                  </td>
+                                  <td>
+                                    <small>
+                                      Presupuesto utilidad {player.recommended_ability_budget == null ? "N/D" : formatNumber(player.recommended_ability_budget)}
+                                    </small>
+                                    <small>
+                                      Foco {(player.recommended_utility_focus ?? player.recommended_ability_focus ?? []).join(", ") || "N/D"}
+                                    </small>
+                                    <small>
+                                      Estilo {formatPercent((Number(player.player_fit_score) || 0) * 100, 1)}
+                                      {" · "}
+                                      Racha {formatPercent((Number(player.player_form_score) || 0) * 100, 1)}
+                                    </small>
                                   </td>
                                 </tr>
                               ))}
