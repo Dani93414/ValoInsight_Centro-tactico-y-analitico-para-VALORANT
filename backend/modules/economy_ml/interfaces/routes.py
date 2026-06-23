@@ -7,7 +7,12 @@ from threading import Lock
 from fastapi import APIRouter, Header, HTTPException
 
 from modules.economy_ml.analysis_reports import build_map_rank_report
+from modules.economy_ml.ability_catalog import (
+    build_ability_catalog_report,
+    load_ability_catalog,
+)
 from modules.economy_ml.content_catalog import build_content_report
+from modules.economy_ml.data_availability import build_data_availability_report
 from modules.economy_ml.dataset_builder import (
     build_economy_dataset_from_matches, build_player_economy_dataset_from_matches,
     save_dataset, validate_dataset,
@@ -29,6 +34,21 @@ def economy_ml_status():
 @router.get("/content-report")
 def economy_ml_content_report():
     return build_content_report()
+
+
+@router.get("/data-availability")
+def economy_ml_data_availability():
+    return build_data_availability_report()
+
+
+@router.get("/ability-catalog")
+def economy_ml_ability_catalog():
+    return load_ability_catalog()
+
+
+@router.get("/ability-catalog/report")
+def economy_ml_ability_catalog_report():
+    return build_ability_catalog_report()
 
 
 @router.post("/build-dataset")

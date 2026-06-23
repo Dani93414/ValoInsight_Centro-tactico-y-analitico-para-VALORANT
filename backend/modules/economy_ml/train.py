@@ -20,9 +20,13 @@ from .metrics import classification_metrics, evaluate_slices
 from . import model_registry
 from .schemas import (
     CATEGORICAL_FEATURES, FORBIDDEN_FEATURES, MODEL_FEATURES, NUMERIC_FEATURES,
+    AGENT_UTILITY_NUMERIC_FEATURES,
     PREBUY_CATEGORICAL_FEATURES, PREBUY_NUMERIC_FEATURES, PROPENSITY_FEATURES,
-    SCHEMA_VERSION,
+    SCHEMA_VERSION, validate_no_feature_leakage,
 )
+from .ability_catalog import ability_costs_available
+from .config import PLAN_VALUE_WEIGHTS
+from .data_availability import build_data_availability_report
 
 MIN_SAMPLES_GLOBAL = 1000
 MIN_SAMPLES_RANK_GROUP = 700
@@ -88,19 +92,56 @@ def _propensity_weights(train: pd.DataFrame) -> tuple[Pipeline | None, np.ndarra
     }
 
 
-def _calibrate(raw_pipeline: Pipeline, calibration: pd.DataFrame) -> LogisticRegression | None:
-    if calibration.empty or calibration["match_won"].nunique() < 2:
+MODEL_LABELS = {
+    "match_win_model": "match_won",
+    "round_win_model": "round_won",
+    "fullbuy_next_round_model": "next_round_fullbuy_possible",
+}
+
+
+def _calibrate(raw_pipeline: Pipeline, calibration: pd.DataFrame, label: str) -> LogisticRegression | None:
+    if calibration.empty or calibration[label].nunique() < 2:
         return None
     raw = raw_pipeline.predict_proba(calibration[MODEL_FEATURES])[:, 1].reshape(-1, 1)
     calibrator = LogisticRegression()
-    calibrator.fit(raw, calibration["match_won"])
+    calibrator.fit(raw, calibration[label])
     return calibrator
 
 
-def _predict(bundle: dict, frame: pd.DataFrame) -> np.ndarray:
-    raw = bundle["pipeline"].predict_proba(frame[MODEL_FEATURES])[:, 1]
-    calibrator = bundle.get("calibrator")
+def _predict(bundle: dict, frame: pd.DataFrame, model_key: str = "match_win_model") -> np.ndarray:
+    model_bundle = (bundle.get("models") or {}).get(model_key) or bundle
+    raw = model_bundle["pipeline"].predict_proba(frame[MODEL_FEATURES])[:, 1]
+    calibrator = model_bundle.get("calibrator")
     return calibrator.predict_proba(raw.reshape(-1, 1))[:, 1] if calibrator else raw
+
+
+def _fit_binary_model(
+    train: pd.DataFrame,
+    calibration: pd.DataFrame,
+    test: pd.DataFrame,
+    weights: np.ndarray,
+    label: str,
+) -> tuple[dict | None, dict | None]:
+    if train[label].nunique() < 2 or test.empty or test[label].nunique() < 1:
+        return None, None
+    baseline = Pipeline([
+        ("prepare", _preprocessor(NUMERIC_FEATURES, CATEGORICAL_FEATURES, True)),
+        ("model", LogisticRegression(max_iter=1500)),
+    ])
+    baseline.fit(train[MODEL_FEATURES], train[label], model__sample_weight=weights)
+    pipeline = Pipeline([
+        ("prepare", _preprocessor(NUMERIC_FEATURES, CATEGORICAL_FEATURES, False)),
+        ("model", HistGradientBoostingClassifier(random_state=42)),
+    ])
+    pipeline.fit(train[MODEL_FEATURES], train[label], model__sample_weight=weights)
+    calibrator = _calibrate(pipeline, calibration, label)
+    raw_bundle = {"pipeline": pipeline, "calibrator": calibrator}
+    probabilities = _predict(raw_bundle, test, "match_win_model")
+    baseline_probabilities = baseline.predict_proba(test[MODEL_FEATURES])[:, 1]
+    metrics = classification_metrics(test[label], probabilities)
+    metrics["baseline_global"] = classification_metrics(test[label], baseline_probabilities)
+    metrics["calibrated"] = calibrator is not None
+    return raw_bundle, metrics
 
 
 def _fit_scope(
@@ -117,40 +158,42 @@ def _fit_scope(
     if train["match_won"].nunique() < 2 or test.empty:
         return None
     propensity, weights, propensity_metadata = _propensity_weights(train)
-    baseline = Pipeline([
-        ("prepare", _preprocessor(NUMERIC_FEATURES, CATEGORICAL_FEATURES, True)),
-        ("model", LogisticRegression(max_iter=1500)),
-    ])
-    baseline.fit(train[MODEL_FEATURES], train["match_won"], model__sample_weight=weights)
-    pipeline = Pipeline([
-        ("prepare", _preprocessor(NUMERIC_FEATURES, CATEGORICAL_FEATURES, False)),
-        ("model", HistGradientBoostingClassifier(random_state=42)),
-    ])
-    pipeline.fit(train[MODEL_FEATURES], train["match_won"], model__sample_weight=weights)
-    calibrator = _calibrate(pipeline, calibration)
+    fitted_models: dict[str, dict] = {}
+    model_metrics: dict[str, dict] = {}
+    for model_key, label in MODEL_LABELS.items():
+        if label not in train:
+            continue
+        model_bundle, metrics = _fit_binary_model(train, calibration, test, weights, label)
+        if model_bundle:
+            fitted_models[model_key] = model_bundle
+            model_metrics[model_key] = metrics or {}
+    if "match_win_model" not in fitted_models:
+        return None
     action_support = train["real_buy_action"].value_counts().astype(int).to_dict()
     bundle = {
-        "pipeline": pipeline, "calibrator": calibrator, "propensity_pipeline": propensity,
+        "pipeline": fitted_models["match_win_model"]["pipeline"],
+        "calibrator": fitted_models["match_win_model"].get("calibrator"),
+        "models": fitted_models,
+        "propensity_pipeline": propensity,
         "scope": scope, "value": value, "features": MODEL_FEATURES,
         "schema_version": SCHEMA_VERSION, "action_support": action_support,
         "min_action_support": MIN_ACTION_SUPPORT,
     }
-    probabilities = _predict(bundle, test)
-    baseline_probabilities = baseline.predict_proba(test[MODEL_FEATURES])[:, 1]
+    probabilities = _predict(bundle, test, "match_win_model")
     metrics = evaluate_slices(test, probabilities)
-    metrics["baseline_global"] = classification_metrics(test["match_won"], baseline_probabilities)
-    metrics["calibrated"] = calibrator is not None
+    metrics["models"] = model_metrics
     model_registry.save_model(bundle, scope, value, artifacts_dir)
     return {
         "samples": len(frame), "train_samples": len(train), "calibration_samples": len(calibration),
         "test_samples": len(test), "action_support": action_support,
         "propensity": propensity_metadata, "metrics": metrics,
+        "labels": {key: label for key, label in MODEL_LABELS.items() if key in fitted_models},
     }
 
 
 def train_models(dataset: pd.DataFrame, *, enforce_minimums: bool = True) -> dict:
     required = [column for column in MODEL_FEATURES if column != "buy_action"]
-    required += ["match_id", "game_start_millis", "match_won", "real_buy_action"]
+    required += ["match_id", "game_start_millis", "match_won", "round_won", "real_buy_action"]
     missing = [column for column in required if column not in dataset]
     if missing:
         raise ValueError(f"Dataset missing required columns: {missing}")
@@ -161,18 +204,30 @@ def train_models(dataset: pd.DataFrame, *, enforce_minimums: bool = True) -> dic
         raise ValueError("Dataset lacks enough valid timestamps for temporal evaluation")
     if (dataset["real_buy_action"] == "UNKNOWN").any():
         raise ValueError("Dataset contains UNKNOWN buy actions")
-    leaked = FORBIDDEN_FEATURES.intersection(MODEL_FEATURES)
-    if leaked:
-        raise ValueError(f"Forbidden model features: {sorted(leaked)}")
+    leakage = validate_no_feature_leakage(MODEL_FEATURES)
+    if not leakage["valid"]:
+        raise ValueError(f"Forbidden or post-round model features: {leakage}")
+    availability = build_data_availability_report()
     metadata = {
         "schema_version": SCHEMA_VERSION, "created_at": datetime.now(timezone.utc).isoformat(),
         "dataset_rows": len(dataset), "features": MODEL_FEATURES,
         "categorical_features": CATEGORICAL_FEATURES, "numeric_features": NUMERIC_FEATURES,
+        "includes_agent_utility": True,
+        "agent_utility_features": AGENT_UTILITY_NUMERIC_FEATURES,
+        "labels": MODEL_LABELS,
+        "available_data_report_hash": availability.get("report_hash"),
+        "ability_cost_available": ability_costs_available(),
+        "agent_utility_available": True,
+        "player_style_available": "fallback_or_embedded_analytics",
+        "player_form_available": True,
+        "ultimate_inference_available": True,
+        "plan_value_weights": PLAN_VALUE_WEIGHTS,
         "estimation_type": "observational_off_policy_ipw",
         "limitations": [
             "Las estimaciones no prueban causalidad.",
             "Solo se recomiendan acciones con soporte histórico suficiente.",
             "Las alternativas usan perfiles de compra simulados y auditables.",
+            "No se conoce compra real de habilidades; se estima utilidad potencial por composición de agentes.",
         ],
         "models": {"global": None, "rank_groups": {}, "rank_names": {}},
     }

@@ -13,7 +13,8 @@ from modules.analytics.infrastructure.reference_data import (
 )
 
 from .content_catalog import find_gear, find_weapon
-from .schemas import FORBIDDEN_FEATURES, MODEL_FEATURES
+from .agent_utility import player_agent_utility_features
+from .schemas import FORBIDDEN_FEATURES, MODEL_FEATURES, validate_no_feature_leakage
 from .state_extractor import extract_match_round_states
 
 LOGGER = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ def build_player_economy_dataset_from_matches(matches: list[dict]) -> pd.DataFra
                     "competitive_tier": player.get("competitiveTier"),
                     "rank_name": state.get("rank_name"),
                     "rank_group": state.get("rank_group"),
+                    **player_agent_utility_features(agent_id, str(state.get("side") or "unknown")),
                     "team_score_before": state.get("team_score_before"),
                     "enemy_score_before": state.get("enemy_score_before"),
                     "score_diff": state.get("score_diff"),
@@ -165,17 +167,19 @@ def save_dataset(df: pd.DataFrame, output_path: str | Path = DEFAULT_DATASET_PAT
 def validate_dataset(df: pd.DataFrame) -> dict:
     expected = {feature for feature in MODEL_FEATURES if feature != "buy_action"}
     missing = sorted(expected - set(df.columns))
+    leakage = validate_no_feature_leakage(MODEL_FEATURES)
     leaked = sorted(FORBIDDEN_FEATURES.intersection(MODEL_FEATURES))
     timestamp_coverage = (
         float((pd.to_numeric(df["game_start_millis"], errors="coerce").fillna(0) > 0).mean())
         if "game_start_millis" in df and len(df) else 0.0
     )
     return {
-        "valid": not missing and not leaked and not df.empty and timestamp_coverage >= 0.9,
+        "valid": not missing and leakage["valid"] and not df.empty and timestamp_coverage >= 0.9,
         "rows": len(df),
         "matches": int(df["match_id"].nunique()) if "match_id" in df else 0,
         "missing_model_columns": missing,
         "forbidden_model_features": leaked,
+        "post_round_only_model_features": leakage["post_round_only_features"],
         "timestamp_coverage": timestamp_coverage,
         "unknown_action_rate": (
             float((df["real_buy_action"] == "UNKNOWN").mean())
