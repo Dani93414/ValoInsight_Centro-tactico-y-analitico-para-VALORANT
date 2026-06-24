@@ -18,7 +18,13 @@ def context_key(state: dict[str, Any], plan: dict[str, Any]) -> str:
     macro = plan.get("macro_case") or plan.get("team_buy_case")
     if state.get("is_match_point") or state.get("is_overtime") or macro in {"OVERTIME", "SPECIAL_ROUND"}:
         return "match_point_or_overtime"
-    if macro == "STABILIZATION":
+    if state.get("is_pistol_round"):
+        return "pistol"
+    if macro == "ECO":
+        return "eco"
+    if macro == "BONUS":
+        return "bonus"
+    if macro in {"STABILIZATION", "ESTABILIZACION"}:
         return "stabilization"
     return "normal"
 

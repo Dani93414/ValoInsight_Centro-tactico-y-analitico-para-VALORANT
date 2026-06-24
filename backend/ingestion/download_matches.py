@@ -1,9 +1,11 @@
 # descargar_matches.py
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 import re
 import time
+from threading import Lock
 from pathlib import Path
 from urllib.parse import quote
 
@@ -43,9 +45,9 @@ COMPETITIVE_QUEUE_ID = "competitive"
 # Guardamos los RAW junto al script para que el pipeline pueda renombrar/convertir/borrar en un solo flujo.
 OUT_DIR = Path(__file__).resolve().parent
 
-# Tu límite:
-REQUESTS_PER_MINUTE = 30
-SAFETY_FACTOR = 1.05  # un pelín más lento para ir seguro
+DEFAULT_REQUESTS_PER_MINUTE = int(os.getenv("HENRIK_REQUESTS_PER_MINUTE", "30"))
+DEFAULT_SAFETY_FACTOR = float(os.getenv("HENRIK_RATE_LIMIT_SAFETY_FACTOR", "1.10"))
+DEFAULT_DOWNLOAD_WORKERS = int(os.getenv("HENRIK_DOWNLOAD_WORKERS", "4"))
 
 # Reintentos
 MAX_RETRIES = 12
@@ -58,24 +60,40 @@ def safe_name(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", s).strip("_")
 
 
-class RateLimiter:
+class ThreadSafeRateLimiter:
     """
-    Rate limit simple por intervalo mínimo entre requests.
-    Para 30/min -> 2.0s por request (con factor de seguridad).
+    Rate limiter global para una sola API key.
+    Todos los workers comparten este limitador.
     """
-    def __init__(self, rpm: int, safety_factor: float = 1.0):
+    def __init__(self, rpm: int, safety_factor: float = 1.10):
+        if rpm <= 0:
+            raise ValueError("rpm must be > 0")
+
         self.min_interval = (60.0 / float(rpm)) * float(safety_factor)
         self._next_time = 0.0
+        self._lock = Lock()
 
     def wait(self):
-        now = time.monotonic()
-        if now < self._next_time:
-            time.sleep(self._next_time - now)
-        # programa el siguiente “slot”
-        self._next_time = time.monotonic() + self.min_interval
+        with self._lock:
+            now = time.monotonic()
+
+            if now < self._next_time:
+                time.sleep(self._next_time - now)
+
+            self._next_time = time.monotonic() + self.min_interval
 
 
-limiter = RateLimiter(REQUESTS_PER_MINUTE, SAFETY_FACTOR)
+limiter = ThreadSafeRateLimiter(DEFAULT_REQUESTS_PER_MINUTE, DEFAULT_SAFETY_FACTOR)
+
+
+def build_session() -> requests.Session:
+    session = requests.Session()
+    session.headers.update({
+        "Authorization": API_KEY,
+        "Accept": "application/json",
+        "User-Agent": "match-downloader/parallel",
+    })
+    return session
 
 
 def henrik_get(session: requests.Session, path: str, params=None) -> dict:
@@ -157,6 +175,32 @@ def henrik_get(session: requests.Session, path: str, params=None) -> dict:
     )
 
 
+def download_match_detail(match_id: str, riot_id_safe: str, output_index: int) -> tuple[str, bool, str | None]:
+    """
+    Descarga una partida concreta y la guarda como RAW JSON.
+    Devuelve: (match_id, success, error)
+    """
+    session = build_session()
+
+    try:
+        path = f"/valorant/v4/match/{REGION}/{match_id}"
+        detail = henrik_get(session, path)
+
+        match_file = OUT_DIR / f"{riot_id_safe}_match_{output_index:03d}_{match_id}.json"
+        tmp_file = match_file.with_suffix(".json.tmp")
+
+        tmp_file.write_text(
+            json.dumps(detail, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        tmp_file.replace(match_file)
+
+        return match_id, True, None
+
+    except Exception as exc:
+        return match_id, False, str(exc)
+
+
 def _extract_competitive_match_id(match_summary: dict) -> tuple[str | None, bool]:
     metadata = match_summary.get("metadata", {}) or {}
     queue = metadata.get("queue") or {}
@@ -183,7 +227,7 @@ def fetch_match_ids(
     known_match_ids: set[str] | None = None,
     db_matches_collection=None,
     backfill_from_history: bool = False,
-    max_api_entries: int = MAX_API_ENTRIES,
+    max_api_entries: int | None = MAX_API_ENTRIES,
 ) -> list[str]:
     """
     Page through the API until we accumulate `total` competitive match IDs.
@@ -202,8 +246,9 @@ def fetch_match_ids(
     known_match_ids = known_match_ids or set()
     announced_backfill = False
 
-    while start < max_api_entries:
-        size = min(PAGE_SIZE, max_api_entries - start)
+    while max_api_entries is None or start < max_api_entries:
+        remaining = PAGE_SIZE if max_api_entries is None else max_api_entries - start
+        size = min(PAGE_SIZE, remaining)
 
         path = f"/valorant/v4/matches/{REGION}/{PLATFORM}/{quote(name, safe='')}/{quote(tag, safe='')}"
         payload = henrik_get(session, path, params={"size": size, "start": start})
@@ -272,10 +317,11 @@ def fetch_match_ids(
 
     if backfill_from_history and len(new_seen) < total:
         riot_id = f"{name}#{tag}"
+        scan_limit = "sin limite" if max_api_entries is None else str(max_api_entries)
         print(
             f"[WARN] {riot_id}: solo se encontraron {len(new_seen)} partidas nuevas "
             f"tras revisar hasta {len(match_ids)} competitivas historicas "
-            f"(limite de escaneo: {max_api_entries} entradas API)."
+            f"(limite de escaneo: {scan_limit} entradas API)."
         )
 
     return match_ids
@@ -432,12 +478,50 @@ def main():
             f"cuando se pagina (default: {MAX_API_ENTRIES})."
         ),
     )
+    parser.add_argument(
+        "--no-max-history-scan",
+        action="store_true",
+        help=(
+            "Sin limite artificial de entradas historicas: pagina hasta completar "
+            "las partidas nuevas pedidas o hasta que la API no devuelva mas datos."
+        ),
+    )
+    parser.add_argument(
+        "--requests-per-minute",
+        type=int,
+        default=DEFAULT_REQUESTS_PER_MINUTE,
+        help="Limite global de requests por minuto para Henrik API.",
+    )
+    parser.add_argument(
+        "--rate-limit-safety-factor",
+        type=float,
+        default=DEFAULT_SAFETY_FACTOR,
+        help="Factor de seguridad aplicado al rate limit.",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=DEFAULT_DOWNLOAD_WORKERS,
+        help="Numero de workers para descargar detalles de partidas.",
+    )
     args = parser.parse_args()
 
     if args.matches_per_player <= 0:
         raise SystemExit("--matches-per-player debe ser mayor que 0.")
-    if args.max_history_scan <= 0:
+    if args.max_history_scan <= 0 and not args.no_max_history_scan:
         raise SystemExit("--max-history-scan debe ser mayor que 0.")
+    if args.requests_per_minute <= 0:
+        raise SystemExit("--requests-per-minute debe ser mayor que 0.")
+    if args.rate_limit_safety_factor < 1.0:
+        raise SystemExit("--rate-limit-safety-factor debe ser mayor o igual que 1.0.")
+    if args.workers <= 0:
+        raise SystemExit("--workers debe ser mayor que 0.")
+
+    global limiter
+    limiter = ThreadSafeRateLimiter(
+        args.requests_per_minute,
+        args.rate_limit_safety_factor,
+    )
 
     players = parse_players_arg(args.players)
 
@@ -459,12 +543,8 @@ def main():
         except Exception as exc:
             raise SystemExit(f"No se pudo conectar a MongoDB para --check-db-existing: {exc}")
 
-    session = requests.Session()
-    session.headers.update({
-        "Authorization": API_KEY,
-        "Accept": "application/json",
-        "User-Agent": "match-downloader/onefile"
-    })
+    session = build_session()
+    scheduled_match_ids: set[str] = set()
 
     try:
         for name, tag in players:
@@ -480,7 +560,7 @@ def main():
                 known_match_ids=existing_match_ids,
                 db_matches_collection=db_matches_collection,
                 backfill_from_history=args.backfill_from_history,
-                max_api_entries=args.max_history_scan,
+                max_api_entries=None if args.no_max_history_scan else args.max_history_scan,
             )
             if not fetched_match_ids:
                 print(f"[WARN] Sin partidas para {riot_id} (privado/sin datos/región mal).")
@@ -500,11 +580,17 @@ def main():
                 if mid in db_existing_match_ids and mid not in existing_match_ids
             )
 
-            known_match_ids = existing_match_ids | db_existing_match_ids
-            new_candidate_match_ids = [mid for mid in fetched_match_ids if mid not in known_match_ids]
+            known_match_ids = existing_match_ids | db_existing_match_ids | scheduled_match_ids
+            new_candidate_match_ids: list[str] = []
+            for mid in fetched_match_ids:
+                if mid in known_match_ids:
+                    continue
+                new_candidate_match_ids.append(mid)
+                known_match_ids.add(mid)
             match_ids = new_candidate_match_ids
             if args.backfill_from_history:
                 match_ids = match_ids[:args.matches_per_player]
+            scheduled_match_ids.update(match_ids)
             skipped_existing = len(fetched_match_ids) - len(new_candidate_match_ids)
 
             if db_matches_collection is not None:
@@ -538,17 +624,33 @@ def main():
             }, ensure_ascii=False, indent=2), encoding="utf-8")
 
             saved = 0
-            for i, match_id in enumerate(match_ids, start=1):
-                print(f"[{riot_id}] {i}/{len(match_ids)} -> {match_id}")
-                path = f"/valorant/v4/match/{REGION}/{match_id}"
-                detail = henrik_get(session, path)
+            failed = 0
 
-                match_file = OUT_DIR / f"{riot_id_safe}_match_{i:03d}_{match_id}.json"
-                match_file.write_text(json.dumps(detail, ensure_ascii=False, indent=2), encoding="utf-8")
-                saved += 1
-                existing_match_ids.add(match_id)
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                futures = {
+                    executor.submit(download_match_detail, match_id, riot_id_safe, i): match_id
+                    for i, match_id in enumerate(match_ids, start=1)
+                }
 
-            print(f"[OK] {riot_id}: guardadas {saved} partidas en: {OUT_DIR.resolve()}")
+                for future in as_completed(futures):
+                    match_id = futures[future]
+
+                    try:
+                        downloaded_match_id, ok, error = future.result()
+                    except Exception as exc:
+                        failed += 1
+                        print(f"[FAILED] {match_id}: {exc}")
+                        continue
+
+                    if ok:
+                        saved += 1
+                        existing_match_ids.add(downloaded_match_id)
+                        print(f"[OK] {downloaded_match_id}")
+                    else:
+                        failed += 1
+                        print(f"[FAILED] {downloaded_match_id}: {error}")
+
+            print(f"[OK] {riot_id}: guardadas {saved}, fallidas {failed} en: {OUT_DIR.resolve()}")
     finally:
         if db_client is not None:
             db_client.close()
@@ -558,3 +660,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

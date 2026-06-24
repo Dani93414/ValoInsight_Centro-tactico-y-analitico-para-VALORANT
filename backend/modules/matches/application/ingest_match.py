@@ -95,6 +95,33 @@ def process_single_match_with_status(match_obj: dict) -> str:
         return "failed"
 
 
+def insert_match_only_with_status(match_obj: dict) -> str:
+    """
+    Inserta unicamente el documento de partida.
+    No actualiza players, analytics ni regions.
+
+    Devuelve:
+    - inserted
+    - already_exists
+    - failed
+    """
+    if not match_obj or "matchInfo" not in match_obj:
+        logger.error("Invalid match payload: missing matchInfo")
+        return "failed"
+
+    match_id = _safe_match_id(match_obj)
+    if not match_id:
+        logger.error("Invalid match payload: missing matchInfo.matchId")
+        return "failed"
+
+    try:
+        inserted = mongo_match_repo.insert(match_obj)
+        return "inserted" if inserted else "already_exists"
+    except Exception as exc:
+        logger.error("Error storing match %s: %s", match_id, exc)
+        return "failed"
+
+
 def process_single_match(match_obj: dict) -> bool:
     """Backward-compatible wrapper kept for existing callers."""
     status = process_single_match_with_status(match_obj)

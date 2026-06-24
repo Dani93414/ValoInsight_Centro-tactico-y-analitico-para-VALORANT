@@ -11,6 +11,8 @@ from .model_registry import load_model_candidates
 from .schemas import MODEL_FEATURES, PROPENSITY_FEATURES
 from .team_plan import evaluate_team_plan_from_action
 
+MIN_RECOMMENDATION_MARGIN = 0.04
+
 
 def _availability(action: str, state: dict, bundle: dict) -> tuple[bool, str | None, int]:
     credits = float(state.get("team_estimated_credits_before_buy") or 0)
@@ -36,6 +38,28 @@ def _availability(action: str, state: dict, bundle: dict) -> tuple[bool, str | N
         if probability < MIN_PROPENSITY:
             return False, f"Acción fuera de soporte para este estado ({probability:.1%})", support
     return True, None, support
+
+
+def _eco_sheriff_guardrail(action: str, state: dict, team_plan: dict) -> tuple[bool, str | None]:
+    sheriff_actions = {
+        "ECO_SHERIFF", "ECO_ONE_SHERIFF", "ECO_TWO_SHERIFFS", "ECO_SHERIFF_STACK",
+    }
+    if action not in sheriff_actions:
+        return True, None
+    if state.get("is_match_point") or state.get("is_last_round_before_switch") or state.get("is_overtime"):
+        return True, None
+
+    future = float(team_plan.get("future_economy_score") or 0)
+    round_win = float(team_plan.get("predicted_round_win") or 0)
+    credits = float(state.get("team_estimated_credits_before_buy") or 0)
+
+    if action == "ECO_SHERIFF_STACK":
+        return False, "Stack de Sheriffs bloqueado fuera de rondas limite"
+    if credits < 7000 and action in {"ECO_TWO_SHERIFFS", "ECO_SHERIFF"}:
+        return False, "Eco con varias Sheriffs bloqueada: creditos bajos y prioridad de ahorro"
+    if future < 0.55 and round_win < 0.38 and action in {"ECO_TWO_SHERIFFS", "ECO_SHERIFF"}:
+        return False, "Eco Sheriff bloqueada: bajo beneficio inmediato y mala economia futura"
+    return True, None
 
 
 def _predict_probability(bundle: dict, scenario: dict, model_key: str = "match_win_model") -> float | None:
@@ -95,6 +119,9 @@ def _recommend_with_bundle(
                 team_plan["future_economy_score"] = fullbuy_probability
             from .plan_evaluator import evaluate_plan_value
             team_plan.update(evaluate_plan_value(team_plan, state))
+            viable, guardrail_reason = _eco_sheriff_guardrail(action, state, team_plan)
+            if not viable:
+                reason = guardrail_reason
         alternatives.append({
             "action": action, "estimated_match_win_probability": probability,
             "estimated_round_win_probability": round_probability,
@@ -113,9 +140,22 @@ def _recommend_with_bundle(
     )
     support_factor = min(1.0, best["historical_support"] / 200)
     confidence = min(1.0, margin * 4) * support_factor
+    if margin < MIN_RECOMMENDATION_MARGIN:
+        strength = "low"
+        low_confidence_reason = "Margen insuficiente entre alternativas"
+    elif confidence >= 0.6:
+        strength = "high"
+        low_confidence_reason = None
+    else:
+        strength = "medium"
+        low_confidence_reason = None
     return {
         "available": True, "recommended_action": best["action"], "model_scope": scope,
         "confidence": float(confidence), "confidence_kind": "support_adjusted_margin",
+        "recommendation_margin": float(margin),
+        "support_factor": float(support_factor),
+        "recommendation_strength": strength,
+        "low_confidence_reason": low_confidence_reason,
         "estimated_match_win_probability": best["estimated_match_win_probability"],
         "team_plan": best["team_plan"],
         "alternatives": alternatives,

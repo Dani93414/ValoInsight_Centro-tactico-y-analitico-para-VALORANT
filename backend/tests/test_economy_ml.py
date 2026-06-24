@@ -35,6 +35,8 @@ from modules.economy_ml.data_contract import build_data_contract_report, validat
 from modules.economy_ml.data_availability import build_data_availability_report
 from modules.economy_ml.economy_cases import classify_economy_case
 from modules.economy_ml.plan_coherence import evaluate_plan_coherence
+from modules.economy_ml.plan_evaluator import context_key
+from modules.economy_ml.recommendation_audit import summarize_recommendation_distribution
 from modules.economy_ml.ultimate_inference import infer_ultimate_state
 from modules.economy_ml.utility_budget import estimate_player_utility_budget
 
@@ -68,9 +70,16 @@ class EconomyMlTests(unittest.TestCase):
 
     def test_buy_classifier_is_granular(self):
         economies = [{"weapon": "Sheriff", "armor": None, "loadoutValue": 800, "spent": 800}] * 5
-        self.assertEqual(classify_team_buy_action(economies), "ECO_SHERIFF")
+        self.assertEqual(classify_team_buy_action(economies), "ECO_SHERIFF_STACK")
         self.assertTrue(is_operator("a03b24d3-4319-996d-0f8c-94bbfba1dfc7"))
         self.assertTrue(is_heavy_armor("822bcab2-40a2-324e-c137-e09195ad7692"))
+
+    def test_buy_classifier_distinguishes_sheriff_counts(self):
+        sheriff = {"weapon": "Sheriff", "armor": None, "loadoutValue": 800, "spent": 800}
+        classic = {"weapon": "Classic", "armor": None, "loadoutValue": 0, "spent": 0}
+        self.assertEqual(classify_team_buy_action([sheriff] + [classic] * 4), "ECO_ONE_SHERIFF")
+        self.assertEqual(classify_team_buy_action([sheriff] * 2 + [classic] * 3), "ECO_TWO_SHERIFFS")
+        self.assertEqual(classify_team_buy_action([sheriff] * 3 + [classic] * 2), "ECO_SHERIFF_STACK")
 
     def test_buy_classifier_handles_non_rifle_weapon_families(self):
         bucky_buy = [
@@ -228,6 +237,21 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(full["action_rifle_count"], 5)
         self.assertEqual(full["action_heavy_armor_count"], 5)
 
+    def test_sheriff_eco_profiles_are_distinct(self):
+        state = {**extract_match_round_states(_match())[0], "team_estimated_credits_before_buy": 8000}
+        one = simulate_action_features(state, "ECO_ONE_SHERIFF")
+        two = simulate_action_features(state, "ECO_TWO_SHERIFFS")
+        stack = simulate_action_features(state, "ECO_SHERIFF_STACK")
+        self.assertEqual(one["action_sheriff_count"], 1)
+        self.assertEqual(two["action_sheriff_count"], 2)
+        self.assertEqual(stack["action_sheriff_count"], 5)
+        self.assertLess(one["action_total_spent"], two["action_total_spent"])
+        self.assertLess(two["action_total_spent"], stack["action_total_spent"])
+
+    def test_context_key_detects_eco(self):
+        state = {"is_match_point": 0, "is_overtime": 0, "is_pistol_round": 0}
+        self.assertEqual(context_key(state, {"macro_case": "ECO"}), "eco")
+
     def test_team_plan_evaluates_collective_costs_and_future_economy(self):
         state = {
             **extract_match_round_states(_match())[0],
@@ -291,6 +315,105 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIsNotNone(result["alternatives"][0]["team_plan"])
         full_buy = next(item for item in result["alternatives"] if item["action"] == "FULL_RIFLES")
         self.assertFalse(full_buy["is_available"])
+
+    def test_policy_blocks_sheriff_stack_in_normal_eco(self):
+        class FakePipeline:
+            def predict_proba(self, frame):
+                action = frame.iloc[0]["buy_action"]
+                probability = 0.9 if action == "ECO_SHERIFF_STACK" else 0.5
+                return np.array([[1 - probability, probability]])
+
+        state = {
+            **extract_match_round_states(_match())[0],
+            "round_number": 3,
+            "is_pistol_round": 0,
+            "is_match_point": 0,
+            "is_last_round_before_switch": 0,
+            "is_overtime": 0,
+            "team_estimated_credits_before_buy": 6000,
+        }
+        with patch(
+            "modules.economy_ml.policy.load_model_candidates",
+            return_value=[({
+                "pipeline": FakePipeline(),
+                "action_support": {"ECO_CLASSIC": 100, "ECO_SHERIFF_STACK": 100},
+                "min_action_support": 25,
+            }, "global")],
+        ):
+            result = recommend_economy_action(state, ["ECO_CLASSIC", "ECO_SHERIFF_STACK"])
+        self.assertTrue(result["available"])
+        self.assertNotEqual(result["recommended_action"], "ECO_SHERIFF_STACK")
+        blocked = next(item for item in result["alternatives"] if item["action"] == "ECO_SHERIFF_STACK")
+        self.assertFalse(blocked["is_available"])
+        self.assertIn("Stack de Sheriffs bloqueado", blocked["reason_if_unavailable"])
+
+    def test_policy_blocks_multi_sheriff_when_credits_are_low(self):
+        class FakePipeline:
+            def predict_proba(self, frame):
+                action = frame.iloc[0]["buy_action"]
+                probability = 0.8 if action == "ECO_TWO_SHERIFFS" else 0.5
+                return np.array([[1 - probability, probability]])
+
+        state = {
+            **extract_match_round_states(_match())[0],
+            "round_number": 3,
+            "is_pistol_round": 0,
+            "is_match_point": 0,
+            "is_last_round_before_switch": 0,
+            "is_overtime": 0,
+            "team_estimated_credits_before_buy": 5000,
+        }
+        with patch(
+            "modules.economy_ml.policy.load_model_candidates",
+            return_value=[({
+                "pipeline": FakePipeline(),
+                "action_support": {"ECO_CLASSIC": 100, "ECO_TWO_SHERIFFS": 100},
+                "min_action_support": 25,
+            }, "global")],
+        ):
+            result = recommend_economy_action(state, ["ECO_CLASSIC", "ECO_TWO_SHERIFFS"])
+        blocked = next(item for item in result["alternatives"] if item["action"] == "ECO_TWO_SHERIFFS")
+        self.assertFalse(blocked["is_available"])
+        self.assertIn("creditos bajos", blocked["reason_if_unavailable"])
+
+    def test_policy_marks_small_margin_as_low_strength(self):
+        class FakePipeline:
+            def predict_proba(self, _frame):
+                return np.array([[0.5, 0.5]])
+
+        def fake_plan(_state, action, probability):
+            return {"source_action": action, "predicted_match_win": probability, "team_plan_value": 0.5}
+
+        def fake_value(plan, _state):
+            value = 0.500 if plan["source_action"] == "ECO_CLASSIC" else 0.485
+            return {"team_plan_value": value, "plan_value_context": "eco", "plan_value_weights": {}}
+
+        state = {
+            **extract_match_round_states(_match())[0],
+            "round_number": 3,
+            "is_pistol_round": 0,
+            "is_match_point": 0,
+            "is_overtime": 0,
+            "team_estimated_credits_before_buy": 6000,
+        }
+        with patch(
+            "modules.economy_ml.policy.load_model_candidates",
+            return_value=[({
+                "pipeline": FakePipeline(),
+                "action_support": {"ECO_CLASSIC": 100, "ECO_ONE_SHERIFF": 100},
+                "min_action_support": 25,
+            }, "global")],
+        ), patch(
+            "modules.economy_ml.policy.evaluate_team_plan_from_action",
+            side_effect=fake_plan,
+        ), patch(
+            "modules.economy_ml.plan_evaluator.evaluate_plan_value",
+            side_effect=fake_value,
+        ):
+            result = recommend_economy_action(state, ["ECO_CLASSIC", "ECO_ONE_SHERIFF"])
+        self.assertEqual(result["recommendation_strength"], "low")
+        self.assertLess(result["recommendation_margin"], 0.04)
+        self.assertIn("Margen insuficiente", result["low_confidence_reason"])
 
     def test_policy_rejects_action_without_historical_support(self):
         state = {**extract_match_round_states(_match())[0], "team_estimated_credits_before_buy": 25000}
@@ -361,6 +484,17 @@ class EconomyMlTests(unittest.TestCase):
         ])
         similar = find_similar_rounds(state, dataset)
         self.assertEqual([row["match_id"] for row in similar], ["other-match"])
+
+    def test_recommendation_audit_counts_sheriff_share(self):
+        summary = summarize_recommendation_distribution([
+            {"recommended_action": "ECO_CLASSIC", "real_buy_action": "ECO_CLASSIC"},
+            {"recommended_action": "ECO_ONE_SHERIFF", "real_buy_action": "ECO_PISTOL_UPGRADE"},
+            {"recommended_action": "FULL_RIFLES", "real_buy_action": "FULL_RIFLES"},
+        ])
+        self.assertEqual(summary["total_recommendations"], 3)
+        self.assertEqual(summary["recommended_action_counts"]["ECO_ONE_SHERIFF"], 1)
+        self.assertEqual(summary["real_vs_recommended_matrix"]["ECO_PISTOL_UPGRADE"]["ECO_ONE_SHERIFF"], 1)
+        self.assertEqual(summary["sheriff_share_within_eco_recommendations"], 0.5)
 
 
 if __name__ == "__main__":

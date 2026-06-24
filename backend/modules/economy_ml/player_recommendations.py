@@ -112,7 +112,7 @@ def _recommend_loadout(
         weapon = _pick_weapon("close_range", budget)
         armor = _pick_armor("light", max(0, budget - float((weapon or {}).get("cost") or 0)))
         reasons.append("Compra parcial para disputar espacios cercanos.")
-    elif action == "ECO_SHERIFF":
+    elif action in {"ECO_SHERIFF", "ECO_ONE_SHERIFF", "ECO_TWO_SHERIFFS", "ECO_SHERIFF_STACK"}:
         weapon = _pick_named_weapon("sheriff", budget) or _pick_weapon("sidearm", budget)
         reasons.append("Eco con pistola de alto valor historico.")
     elif action == "ECO_PISTOL_UPGRADE":
@@ -147,7 +147,10 @@ def _recommended_utility_budget(action: str, available_after_loadout: float, uti
     base_caps = {
         "ECO_CLASSIC": 0,
         "ECO_PISTOL_UPGRADE": 300,
+        "ECO_ONE_SHERIFF": 250,
+        "ECO_TWO_SHERIFFS": 300,
         "ECO_SHERIFF": 350,
+        "ECO_SHERIFF_STACK": 350,
         "SEMI_SMG": 600,
         "SEMI_MARSHAL": 550,
         "MIXED_LOW_BUY": 650,

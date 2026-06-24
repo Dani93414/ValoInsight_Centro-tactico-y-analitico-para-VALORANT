@@ -45,6 +45,21 @@ def cleanup_staging_files(staging_dir: Path, stage_label: str) -> int:
     return deleted
 
 
+def ask_positive_int(prompt: str) -> int:
+    while True:
+        raw_value = input(prompt).strip()
+        try:
+            value = int(raw_value)
+        except ValueError:
+            print("[WARN] Introduce un numero entero mayor que 0.")
+            continue
+
+        if value > 0:
+            return value
+
+        print("[WARN] Introduce un numero mayor que 0.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -64,7 +79,21 @@ def main() -> None:
         "--matches-per-player",
         type=int,
         default=30,
-        help="Cantidad de partidas a solicitar por jugador (default: 5).",
+        help="Cantidad de partidas a solicitar por jugador (default: 30).",
+    )
+    parser.add_argument(
+        "--ask-matches",
+        action="store_true",
+        help="Pregunta interactivamente cuantas partidas quieres por jugador.",
+    )
+    parser.add_argument(
+        "--fill-requested",
+        action="store_true",
+        help=(
+            "Modo recomendado para completar el numero pedido: consulta Mongo, "
+            "descarta repetidas y sigue buscando en historico hasta llegar al objetivo "
+            "o agotar la API."
+        ),
     )
     parser.add_argument(
         "--tz",
@@ -95,6 +124,11 @@ def main() -> None:
         help="Maximo de entradas del historial a revisar por jugador.",
     )
     parser.add_argument(
+        "--no-max-history-scan",
+        action="store_true",
+        help="Sin limite artificial de entradas historicas; pagina hasta agotar la API.",
+    )
+    parser.add_argument(
         "--skip-upload",
         action="store_true",
         help="No sube a Mongo tras convertir (solo descarga y formatea).",
@@ -116,8 +150,17 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.matches_per_player <= 0:
+    matches_per_player = (
+        ask_positive_int("Cuantas partidas quieres por jugador? ")
+        if args.ask_matches
+        else args.matches_per_player
+    )
+
+    if matches_per_player <= 0:
         raise RuntimeError("--matches-per-player debe ser mayor que 0")
+
+    if args.fill_requested and args.skip_db_check:
+        raise RuntimeError("--fill-requested necesita consultar Mongo; no lo uses con --skip-db-check")
 
     if args.verify and (args.expected_per_player is None or args.expected_per_player <= 0):
         raise RuntimeError("Con --verify debes indicar --expected-per-player (>0)")
@@ -141,7 +184,7 @@ def main() -> None:
         python_exe,
         str(scripts_dir / "descarga_formateo_partidas.py"),
         "--matches-per-player",
-        str(args.matches_per_player),
+        str(matches_per_player),
         "--tz",
         args.tz,
     ]
@@ -155,11 +198,14 @@ def main() -> None:
     if not args.skip_db_check:
         download_cmd.append("--check-db-before-download")
 
-    if args.backfill_from_history:
+    if args.backfill_from_history or args.fill_requested:
         download_cmd.append("--backfill-from-history")
 
     if args.max_history_scan is not None:
         download_cmd.extend(["--max-history-scan", str(args.max_history_scan)])
+
+    if args.no_max_history_scan:
+        download_cmd.append("--no-max-history-scan")
 
     run_step(download_cmd, project_root, "Descarga y conversion")
 
@@ -173,6 +219,8 @@ def main() -> None:
             "--input-dir",
             "data/BaseDatos_Partidas",
         ]
+        if args.fill_requested:
+            upload_cmd.append("--delete-duplicates")
         run_step(upload_cmd, project_root, "Subida a MongoDB")
 
     if args.verify:
