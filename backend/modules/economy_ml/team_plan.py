@@ -13,7 +13,10 @@ from .plan_evaluator import evaluate_plan_value
 BUY_CASE_BY_ACTION = {
     "ECO_CLASSIC": ("ECO", "ECO completa"),
     "ECO_PISTOL_UPGRADE": ("ECO", "ECO con pistolas"),
-    "ECO_SHERIFF": ("ECO", "ECO con Sheriff"),
+    "ECO_ONE_SHERIFF": ("ECO", "ECO con 1 Sheriff"),
+    "ECO_TWO_SHERIFFS": ("ECO", "ECO con 2 Sheriffs"),
+    "ECO_SHERIFF": ("ECO", "ECO con 2 Sheriffs"),
+    "ECO_SHERIFF_STACK": ("ECO", "ECO agresiva con Sheriffs"),
     "SEMI_SMG": ("SEMIBUY", "Semibuy equilibrada"),
     "SEMI_MARSHAL": ("SEMIBUY", "Semibuy de castigo economica"),
     "MIXED_LOW_BUY": ("ESTABILIZACION", "Estabilizacion de economia"),

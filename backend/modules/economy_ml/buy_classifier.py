@@ -5,10 +5,11 @@ from typing import Any
 from .content_catalog import find_weapon, gear_armor_level, weapon_has_profile
 
 BUY_ACTIONS = [
-    "ECO_CLASSIC", "ECO_PISTOL_UPGRADE", "ECO_SHERIFF", "SEMI_SMG",
-    "SEMI_MARSHAL", "FORCE_OUTLAW", "FORCE_RIFLE_LIGHT", "FORCE_2_RIFLES",
-    "FULL_RIFLES", "FULL_OPERATOR", "BONUS_KEEP_WEAPONS", "MIXED_LOW_BUY",
-    "UNKNOWN",
+    "ECO_CLASSIC", "ECO_PISTOL_UPGRADE", "ECO_ONE_SHERIFF",
+    "ECO_TWO_SHERIFFS", "ECO_SHERIFF", "ECO_SHERIFF_STACK",
+    "SEMI_SMG", "SEMI_MARSHAL", "FORCE_OUTLAW", "FORCE_RIFLE_LIGHT",
+    "FORCE_2_RIFLES", "FULL_RIFLES", "FULL_OPERATOR",
+    "BONUS_KEEP_WEAPONS", "MIXED_LOW_BUY", "UNKNOWN",
 ]
 
 def _norm(value: Any) -> str:
@@ -86,8 +87,12 @@ def classify_team_buy_action(
         return "SEMI_MARSHAL"
     if smgs >= 2 or shotguns >= 2:
         return "SEMI_SMG"
-    if sheriffs >= 2:
-        return "ECO_SHERIFF"
+    if sheriffs >= 3:
+        return "ECO_SHERIFF_STACK"
+    if sheriffs == 2:
+        return "ECO_TWO_SHERIFFS"
+    if sheriffs == 1 and total < 5000:
+        return "ECO_ONE_SHERIFF"
     if sidearms >= 2 and total < 8000:
         return "ECO_PISTOL_UPGRADE"
     if total < 4000 and spent < 3000:

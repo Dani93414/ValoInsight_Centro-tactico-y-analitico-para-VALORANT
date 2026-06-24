@@ -8,6 +8,7 @@ from .content_catalog import CONTENT_UNAVAILABLE_REASON, content_available
 from .dataset_builder import DEFAULT_DATASET_PATH
 from .model_registry import load_metadata, status
 from .player_recommendations import build_player_recommendations
+from .plan_evaluator import evaluate_plan_value
 from .policy import recommend_economy_action
 from .similar_rounds import find_similar_rounds, summarize_similar_rounds
 from .state_extractor import extract_match_round_states
@@ -97,7 +98,20 @@ def predict_match_economy_recommendations(match: dict) -> dict:
             match, state, result["recommended_action"]
         )
         recommended_team_plan = dict(result.get("team_plan") or {})
+        pre_player_plan_value = recommended_team_plan.get("team_plan_value")
         recommended_team_plan["players"] = player_recommendations
+        recommended_team_plan.update(evaluate_plan_value(recommended_team_plan, state))
+        post_player_plan_value = recommended_team_plan.get("team_plan_value")
+        plan_value_delta = (
+            post_player_plan_value - pre_player_plan_value
+            if pre_player_plan_value is not None and post_player_plan_value is not None
+            else None
+        )
+        plan_value_warning = (
+            "El valor del plan cambio tras incorporar player_fit; la seleccion se hizo antes de esta recalibracion."
+            if plan_value_delta is not None and abs(plan_value_delta) >= 0.04
+            else None
+        )
         recommendations.append({
             "round_number": state["round_number"], "team_id": state["team_id"],
             "team_label": state["team_id"], "rank_name": state["rank_name"],
@@ -105,11 +119,18 @@ def predict_match_economy_recommendations(match: dict) -> dict:
             "recommended_action": result["recommended_action"],
             "decision_type": _decision_type(real_action, result["recommended_action"]),
             "model_scope": result["model_scope"], "confidence": result["confidence"],
+            "confidence_kind": result.get("confidence_kind"),
+            "recommendation_strength": result.get("recommendation_strength"),
+            "recommendation_margin": result.get("recommendation_margin"),
+            "support_factor": result.get("support_factor"),
+            "low_confidence_reason": result.get("low_confidence_reason"),
             "estimated_match_win_probability": result["estimated_match_win_probability"],
             "estimated_round_win_probability": recommended_team_plan.get("predicted_round_win"),
             "estimated_fullbuy_next_round_probability": recommended_team_plan.get("next_round_fullbuy_probability"),
             "team_plan": recommended_team_plan,
             "recommended_team_plan": recommended_team_plan,
+            "post_player_fit_plan_value_delta": plan_value_delta,
+            "post_player_fit_plan_value_warning": plan_value_warning,
             "real_action_estimated_match_win_probability": real_probability,
             "delta_vs_real": (
                 result["estimated_match_win_probability"] - real_probability

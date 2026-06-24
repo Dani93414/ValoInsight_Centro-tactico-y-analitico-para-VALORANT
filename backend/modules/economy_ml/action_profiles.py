@@ -10,7 +10,10 @@ from .buy_classifier import (
 ACTION_TEMPLATES: dict[str, dict[str, float | int]] = {
     "ECO_CLASSIC": {"spend": 0, "loadout": 0},
     "ECO_PISTOL_UPGRADE": {"spend": 2500, "loadout": 2500},
-    "ECO_SHERIFF": {"spend": 4000, "loadout": 4000, "sheriff": 5},
+    "ECO_ONE_SHERIFF": {"spend": 800, "loadout": 800, "sheriff": 1},
+    "ECO_TWO_SHERIFFS": {"spend": 1600, "loadout": 1600, "sheriff": 2},
+    "ECO_SHERIFF": {"spend": 1600, "loadout": 1600, "sheriff": 2},
+    "ECO_SHERIFF_STACK": {"spend": 4000, "loadout": 4000, "sheriff": 5},
     "SEMI_SMG": {"spend": 9000, "loadout": 9000, "smg": 3, "light": 3},
     "SEMI_MARSHAL": {"spend": 7500, "loadout": 7500, "marshal": 2, "light": 2},
     "FORCE_OUTLAW": {"spend": 10500, "loadout": 10500, "outlaw": 2, "light": 2},
