@@ -37,6 +37,7 @@ DEFAULT_PLAYERS = [
 
 MATCHES_PER_PLAYER = 20
 PAGE_SIZE = 10  # max 10
+MAX_API_ENTRIES = 2000
 COMPETITIVE_QUEUE_ID = "competitive"
 
 # Guardamos los RAW junto al script para que el pipeline pueda renombrar/convertir/borrar en un solo flujo.
@@ -156,21 +157,53 @@ def henrik_get(session: requests.Session, path: str, params=None) -> dict:
     )
 
 
-def fetch_match_ids(session: requests.Session, name: str, tag: str, total: int) -> list[str]:
+def _extract_competitive_match_id(match_summary: dict) -> tuple[str | None, bool]:
+    metadata = match_summary.get("metadata", {}) or {}
+    queue = metadata.get("queue") or {}
+    queue_id = (queue.get("id") or "").lower()
+
+    if queue_id != COMPETITIVE_QUEUE_ID:
+        return None, False
+
+    match_id = (
+        metadata.get("matchid")
+        or metadata.get("match_id")
+        or match_summary.get("matchid")
+        or match_summary.get("match_id")
+    )
+    return (str(match_id), True) if match_id else (None, True)
+
+
+def fetch_match_ids(
+    session: requests.Session,
+    name: str,
+    tag: str,
+    total: int,
+    *,
+    known_match_ids: set[str] | None = None,
+    db_matches_collection=None,
+    backfill_from_history: bool = False,
+    max_api_entries: int = MAX_API_ENTRIES,
+) -> list[str]:
     """
     Page through the API until we accumulate `total` competitive match IDs.
     The API may return non-competitive matches, so we keep paging beyond `total`
     entries until we have enough competitive ones or the API is exhausted.
+
+    With backfill_from_history=True, the first `total` competitive matches are
+    still scanned, then older pages are requested until `total` non-existing
+    matches are found or the API is exhausted.
     """
     match_ids: list[str] = []
     seen = set()
+    new_seen = set()
     skipped_non_competitive = 0
     start = 0
-    # Safety cap: never request more than 2000 pages to avoid infinite loops
-    MAX_API_ENTRIES = 2000
+    known_match_ids = known_match_ids or set()
+    announced_backfill = False
 
-    while len(match_ids) < total and start < MAX_API_ENTRIES:
-        size = min(PAGE_SIZE, MAX_API_ENTRIES - start)
+    while start < max_api_entries:
+        size = min(PAGE_SIZE, max_api_entries - start)
 
         path = f"/valorant/v4/matches/{REGION}/{PLATFORM}/{quote(name, safe='')}/{quote(tag, safe='')}"
         payload = henrik_get(session, path, params={"size": size, "start": start})
@@ -179,28 +212,39 @@ def fetch_match_ids(session: requests.Session, name: str, tag: str, total: int) 
         if not data:
             break
 
+        page_competitive_ids: list[str] = []
         for m in data:
-            metadata = m.get("metadata", {}) or {}
-            queue = metadata.get("queue") or {}
-            queue_id = (queue.get("id") or "").lower()
-
-            if queue_id != COMPETITIVE_QUEUE_ID:
+            match_id, is_competitive = _extract_competitive_match_id(m)
+            if not is_competitive:
                 skipped_non_competitive += 1
                 continue
 
-            match_id = (
-                metadata.get("matchid")
-                or metadata.get("match_id")
-                or m.get("matchid")
-                or m.get("match_id")
-            )
             if match_id and match_id not in seen:
                 seen.add(match_id)
                 match_ids.append(match_id)
-                if len(match_ids) >= total:
+                page_competitive_ids.append(match_id)
+                if not backfill_from_history and len(match_ids) >= total:
                     break
 
-        if len(match_ids) >= total:
+        page_existing_db: set[str] = set()
+        if db_matches_collection is not None and page_competitive_ids:
+            page_existing_db = collect_existing_match_ids_from_db(
+                db_matches_collection,
+                page_competitive_ids,
+            )
+
+        for match_id in page_competitive_ids:
+            if (
+                match_id not in known_match_ids
+                and match_id not in page_existing_db
+                and match_id not in new_seen
+            ):
+                new_seen.add(match_id)
+
+        if not backfill_from_history and len(match_ids) >= total:
+            break
+
+        if backfill_from_history and len(match_ids) >= total and len(new_seen) >= total:
             break
 
         start += len(data)
@@ -208,9 +252,31 @@ def fetch_match_ids(session: requests.Session, name: str, tag: str, total: int) 
         if len(data) < size:
             break
 
+        if (
+            backfill_from_history
+            and len(match_ids) >= total
+            and len(new_seen) < total
+            and not announced_backfill
+        ):
+            riot_id = f"{name}#{tag}"
+            missing = total - len(new_seen)
+            print(
+                f"[INFO] {riot_id}: en las ultimas {total} competitivas hay "
+                f"{len(new_seen)} nuevas; buscando {missing} mas en historico..."
+            )
+            announced_backfill = True
+
     if skipped_non_competitive:
         riot_id = f"{name}#{tag}"
         print(f"[INFO] {riot_id}: descartadas no-competitive: {skipped_non_competitive}")
+
+    if backfill_from_history and len(new_seen) < total:
+        riot_id = f"{name}#{tag}"
+        print(
+            f"[WARN] {riot_id}: solo se encontraron {len(new_seen)} partidas nuevas "
+            f"tras revisar hasta {len(match_ids)} competitivas historicas "
+            f"(limite de escaneo: {max_api_entries} entradas API)."
+        )
 
     return match_ids
 
@@ -348,10 +414,30 @@ def main():
             "matchInfo.matchId ya exista en la coleccion matches."
         ),
     )
+    parser.add_argument(
+        "--backfill-from-history",
+        action="store_true",
+        help=(
+            "Primero revisa las ultimas --matches-per-player competitivas y, "
+            "si algunas ya existen, sigue paginando hacia partidas mas antiguas "
+            "hasta completar esa cantidad de partidas nuevas o agotar el historico."
+        ),
+    )
+    parser.add_argument(
+        "--max-history-scan",
+        type=int,
+        default=MAX_API_ENTRIES,
+        help=(
+            "Maximo de entradas del endpoint de historial a revisar por jugador "
+            f"cuando se pagina (default: {MAX_API_ENTRIES})."
+        ),
+    )
     args = parser.parse_args()
 
     if args.matches_per_player <= 0:
         raise SystemExit("--matches-per-player debe ser mayor que 0.")
+    if args.max_history_scan <= 0:
+        raise SystemExit("--max-history-scan debe ser mayor que 0.")
 
     players = parse_players_arg(args.players)
 
@@ -386,7 +472,16 @@ def main():
             riot_id_safe = safe_name(riot_id)
             print(f"\n[INFO] {riot_id} -> pidiendo {args.matches_per_player} partidas...")
 
-            fetched_match_ids = fetch_match_ids(session, name, tag, args.matches_per_player)
+            fetched_match_ids = fetch_match_ids(
+                session,
+                name,
+                tag,
+                args.matches_per_player,
+                known_match_ids=existing_match_ids,
+                db_matches_collection=db_matches_collection,
+                backfill_from_history=args.backfill_from_history,
+                max_api_entries=args.max_history_scan,
+            )
             if not fetched_match_ids:
                 print(f"[WARN] Sin partidas para {riot_id} (privado/sin datos/región mal).")
                 continue
@@ -406,8 +501,11 @@ def main():
             )
 
             known_match_ids = existing_match_ids | db_existing_match_ids
-            match_ids = [mid for mid in fetched_match_ids if mid not in known_match_ids]
-            skipped_existing = len(fetched_match_ids) - len(match_ids)
+            new_candidate_match_ids = [mid for mid in fetched_match_ids if mid not in known_match_ids]
+            match_ids = new_candidate_match_ids
+            if args.backfill_from_history:
+                match_ids = match_ids[:args.matches_per_player]
+            skipped_existing = len(fetched_match_ids) - len(new_candidate_match_ids)
 
             if db_matches_collection is not None:
                 print(

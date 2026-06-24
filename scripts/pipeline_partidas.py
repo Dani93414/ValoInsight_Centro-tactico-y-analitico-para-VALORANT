@@ -82,6 +82,19 @@ def main() -> None:
         help="No consulta MongoDB antes de descargar (no recomendado).",
     )
     parser.add_argument(
+        "--backfill-from-history",
+        action="store_true",
+        help=(
+            "Si las ultimas --matches-per-player competitivas ya existen, "
+            "sigue buscando partidas mas antiguas hasta completar nuevas o agotar historico."
+        ),
+    )
+    parser.add_argument(
+        "--max-history-scan",
+        type=int,
+        help="Maximo de entradas del historial a revisar por jugador.",
+    )
+    parser.add_argument(
         "--skip-upload",
         action="store_true",
         help="No sube a Mongo tras convertir (solo descarga y formatea).",
@@ -108,6 +121,9 @@ def main() -> None:
 
     if args.verify and (args.expected_per_player is None or args.expected_per_player <= 0):
         raise RuntimeError("Con --verify debes indicar --expected-per-player (>0)")
+
+    if args.max_history_scan is not None and args.max_history_scan <= 0:
+        raise RuntimeError("--max-history-scan debe ser mayor que 0")
 
     project_root = Path(__file__).resolve().parents[1]
     staging_dir = project_root / "backend" / "ingestion"
@@ -138,6 +154,12 @@ def main() -> None:
 
     if not args.skip_db_check:
         download_cmd.append("--check-db-before-download")
+
+    if args.backfill_from_history:
+        download_cmd.append("--backfill-from-history")
+
+    if args.max_history_scan is not None:
+        download_cmd.extend(["--max-history-scan", str(args.max_history_scan)])
 
     run_step(download_cmd, project_root, "Descarga y conversion")
 

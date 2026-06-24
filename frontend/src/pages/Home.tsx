@@ -969,32 +969,6 @@ export default function Home() {
             onClick={() => navigate("/estadisticas-globales")}
             onKeyDown={handleGlobalCardKeyDown}
           >
-            <label
-              className="home-global-card__region-selector"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <span>Región activa</span>
-              <select
-                value={activeRegionCode}
-                disabled={regions.length === 0}
-                onClick={(event) => event.stopPropagation()}
-                onChange={(event) => {
-                  event.stopPropagation();
-                  setSelectedRegion(event.target.value);
-                }}
-              >
-                {regions.length === 0 ? (
-                  <option value="">Sin regiones</option>
-                ) : (
-                  regions.map((region) => (
-                    <option key={region.region} value={region.region}>
-                      {region.region}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
             <div className="home-global-card__content">
               <div className="home-global-card__meta">
                 <span className="home-panel-label">Data center</span>
@@ -1003,7 +977,35 @@ export default function Home() {
                   {updatedAt ? ` · Actualizado ${updatedAt}` : ""}
                 </span>
               </div>
-              <h3>Estadísticas globales</h3>
+              <div className="home-global-card__title-row">
+                <h3>Estadísticas globales</h3>
+                <label
+                  className="home-global-card__region-selector"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <span>Región activa</span>
+                  <select
+                    value={activeRegionCode}
+                    disabled={regions.length === 0}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) => {
+                      event.stopPropagation();
+                      setSelectedRegion(event.target.value);
+                    }}
+                  >
+                    {regions.length === 0 ? (
+                      <option value="">Sin regiones</option>
+                    ) : (
+                      regions.map((region) => (
+                        <option key={region.region} value={region.region}>
+                          {region.region}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+              </div>
               <p>
                 Rankings, regiones, agentes, mapas, armas y economía reunidos
                 en una vista pensada para detectar tendencias.

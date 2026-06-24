@@ -139,6 +139,19 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--backfill-from-history",
+        action="store_true",
+        help=(
+            "Si las ultimas --matches-per-player competitivas ya tienen repetidas, "
+            "sigue buscando partidas mas antiguas hasta completar nuevas o agotar historico."
+        ),
+    )
+    parser.add_argument(
+        "--max-history-scan",
+        type=int,
+        help="Maximo de entradas del historial a revisar por jugador.",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Sobrescribe salidas ya existentes en data/BaseDatos_Partidas/",
@@ -165,6 +178,12 @@ def main() -> None:
         download_cmd.extend(["--matches-per-player", str(args.matches_per_player)])
     if args.check_db_before_download:
         download_cmd.append("--check-db-existing")
+    if args.backfill_from_history:
+        download_cmd.append("--backfill-from-history")
+    if args.max_history_scan is not None:
+        if args.max_history_scan <= 0:
+            raise RuntimeError("--max-history-scan debe ser mayor que 0")
+        download_cmd.extend(["--max-history-scan", str(args.max_history_scan)])
 
     run_step(download_cmd, root_dir, "Descarga")
 

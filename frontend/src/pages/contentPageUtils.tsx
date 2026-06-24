@@ -5,6 +5,7 @@ type ContentShellProps = {
   eyebrow?: string;
   title: string;
   subtitle?: string;
+  className?: string;
   children: ReactNode;
 };
 
@@ -12,10 +13,11 @@ export function ContentShell({
   eyebrow = "Valorant",
   title,
   subtitle,
+  className = "",
   children,
 }: ContentShellProps) {
   return (
-    <main className="content-page">
+    <main className={`content-page ${className}`.trim()}>
       <BackButton />
       <header className="content-header">
         <span className="content-eyebrow">{eyebrow}</span>
