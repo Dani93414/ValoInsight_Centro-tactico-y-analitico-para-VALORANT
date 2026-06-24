@@ -205,6 +205,7 @@ export default function EstadisticasGlobales() {
 
   return (
     <ContentShell
+      className="global-stats-page"
       title="Estadísticas globales"
       subtitle="Resumen competitivo agregado por región usando partidas, jugadores y analíticas embebidas."
     >

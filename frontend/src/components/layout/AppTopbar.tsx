@@ -15,7 +15,7 @@ type CurrentPage = NavLink & {
   id: string;
 };
 
-const LOGO_SRC = "/content/IconVI.png";
+const LOGO_SRC = "/content/site/brand/valoinsight-logo.png";
 
 const primaryLinks: NavLink[] = [
   { label: "Inicio", path: "/" },
@@ -87,6 +87,9 @@ export function AppTopbar() {
   );
 
   const profilePath = user?.puuid ? `/estadisticas/${user.puuid}` : "";
+  const profileLabel = `${user?.gameName ?? "Jugador"}${
+    user?.tagLine ? `#${user.tagLine}` : ""
+  }`;
   const isProfileActive = Boolean(
     profilePath && normalizePath(location.pathname) === profilePath,
   );
@@ -207,34 +210,35 @@ export function AppTopbar() {
 
           {isLoggedIn && user?.puuid && (
             <button
-              className={`app-topbar__nav-button${
+              className={`app-topbar__nav-button app-topbar__profile-button${
                 isProfileActive ? " app-topbar__nav-button--active" : ""
               }`}
               type="button"
               aria-current={isProfileActive ? "page" : undefined}
+              title="Ir a mi perfil"
               onClick={() => handleNavigate(`/estadisticas/${user.puuid}`)}
             >
-              Mi Perfil
+              {profileLabel}
             </button>
           )}
 
           <button
-            className="app-topbar__login-button"
+            className={`app-topbar__login-button${
+              isLoggedIn ? " app-topbar__login-button--icon-only" : ""
+            }`}
             type="button"
             onClick={handleAuthAction}
+            aria-label={isLoggedIn ? "Cerrar sesion" : undefined}
+            title={isLoggedIn ? "Cerrar sesion" : undefined}
           >
             {isLoggedIn ? (
               <LogOut size={17} aria-hidden="true" />
             ) : (
               <LogIn size={17} aria-hidden="true" />
             )}
-            <span className="app-topbar__login-label">
-              {isLoggedIn
-                ? `${user?.gameName ?? "Jugador"}${
-                    user?.tagLine ? `#${user.tagLine}` : ""
-                  }`
-                : "Iniciar sesión"}
-            </span>
+            {!isLoggedIn && (
+              <span className="app-topbar__login-label">Iniciar sesión</span>
+            )}
           </button>
         </div>
       </header>

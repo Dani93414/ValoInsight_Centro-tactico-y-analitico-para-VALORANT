@@ -530,7 +530,7 @@ body {
     left: 50%;
     width: 240%;
     height: 88%;
-    background: url("/content/Fondo_Armas.png") no-repeat center center;
+    background: url("/content/site/stats/weapons-background.png") no-repeat center center;
     background-size: contain;
     transform: translate(-50%, -50%) rotate(90deg);
     transform-origin: center;
@@ -3842,7 +3842,7 @@ body {
       rgba(255, 70, 85, 0.2),
       transparent 38%
     ),
-    url("/content/FondoHeatmap.png") center / cover no-repeat;
+    url("/content/site/stats/heatmap-background.png") center / cover no-repeat;
   color: inherit;
   text-align: left;
   cursor: pointer;

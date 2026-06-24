@@ -4962,8 +4962,8 @@ function MatchEventMapCanvas({
                       className="event-map-marker-objective-icon"
                       src={
                         marker.objectiveIcon === "plant"
-                          ? "/content/SpikePlantada.png"
-                          : "/content/SpikeDesfusada.png"
+                          ? "/content/site/matches/spike-planted.png"
+                          : "/content/site/matches/spike-defused.png"
                       }
                       alt={marker.label}
                     />
@@ -5001,8 +5001,8 @@ function MatchEventMapCanvas({
                     <img
                       src={
                         marker.objectiveIcon === "plant"
-                          ? "/content/SpikePlantada.png"
-                          : "/content/SpikeDesfusada.png"
+                          ? "/content/site/matches/spike-planted.png"
+                          : "/content/site/matches/spike-defused.png"
                       }
                       alt=""
                     />

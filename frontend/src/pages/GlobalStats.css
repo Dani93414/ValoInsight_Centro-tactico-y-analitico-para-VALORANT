@@ -1,3 +1,10 @@
+.global-stats-page .content-title {
+  max-width: 100%;
+  font-size: clamp(2.2rem, 7.2vw, 5.8rem);
+  line-height: 0.96;
+  overflow-wrap: anywhere;
+}
+
 .global-toolbar {
   display: flex;
   align-items: end;
