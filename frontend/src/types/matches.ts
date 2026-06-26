@@ -155,11 +155,19 @@ export type EconomyMlAlternative = {
 export type EconomyMlTeamPlan = {
   macro_case?: string;
   subtype?: string;
+  target_loadout_case?: string | null;
+  cashflow_case?: string | null;
+  observed_target_loadout_case?: string | null;
+  observed_cashflow_case?: string | null;
+  planned_cashflow_case?: string | null;
+  round_context_case?: string | null;
   team_total_budget?: number;
   estimated_total_spend?: number;
   estimated_weapon_spend?: number;
   estimated_armor_spend?: number;
+  estimated_regen_armor_spend?: number;
   estimated_ability_spend?: number | null;
+  action_regen_armor_count?: number;
   expected_remaining?: number;
   future_economy_score?: number;
   utility_value_score?: number;
@@ -174,6 +182,7 @@ export type EconomyMlTeamPlan = {
   warnings?: string[];
   players?: EconomyMlPlayerRecommendation[];
   ability_budget_unknown?: boolean;
+  ability_purchase_certainty?: string;
   team_buy_case?: string;
   team_buy_subtype?: string;
   source_action?: string;
@@ -191,8 +200,19 @@ export type EconomyMlTeamPlan = {
   coherence_warnings?: string[];
   team_plan_value?: number;
   average_player_fit_score?: number;
+  team_avg_player_fit_score?: number;
+  team_avg_player_form_score?: number;
+  team_avg_weapon_fit_score?: number;
   plan_value_context?: string;
-  ability_purchase_certainty?: string;
+  plan_value_weights?: Record<string, number>;
+  allocation?: {
+    valid?: boolean;
+    team_total_cost?: number;
+    team_estimated_credits_before_buy?: number;
+    violations?: string[];
+    warnings?: string[];
+    players?: Array<Record<string, unknown>>;
+  } | null;
 };
 
 export type EconomyMlPlayerRecommendation = {
@@ -261,6 +281,9 @@ export type EconomyMlRoundRecommendation = {
   decision_type: string;
   model_scope: string;
   confidence: number;
+  confidence_kind?: string | null;
+  recommendation_strength?: string | null;
+  recommendation_margin?: number | null;
   recommendation_status?: string | null;
   num_viable_alternatives?: number | null;
   delta_team_plan_value?: number | null;
@@ -278,7 +301,9 @@ export type EconomyMlRoundRecommendation = {
   planned_cashflow_case?: string | null;
   action_regen_armor_count?: number | null;
   in_sample?: boolean;
+  support_factor?: number | null;
   credit_quality_factor?: number | null;
+  low_confidence_reason?: string | null;
   estimated_match_win_probability: number;
   estimated_round_win_probability?: number | null;
   estimated_fullbuy_next_round_probability?: number | null;

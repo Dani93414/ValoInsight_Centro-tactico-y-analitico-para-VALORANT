@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .content_catalog import weapon_catalog_role
 from .economy_rules import armor_cost, item_cost, weapon_cost
 
 
@@ -64,9 +65,76 @@ def validate_player_recommendation_budget(
     return False, ["La compra recomendada supera los creditos estimados del jugador."]
 
 
+def _weapon_name(weapon: Any) -> str:
+    if isinstance(weapon, dict):
+        return str(weapon.get("displayName") or weapon.get("name") or "").strip().lower()
+    return str(weapon or "").strip().lower()
+
+
+def _armor_level(armor: Any) -> str:
+    if isinstance(armor, dict):
+        return str(armor.get("armor_level") or "").strip().lower()
+    return str(armor or "").strip().lower()
+
+
+def validate_macro_composition(action: str, allocation: dict) -> dict:
+    players = allocation.get("players") or []
+    weapons = [player.get("weapon") for player in players]
+    armors = [player.get("armor") for player in players]
+    roles = [weapon_catalog_role(weapon) for weapon in weapons if weapon]
+    names = [_weapon_name(weapon) for weapon in weapons if weapon]
+    armor_levels = [_armor_level(armor) for armor in armors if armor]
+    violations: list[str] = []
+    warnings: list[str] = []
+
+    if action == "FULL_RIFLES":
+        sniper_count = sum(role == "sniper" for role in roles)
+        rifle_count = sum(role == "rifle" for role in roles)
+        if sniper_count:
+            violations.append("FULL_RIFLES no puede asignar snipers.")
+        if rifle_count < 4:
+            violations.append("FULL_RIFLES debe asignar al menos 4 rifles.")
+        if "light" in armor_levels:
+            violations.append("FULL_RIFLES no acepta escudo ligero como armadura principal.")
+    elif action == "FULL_OPERATOR":
+        operator_count = sum(name == "operator" for name in names)
+        rifle_count = sum(role == "rifle" for role in roles)
+        if operator_count != 1:
+            violations.append("FULL_OPERATOR debe asignar exactamente una Operator.")
+        if rifle_count < 3:
+            violations.append("FULL_OPERATOR debe asignar al menos 3 rifles reales adicionales si hay presupuesto.")
+    elif action == "FORCE_RIFLE_LIGHT":
+        if any(name in {"operator", "outlaw", "marshal"} for name in names):
+            violations.append("FORCE_RIFLE_LIGHT no puede asignar snipers en slots de rifle.")
+
+    expected_exact = {
+        "FORCE_OUTLAW": ("outlaw", 2),
+        "SEMI_MARSHAL": ("marshal", 2),
+        "ECO_ONE_SHERIFF": ("sheriff", 1),
+        "ECO_TWO_SHERIFFS": ("sheriff", 2),
+        "ECO_SHERIFF": ("sheriff", 2),
+        "ECO_SHERIFF_STACK": ("sheriff", 5),
+    }.get(action)
+    if expected_exact:
+        name, expected = expected_exact
+        actual = sum(item == name for item in names)
+        if actual != expected:
+            violations.append(f"{action} debe asignar exactamente {expected} {name}.")
+
+    if action in {"FULL_RIFLES", "FULL_OPERATOR"} and "regen" in armor_levels:
+        warnings.append("Regen Shield usado como downgrade de escudo pesado.")
+
+    return {"valid": not violations, "violations": violations, "warnings": warnings}
+
+
 def validate_team_plan_allocation(allocation: dict) -> dict:
     violations = list(allocation.get("violations") or [])
     warnings = list(allocation.get("warnings") or [])
+    action = str(allocation.get("action") or "")
+    if action:
+        macro = validate_macro_composition(action, allocation)
+        violations.extend(macro["violations"])
+        warnings.extend(macro["warnings"])
     team_budget = _number(allocation.get("team_estimated_credits_before_buy"))
     team_total = _number(allocation.get("team_total_cost"))
     if team_budget and team_total > team_budget + 1e-6:

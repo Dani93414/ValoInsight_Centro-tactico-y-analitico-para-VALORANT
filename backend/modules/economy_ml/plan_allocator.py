@@ -6,7 +6,7 @@ from modules.analytics.infrastructure.reference_data import resolve_agent_role
 
 from .agent_utility import agent_utility
 from .ability_planner import estimate_minimum_key_utility_budget, recommend_ability_purchase
-from .content_catalog import load_gear_catalog, load_weapon_catalog, weapon_catalog_role
+from .content_catalog import load_gear_catalog, load_weapon_catalog
 from .economy_rules import (
     GHOST_COST,
     LIGHT_ARMOR_COST,
@@ -189,52 +189,6 @@ def _context_from_action(action: str, state: dict[str, Any]) -> str:
     return "normal"
 
 
-def _weapon_name(weapon: dict[str, Any] | None) -> str:
-    return str((weapon or {}).get("displayName") or "")
-
-
-def _allocation_hard_constraint_violations(action: str, assignments: list[dict[str, Any]]) -> list[str]:
-    weapons = [item.get("weapon") for item in assignments]
-    armors = [item.get("armor") for item in assignments]
-    roles = [weapon_catalog_role(weapon) for weapon in weapons if weapon]
-    names = [_weapon_name(weapon).strip().lower() for weapon in weapons if weapon]
-    armor_levels = [str((armor or {}).get("armor_level") or "") for armor in armors if armor]
-    violations: list[str] = []
-    if action == "FULL_RIFLES":
-        sniper_count = sum(role == "sniper" for role in roles)
-        rifle_count = sum(role == "rifle" for role in roles)
-        if sniper_count:
-            violations.append("FULL_RIFLES no puede asignar snipers.")
-        if rifle_count < 4:
-            violations.append("FULL_RIFLES debe asignar al menos 4 rifles.")
-    if action == "FULL_OPERATOR":
-        operator_count = sum(name == "operator" for name in names)
-        rifle_count = sum(role == "rifle" for role in roles)
-        if operator_count != 1:
-            violations.append("FULL_OPERATOR debe asignar exactamente una Operator.")
-        if rifle_count < 3:
-            violations.append("FULL_OPERATOR debe asignar al menos 3 rifles reales adicionales si hay presupuesto.")
-    if action == "FORCE_RIFLE_LIGHT":
-        if any(name in {"operator", "outlaw", "marshal"} for name in names):
-            violations.append("FORCE_RIFLE_LIGHT no puede asignar snipers en slots de rifle.")
-    expected_exact = {
-        "FORCE_OUTLAW": ("outlaw", 2),
-        "SEMI_MARSHAL": ("marshal", 2),
-        "ECO_ONE_SHERIFF": ("sheriff", 1),
-        "ECO_TWO_SHERIFFS": ("sheriff", 2),
-        "ECO_SHERIFF": ("sheriff", 2),
-        "ECO_SHERIFF_STACK": ("sheriff", 5),
-    }.get(action)
-    if expected_exact:
-        name, expected = expected_exact
-        actual = sum(item == name for item in names)
-        if actual != expected:
-            violations.append(f"{action} debe asignar exactamente {expected} {name}.")
-    if action == "FULL_RIFLES" and "light" in armor_levels:
-        violations.append("FULL_RIFLES no acepta escudo ligero como armadura principal.")
-    return violations
-
-
 def allocate_player_loadouts(
     match: dict[str, Any],
     state: dict[str, Any],
@@ -337,8 +291,8 @@ def allocate_player_loadouts(
         }
 
     assignments = [assignments_by_index[index] for index in sorted(assignments_by_index)]
-    violations.extend(_allocation_hard_constraint_violations(action, assignments))
     allocation = {
+        "action": action,
         "valid": not violations,
         "team_total_cost": round(sum(_number(item.get("total_cost")) for item in assignments), 2),
         "team_estimated_credits_before_buy": _number(state.get("team_estimated_credits_before_buy")),
@@ -348,11 +302,5 @@ def allocate_player_loadouts(
     validation = validate_team_plan_allocation(allocation)
     allocation["valid"] = bool(allocation["valid"] and validation["valid"])
     allocation["violations"] = list(dict.fromkeys(violations + validation["violations"]))
-    armor_warnings = []
-    if action in {"FULL_RIFLES", "FULL_OPERATOR"} and any(
-        str((item.get("armor") or {}).get("armor_level") or "") == "regen"
-        for item in assignments
-    ):
-        armor_warnings.append("Regen Shield usado como downgrade de escudo pesado.")
-    allocation["warnings"] = list(dict.fromkeys(validation["warnings"] + armor_warnings))
+    allocation["warnings"] = list(dict.fromkeys(validation["warnings"]))
     return allocation
