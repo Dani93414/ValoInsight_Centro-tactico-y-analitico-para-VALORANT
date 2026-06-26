@@ -17,6 +17,26 @@ MIN_RECOMMENDATION_MARGIN = 0.04
 PISTOL_SHERIFF_MIN_MARGIN = 0.08
 
 
+def recommendation_status(num_viable_alternatives: int, chosen_eq_real: bool, delta_team_plan_value: float) -> str:
+    if num_viable_alternatives == 0:
+        return "no_supported_counterfactual"
+    if num_viable_alternatives == 1 and chosen_eq_real:
+        return "only_one_viable_action"
+    if chosen_eq_real and abs(delta_team_plan_value) < 1e-6:
+        return "matched_real"
+    return "actionable_recommendation"
+
+
+def _credit_quality_adjustment(state: dict) -> tuple[float, str | None]:
+    quality = str(state.get("credit_estimate_quality") or state.get("team_credit_estimate_quality") or "")
+    if quality == "inconsistent":
+        reason = str(state.get("credit_estimate_inconsistency_reason") or "credit_estimate_inconsistent")
+        return 0.55, f"Calidad de creditos inconsistente: {reason}"
+    if quality in {"rules_only", "observed_with_reconciliation_warnings"}:
+        return 0.8, "Creditos estimados por reglas/reconciliacion; menor confianza"
+    return 1.0, None
+
+
 def _availability(action: str, state: dict, bundle: dict) -> tuple[bool, str | None, int]:
     allowed, pistol_reason = pistol_action_guardrail(action, state)
     credits = float(state.get("team_estimated_credits_before_buy") or 0)
@@ -177,8 +197,42 @@ def _recommend_with_bundle(
                 "Sheriff en pistol requiere margen alto; se elige alternativa conservadora."
             )
     support_factor = min(1.0, best["historical_support"] / 200)
-    confidence = min(1.0, margin * 4) * support_factor
-    if margin < MIN_RECOMMENDATION_MARGIN:
+    real_action = str(state.get("real_buy_action") or "")
+    real_alternative = next((item for item in viable if item["action"] == real_action), None)
+    real_plan = real_alternative.get("team_plan") if real_alternative else None
+    best_plan = best["team_plan"] or {}
+    delta_team_plan_value = (
+        float(best_plan.get("team_plan_value") or 0)
+        - float((real_plan or {}).get("team_plan_value") or 0)
+        if real_plan is not None else None
+    )
+    delta_round_win = (
+        float(best_plan.get("predicted_round_win") or 0)
+        - float((real_plan or {}).get("predicted_round_win") or 0)
+        if real_plan is not None
+        and best_plan.get("predicted_round_win") is not None
+        and real_plan.get("predicted_round_win") is not None
+        else None
+    )
+    delta_next_fullbuy = (
+        float(best_plan.get("next_round_fullbuy_probability") or 0)
+        - float((real_plan or {}).get("next_round_fullbuy_probability") or 0)
+        if real_plan is not None
+        and best_plan.get("next_round_fullbuy_probability") is not None
+        and real_plan.get("next_round_fullbuy_probability") is not None
+        else None
+    )
+    status = recommendation_status(
+        len(viable),
+        best["action"] == real_action,
+        float(delta_team_plan_value or 0.0),
+    )
+    credit_quality_factor, credit_quality_reason = _credit_quality_adjustment(state)
+    confidence = min(1.0, margin * 4) * support_factor * credit_quality_factor
+    if credit_quality_reason is not None and credit_quality_factor < 0.7:
+        strength = "low"
+        low_confidence_reason = credit_quality_reason
+    elif margin < MIN_RECOMMENDATION_MARGIN:
         strength = "low"
         low_confidence_reason = "Margen insuficiente entre alternativas"
     elif confidence >= 0.6:
@@ -192,6 +246,14 @@ def _recommend_with_bundle(
         "confidence": float(confidence), "confidence_kind": "support_adjusted_margin",
         "recommendation_margin": float(margin),
         "support_factor": float(support_factor),
+        "credit_quality_factor": float(credit_quality_factor),
+        "recommendation_status": status,
+        "num_viable_alternatives": len(viable),
+        "delta_team_plan_value": delta_team_plan_value,
+        "delta_round_win": delta_round_win,
+        "delta_next_fullbuy": delta_next_fullbuy,
+        "support_count_best_action": best["historical_support"],
+        "credit_estimate_quality": state.get("credit_estimate_quality") or state.get("team_credit_estimate_quality"),
         "recommendation_strength": strength,
         "low_confidence_reason": low_confidence_reason,
         "estimated_match_win_probability": best["estimated_match_win_probability"],
@@ -203,12 +265,14 @@ def _recommend_with_bundle(
             "Cada alternativa se evaluo como plan de equipo: armas, escudos, utilidad potencial, ahorro y riesgo futuro.",
             "La compra de habilidades se modela como inversion potencial; no se afirma que esas habilidades se compraran historicamente.",
             "La eleccion final usa team_plan_value, no solo la probabilidad estimada de ganar partida.",
+            *( [credit_quality_reason] if credit_quality_reason else [] ),
             *( [pistol_conservative_reason] if pistol_conservative_reason else [] ),
             *_utility_explanations(state),
         ],
         "limitations": [
             "Modelo observacional: no prueba causalidad.",
             "Compra historica de habilidades no observable salvo dato explicito verificable.",
+            *( ["La estimacion de creditos de esta ronda no es exacta; revisar spent/loadout/reconciliacion."] if credit_quality_reason else [] ),
         ],
     }
 

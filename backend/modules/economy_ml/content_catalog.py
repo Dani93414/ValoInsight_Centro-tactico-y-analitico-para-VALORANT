@@ -8,6 +8,42 @@ from modules.analytics.infrastructure import reference_data
 
 
 CONTENT_UNAVAILABLE_REASON = "No hay datos de contenido de Valorant cargados en Mongo"
+TAXONOMY_VERSION = "valorant-content-taxonomy-v2"
+
+WEAPON_ROLE_ALLOWLIST = {
+    "classic": "sidearm",
+    "shorty": "sidearm",
+    "frenzy": "sidearm",
+    "ghost": "sidearm",
+    "sheriff": "sidearm",
+    "bandit": "sidearm",
+    "stinger": "smg",
+    "spectre": "smg",
+    "bucky": "shotgun",
+    "judge": "shotgun",
+    "bulldog": "rifle",
+    "guardian": "rifle",
+    "phantom": "rifle",
+    "vandal": "rifle",
+    "marshal": "sniper",
+    "outlaw": "sniper",
+    "operator": "sniper",
+    "ares": "heavy",
+    "odin": "heavy",
+}
+
+ARMOR_ROLE_ALLOWLIST = {
+    "light shields": "light",
+    "light shield": "light",
+    "escudo ligero": "light",
+    "arm. ligera": "light",
+    "regen shield": "regen",
+    "escudo regen": "regen",
+    "heavy shields": "heavy",
+    "heavy shield": "heavy",
+    "escudo pesado": "heavy",
+    "arm. pesada": "heavy",
+}
 
 
 def _norm(value: Any) -> str:
@@ -70,7 +106,20 @@ def _weapon_usage_profile(item: dict[str, Any]) -> list[str]:
     name = item.get("displayName")
     haystack = " ".join([_norm(category), _norm(category_text), _norm(name)])
     compact_haystack = _compact(haystack)
+    role = weapon_role(item)
     profiles: list[str] = []
+    if role == "sidearm":
+        profiles.append("sidearm")
+    elif role == "smg":
+        profiles.extend(["close_range", "mid_range"])
+    elif role == "shotgun":
+        profiles.extend(["shotgun", "close_range"])
+    elif role == "rifle":
+        profiles.extend(["rifle_default", "mid_range", "long_range"])
+    elif role == "sniper":
+        profiles.extend(["sniper", "long_range"])
+    elif role == "heavy":
+        profiles.append("machine_gun")
     for profile, category_terms, name_terms in USAGE_PROFILE_RULES:
         if any(_compact(term) in compact_haystack for term in category_terms):
             profiles.append(profile)
@@ -78,6 +127,24 @@ def _weapon_usage_profile(item: dict[str, Any]) -> list[str]:
         if any(_compact(term) in compact_haystack for term in name_terms):
             profiles.append(profile)
     return list(dict.fromkeys(profiles)) or ["unknown"]
+
+
+def weapon_role(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("displayName") or value.get("name") or value.get("uuid")
+    compact = _compact(value)
+    return WEAPON_ROLE_ALLOWLIST.get(compact, "unknown")
+
+
+def armor_role(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("displayName") or value.get("name") or value.get("uuid")
+    normalized = _norm(value)
+    compact = _compact(value)
+    for name, role in ARMOR_ROLE_ALLOWLIST.items():
+        if _norm(name) == normalized or _compact(name) == compact:
+            return role
+    return "none"
 
 
 def _normalize_weapon(uuid: str, item: dict[str, Any]) -> dict[str, Any]:
@@ -90,6 +157,8 @@ def _normalize_weapon(uuid: str, item: dict[str, Any]) -> dict[str, Any]:
         "categoryText": _category_text(item),
         "shopData": _shop_data(item),
         "cost": _weapon_cost(item),
+        "weapon_role": weapon_role(item),
+        "taxonomy_version": TAXONOMY_VERSION,
         "fireRate": weapon_stats.get("fireRate"),
         "magazineSize": weapon_stats.get("magazineSize"),
         "wallPenetration": weapon_stats.get("wallPenetration"),
@@ -137,10 +206,12 @@ def load_gear_catalog() -> dict[str, dict[str, Any]]:
         name = item.get("displayName")
         category = str(item.get("category") or shop.get("category") or "")
         text = " ".join([_norm(name), _norm(category), _norm(shop.get("categoryText"))])
-        armor_level = "none"
-        if "heavy" in text or "pesad" in text:
+        armor_level = armor_role(name)
+        if armor_level == "none" and ("regen" in text or "regener" in text):
+            armor_level = "regen"
+        elif armor_level == "none" and ("heavy" in text or "pesad" in text):
             armor_level = "heavy"
-        elif "light" in text or "liger" in text:
+        elif armor_level == "none" and ("light" in text or "liger" in text):
             armor_level = "light"
         result[uuid] = {
             "uuid": uuid,
@@ -149,6 +220,7 @@ def load_gear_catalog() -> dict[str, dict[str, Any]]:
             "categoryText": shop.get("categoryText"),
             "cost": _number(shop.get("cost")),
             "armor_level": armor_level,
+            "taxonomy_version": TAXONOMY_VERSION,
             "raw": item,
         }
     return result
@@ -200,6 +272,11 @@ def weapon_has_profile(value: Any, profile: str) -> bool:
     return bool(weapon and profile in weapon.get("usage_profile", []))
 
 
+def weapon_catalog_role(value: Any) -> str:
+    weapon = find_weapon(value)
+    return str((weapon or {}).get("weapon_role") or weapon_role(value))
+
+
 def gear_armor_level(value: Any) -> str:
     gear = find_gear(value)
     return str((gear or {}).get("armor_level") or "none")
@@ -225,6 +302,7 @@ def build_content_report() -> dict[str, Any]:
         "maps_found": len(maps),
         "weapon_categories": dict(sorted(category_counts.items())),
         "usage_profiles": dict(sorted(profile_counts.items())),
+        "taxonomy_version": TAXONOMY_VERSION,
         "weapons": [
             {
                 "uuid": weapon["uuid"],

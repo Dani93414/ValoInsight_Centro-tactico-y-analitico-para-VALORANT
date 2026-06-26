@@ -4,6 +4,7 @@ from typing import Any
 
 from .action_profiles import simulate_action_features
 from .ability_catalog import ability_costs_available
+from .economy_action_labels import normalize_target_loadout_case
 from .economy_cases import classify_economy_case
 from .future_economy import simulate_next_round_economy
 from .plan_coherence import evaluate_plan_coherence
@@ -160,6 +161,10 @@ def evaluate_team_plan_from_action(
     features = simulate_action_features(state, action)
     case = classify_economy_case(state, action)
     buy_case, subtype = case["macro_buy_case"], case["economy_intent"]
+    target_loadout_case = normalize_target_loadout_case(
+        action,
+        round_number=int(_number(state.get("round_number"))),
+    )
     credits = _number(state.get("team_estimated_credits_before_buy"))
     base_spend = _number(features.get("action_total_spent"))
     weapon_spend = min(base_spend, _estimate_weapon_cost(features))
@@ -184,6 +189,10 @@ def evaluate_team_plan_from_action(
     plan = {
         "macro_case": buy_case,
         "subtype": subtype,
+        "target_loadout_case": target_loadout_case,
+        "cashflow_case": state.get("cashflow_case"),
+        "observed_target_loadout_case": state.get("target_loadout_case"),
+        "observed_cashflow_case": state.get("cashflow_case"),
         "round_context_case": case["round_context_case"],
         "team_total_budget": round(credits, 2),
         "estimated_total_spend": round(total_spend, 2),

@@ -3246,30 +3246,108 @@
   display: grid;
   gap: 0.5rem;
   margin-top: 0.75rem;
+  padding: 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(2, 6, 12, 0.32);
+}
+
+.match-economy-ml-players-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.match-economy-ml-players-header strong {
+  color: #f5f8ff;
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.match-economy-ml-players-header span {
+  color: #98a4b5;
+  font-size: 0.72rem;
+  font-weight: 850;
 }
 
 .match-economy-ml-players table {
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
 }
 
 .match-economy-ml-players th,
 .match-economy-ml-players td {
-  padding: 0.35rem 0.4rem;
+  padding: 0.48rem 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   text-align: left;
   vertical-align: top;
 }
 
+.match-economy-ml-players th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: #98a4b5;
+  background: rgba(9, 12, 18, 0.96);
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.match-economy-ml-players tbody tr:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
 .match-economy-ml-players small {
   display: block;
   margin-top: 0.2rem;
+  color: #98a4b5;
+  line-height: 1.35;
+}
+
+.match-economy-player-name,
+.match-economy-player-agent {
+  display: block;
+  max-width: 160px;
+  color: #f4f7fb;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.match-economy-number-cell {
+  min-width: 92px;
+  color: #f5f8ff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.match-economy-loadout-chip {
+  display: inline-flex;
+  max-width: 190px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #dce4ef;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.25;
+  padding: 0.28rem 0.42rem;
+  overflow-wrap: anywhere;
+}
+
+.match-economy-loadout-chip.is-recommended {
+  border-color: rgba(255, 70, 85, 0.26);
+  background: rgba(255, 70, 85, 0.12);
+  color: #fff0f2;
 }
 
 .match-economy-optimal-table {
   width: 100%;
-  min-width: 940px;
+  min-width: 1740px;
   border-collapse: collapse;
   background: rgba(6, 9, 14, 0.42);
 }
@@ -3292,6 +3370,10 @@
   background: rgba(255, 255, 255, 0.035);
 }
 
+.match-economy-optimal-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
 .match-economy-optimal-table td em {
   display: inline-flex;
   margin-left: 0.38rem;
@@ -3303,6 +3385,76 @@
   font-size: 0.66rem;
   font-weight: 900;
   padding: 0.1rem 0.34rem;
+}
+
+.match-economy-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+  color: #dce4ef;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1.2;
+  padding: 0.24rem 0.42rem;
+  white-space: nowrap;
+}
+
+.match-economy-status-pill.is-actionable_recommendation {
+  border-color: rgba(86, 211, 100, 0.28);
+  background: rgba(86, 211, 100, 0.12);
+  color: #d8ffd9;
+}
+
+.match-economy-status-pill.is-matched_real,
+.match-economy-status-pill.is-only_one_viable_action {
+  border-color: rgba(243, 197, 103, 0.26);
+  background: rgba(243, 197, 103, 0.1);
+  color: #ffe8ad;
+}
+
+.match-economy-status-pill.is-no_supported_counterfactual {
+  border-color: rgba(255, 70, 85, 0.24);
+  background: rgba(255, 70, 85, 0.1);
+  color: #ffd3d8;
+}
+
+.match-economy-quality-pill,
+.match-economy-case-label {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+  color: #dce4ef;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1.2;
+  padding: 0.24rem 0.42rem;
+}
+
+.match-economy-quality-pill.is-exact_observed,
+.match-economy-quality-pill.is-observed_economy {
+  border-color: rgba(86, 211, 100, 0.26);
+  background: rgba(86, 211, 100, 0.1);
+  color: #d8ffd9;
+}
+
+.match-economy-quality-pill.is-reconciled_team,
+.match-economy-quality-pill.is-rules_only,
+.match-economy-quality-pill.is-observed_with_reconciliation_warnings {
+  border-color: rgba(243, 197, 103, 0.26);
+  background: rgba(243, 197, 103, 0.1);
+  color: #ffe8ad;
+}
+
+.match-economy-quality-pill.is-inconsistent {
+  border-color: rgba(255, 70, 85, 0.24);
+  background: rgba(255, 70, 85, 0.1);
+  color: #ffd3d8;
 }
 
 .match-efficiency-pill {

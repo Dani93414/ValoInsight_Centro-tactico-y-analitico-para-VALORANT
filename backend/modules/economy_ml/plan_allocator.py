@@ -6,7 +6,7 @@ from modules.analytics.infrastructure.reference_data import resolve_agent_role
 
 from .agent_utility import agent_utility
 from .ability_planner import estimate_minimum_key_utility_budget, recommend_ability_purchase
-from .content_catalog import load_gear_catalog, load_weapon_catalog
+from .content_catalog import load_gear_catalog, load_weapon_catalog, weapon_catalog_role
 from .economy_rules import (
     GHOST_COST,
     LIGHT_ARMOR_COST,
@@ -175,6 +175,32 @@ def _context_from_action(action: str, state: dict[str, Any]) -> str:
     return "normal"
 
 
+def _weapon_name(weapon: dict[str, Any] | None) -> str:
+    return str((weapon or {}).get("displayName") or "")
+
+
+def _allocation_hard_constraint_violations(action: str, assignments: list[dict[str, Any]]) -> list[str]:
+    weapons = [item.get("weapon") for item in assignments]
+    roles = [weapon_catalog_role(weapon) for weapon in weapons if weapon]
+    names = [_weapon_name(weapon).strip().lower() for weapon in weapons if weapon]
+    violations: list[str] = []
+    if action == "FULL_RIFLES":
+        sniper_count = sum(role == "sniper" for role in roles)
+        rifle_count = sum(role == "rifle" for role in roles)
+        if sniper_count:
+            violations.append("FULL_RIFLES no puede asignar snipers.")
+        if rifle_count < 4:
+            violations.append("FULL_RIFLES debe asignar al menos 4 rifles.")
+    if action == "FULL_OPERATOR":
+        operator_count = sum(name == "operator" for name in names)
+        if operator_count != 1:
+            violations.append("FULL_OPERATOR debe asignar exactamente una Operator.")
+    if action == "FORCE_RIFLE_LIGHT":
+        if any(name == "outlaw" for name in names):
+            violations.append("FORCE_RIFLE_LIGHT no puede asignar Outlaw.")
+    return violations
+
+
 def allocate_player_loadouts(
     match: dict[str, Any],
     state: dict[str, Any],
@@ -277,6 +303,7 @@ def allocate_player_loadouts(
         }
 
     assignments = [assignments_by_index[index] for index in sorted(assignments_by_index)]
+    violations.extend(_allocation_hard_constraint_violations(action, assignments))
     allocation = {
         "valid": not violations,
         "team_total_cost": round(sum(_number(item.get("total_cost")) for item in assignments), 2),

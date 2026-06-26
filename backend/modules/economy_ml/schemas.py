@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 8
 LABEL_COLUMNS = [
     "round_won", "match_won", "next_round_fullbuy_possible",
     "next_round_team_estimated_credits",
@@ -11,6 +11,10 @@ NON_FEATURE_COLUMNS = IDENTIFIER_COLUMNS + LABEL_COLUMNS + ["real_buy_action"]
 PREBUY_CATEGORICAL_FEATURES = [
     "map_id", "season_id", "queue_id", "rank_name", "rank_group", "side",
     "team_credit_estimate_quality", "enemy_credit_estimate_quality",
+    "team_previous_round_reconciliation_quality", "enemy_previous_round_reconciliation_quality",
+    "team_drop_reconciliation_status", "enemy_drop_reconciliation_status",
+    "credit_estimate_quality", "target_loadout_case", "cashflow_case",
+    "enemy_target_loadout_case", "enemy_cashflow_case",
     "macro_buy_case", "economy_intent", "round_context_case",
 ]
 PREBUY_NUMERIC_FEATURES = [
@@ -19,6 +23,8 @@ PREBUY_NUMERIC_FEATURES = [
     "win_streak", "loss_streak", "enemy_win_streak", "enemy_loss_streak",
     "is_pistol_round", "is_second_round", "is_bonus_candidate",
     "is_last_round_before_switch", "is_match_point", "is_overtime",
+    "prebuy_credits_observed", "prebuy_credits_rules",
+    "enemy_prebuy_credits_observed", "enemy_prebuy_credits_rules",
     "team_estimated_credits_before_buy", "enemy_estimated_credits_before_buy",
     "credits_before_buy_diff", "team_players_can_full_buy_estimate",
     "enemy_players_can_full_buy_estimate", "team_players_low_money",
@@ -31,6 +37,22 @@ PREBUY_NUMERIC_FEATURES = [
     "enemy_credit_median", "enemy_credit_std",
     "enemy_players_can_buy_sheriff", "enemy_players_can_buy_light_armor",
     "enemy_players_can_buy_sheriff_light", "enemy_players_can_buy_ghost_light",
+    "team_economy_reconciliation_abs_delta_mean",
+    "team_economy_reconciliation_abs_delta_max",
+    "team_economy_reconciliation_quality_score",
+    "team_possible_afk_bonus",
+    "team_possible_afk_bonus_value",
+    "team_free_light_armor_exception_count",
+    "team_possible_drop_credit_gap",
+    "team_spent_over_prebuy",
+    "enemy_economy_reconciliation_abs_delta_mean",
+    "enemy_economy_reconciliation_abs_delta_max",
+    "enemy_economy_reconciliation_quality_score",
+    "enemy_possible_afk_bonus",
+    "enemy_possible_afk_bonus_value",
+    "enemy_free_light_armor_exception_count",
+    "enemy_possible_drop_credit_gap",
+    "enemy_spent_over_prebuy",
 ]
 
 AGENT_UTILITY_NUMERIC_FEATURES = [

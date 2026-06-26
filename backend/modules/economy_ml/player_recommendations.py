@@ -232,6 +232,12 @@ def build_player_recommendations(
             per_player_budget,
             _number(economy.get("remaining")) + _number(economy.get("spent")),
         )
+        real_remaining_after_buy = _number(economy.get("remaining"))
+        real_spent = _number(economy.get("spent"))
+        real_loadout_value = _number(economy.get("loadoutValue"))
+        credits_before_buy = _number(
+            (state.get("team_player_credit_estimates") or {}).get(puuid)
+        ) or estimated_credits
         agent_id = str(player.get("characterId") or "UNKNOWN")
         role = resolve_agent_role(agent_id)
         utility = agent_utility(agent_id)
@@ -294,6 +300,10 @@ def build_player_recommendations(
             "agent": resolve_agent_name(agent_id),
             "role": role,
             "estimated_credits": estimated_credits,
+            "credits_before_buy": credits_before_buy,
+            "real_remaining_after_buy": real_remaining_after_buy,
+            "real_spent": real_spent,
+            "real_loadout_value": real_loadout_value,
             "real_weapon_id": economy.get("weapon"),
             "real_weapon": _weapon_name(economy.get("weapon")),
             "real_armor_id": economy.get("armor"),

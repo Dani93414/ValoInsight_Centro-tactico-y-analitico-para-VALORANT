@@ -9,11 +9,14 @@ from modules.analytics.infrastructure.reference_data import resolve_map_name
 from .action_profiles import observed_action_features
 from .agent_utility import build_utility_diff_features, summarize_team_agent_utility
 from .buy_classifier import classify_team_buy_action
+from .economy_action_labels import classify_team_economy_labels
 from .economy_cases import classify_economy_case
 from .economy_rules import (
     infer_pistol_free_light_armor_from_economy,
     summarize_player_credit_features,
 )
+from .economy_ledger import build_match_economy_ledger
+from .economy_reconciliation import reconciliation_quality_score
 from .future_economy import add_future_economy_labels
 from .rank_mapping import get_rank_group, get_rank_name, normalize_rank_tier
 
@@ -93,21 +96,59 @@ def _observed_prebuy_credits(economy: dict[str, Any] | None) -> float | None:
     return _number(economy.get("remaining")) + _number(economy.get("spent"))
 
 
+def _team_observed_prebuy(players: list[dict[str, Any]], economy_by_player: dict[str, dict]) -> float | None:
+    values = [
+        _observed_prebuy_credits(economy_by_player.get(str(player["puuid"])))
+        for player in players
+    ]
+    if any(value is None for value in values):
+        return None
+    return sum(float(value or 0) for value in values)
+
+
+def _credit_estimate_quality_v7(observed: float | None, rules: float, fallback_quality: str) -> tuple[str, str | None]:
+    if observed is not None:
+        gap = abs(float(observed) - float(rules))
+        if gap <= 100:
+            return "exact_observed", None
+        if gap <= 600:
+            return "reconciled_team", "observed_rules_gap"
+        return "inconsistent", "observed_rules_gap_gt_600"
+    if rules > 0:
+        return "rules_only", None
+    return "inconsistent", f"missing_observed_and_rules_{fallback_quality}"
+
+
+def fixed_round_start_credits(round_number: int) -> float | None:
+    if round_number in {1, 13}:
+        return 800.0
+    if round_number >= 25:
+        return 5000.0
+    return None
+
+
 def _round_player_credit_values(
     players: list[dict[str, Any]],
     economy_by_player: dict[str, dict],
     fallback_player_credits: dict[str, float],
+    round_number: int,
 ) -> tuple[dict[str, float], str]:
     values: dict[str, float] = {}
     observed = 0
+    fixed_start = fixed_round_start_credits(round_number)
     for player in players:
         puuid = str(player["puuid"])
+        if fixed_start is not None:
+            values[puuid] = fixed_start
+            continue
         exact = _observed_prebuy_credits(economy_by_player.get(puuid))
         if exact is None:
             values[puuid] = fallback_player_credits.get(puuid, 0.0)
             continue
         values[puuid] = min(9000.0, exact)
         observed += 1
+    if fixed_start is not None:
+        return values, "rules_based_reset"
     if observed == len(players):
         quality = "observed_economy"
     elif observed > 0:
@@ -123,6 +164,75 @@ def _prefixed_credit_features(prefix: str, values: list[float]) -> dict[str, flo
         f"{prefix}_{key}": value
         for key, value in summary.items()
     }
+
+
+def _empty_reconciliation_features(prefix: str) -> dict[str, float | int | str]:
+    return {
+        f"{prefix}_economy_reconciliation_abs_delta_mean": 0.0,
+        f"{prefix}_economy_reconciliation_abs_delta_max": 0.0,
+        f"{prefix}_economy_reconciliation_quality_score": 0.0,
+        f"{prefix}_possible_afk_bonus": 0,
+        f"{prefix}_possible_afk_bonus_value": 0.0,
+        f"{prefix}_free_light_armor_exception_count": 0,
+        f"{prefix}_previous_round_reconciliation_quality": "not_available",
+    }
+
+
+def _ledger_reconciliation_features(prefix: str, team_ledger: dict | None) -> dict[str, float | int | str | None]:
+    if not isinstance(team_ledger, dict):
+        return {
+            **_empty_reconciliation_features(prefix),
+            f"{prefix}_drop_reconciliation_status": "not_available",
+            f"{prefix}_possible_drop_credit_gap": 0.0,
+            f"{prefix}_spent_over_prebuy": 0.0,
+        }
+    players = team_ledger.get("players") or []
+    deltas = [
+        abs(_number(player.get("reconciliation_delta")))
+        for player in players
+        if player.get("reconciliation_delta") is not None
+    ]
+    statuses = [str(player.get("reconciliation_status") or "") for player in players]
+    possible_afk = team_ledger.get("afk_bonus_inferred")
+    team_spent = _number(team_ledger.get("team_spent"))
+    team_prebuy = _number(team_ledger.get("team_credits_before_buy_estimated"))
+    spent_over_prebuy = max(0.0, team_spent - team_prebuy)
+    team_delta = team_ledger.get("reconciliation_delta")
+    possible_drop_gap = max(0.0, spent_over_prebuy, _number(team_delta) if team_delta is not None else 0.0)
+    if spent_over_prebuy > 0:
+        drop_status = "spent_over_prebuy"
+    elif team_ledger.get("reconciliation_status") == "observed_more_than_expected":
+        drop_status = "possible_external_credit_source"
+    elif team_ledger.get("reconciliation_status") == "observed_less_than_expected":
+        drop_status = "possible_untracked_spend_or_drop"
+    else:
+        drop_status = str(team_ledger.get("reconciliation_status") or "not_available")
+    return {
+        f"{prefix}_economy_reconciliation_abs_delta_mean": sum(deltas) / len(deltas) if deltas else 0.0,
+        f"{prefix}_economy_reconciliation_abs_delta_max": max(deltas) if deltas else 0.0,
+        f"{prefix}_economy_reconciliation_quality_score": reconciliation_quality_score(statuses),
+        f"{prefix}_possible_afk_bonus": int(possible_afk is not None or "possible_afk_bonus" in (team_ledger.get("flags") or [])),
+        f"{prefix}_possible_afk_bonus_value": _number(possible_afk),
+        f"{prefix}_free_light_armor_exception_count": sum(
+            "free_light_armor_exception" in (player.get("flags") or [])
+            for player in players
+        ),
+        f"{prefix}_previous_round_reconciliation_quality": str(team_ledger.get("reconciliation_status") or "not_available"),
+        f"{prefix}_drop_reconciliation_status": drop_status,
+        f"{prefix}_possible_drop_credit_gap": possible_drop_gap,
+        f"{prefix}_spent_over_prebuy": spent_over_prebuy,
+    }
+
+
+def _ledger_credit_quality(fallback_quality: str, team_ledger: dict | None) -> str:
+    if not isinstance(team_ledger, dict):
+        return fallback_quality
+    if team_ledger.get("reconciliation_status") in {"observed_more_than_expected", "observed_less_than_expected"}:
+        return "observed_with_reconciliation_warnings"
+    players = team_ledger.get("players") or []
+    if players and all(player.get("credits_before_buy_observed") is not None for player in players):
+        return "observed_economy" if fallback_quality != "rules_based_reset" else fallback_quality
+    return "ledger_estimated" if fallback_quality == "rules_based" else fallback_quality
 
 
 def _income_per_player(team_id: str, round_obj: dict, streaks: dict) -> float:
@@ -182,6 +292,12 @@ def extract_match_round_states(match: dict) -> list[dict]:
     streaks = {team_id: {"win": 0, "loss": 0, "previous_won": None} for team_id in team_ids}
     player_credits = {str(player["puuid"]): 800.0 for player in players}
     credit_quality = {team_id: "rules_based" for team_id in team_ids}
+    ledger = build_match_economy_ledger(match)
+    ledger_by_round_team = {
+        (int(round_payload.get("round_number") or 0), str(ledger_team_id)): team_ledger
+        for round_payload in ledger.get("rounds") or []
+        for ledger_team_id, team_ledger in (round_payload.get("teams") or {}).items()
+    }
     rows: list[dict] = []
 
     for index, round_obj in enumerate(rounds):
@@ -218,6 +334,7 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 team_players[team_id],
                 economy_by_player,
                 player_credits,
+                round_number,
             )
             round_player_credits[team_id] = values
             round_credit_quality[team_id] = quality if quality != "rules_based" else credit_quality[team_id]
@@ -264,6 +381,22 @@ def extract_match_round_states(match: dict) -> list[dict]:
             map_id = str(match_info.get("mapId") or "UNKNOWN")
             side = _team_side(team_id, round_number, starting_attack_team)
             enemy_side = _opposite_side(side)
+            team_ledger = ledger_by_round_team.get((round_number, team_id))
+            enemy_ledger = ledger_by_round_team.get((round_number, enemy_id))
+            previous_team_ledger = ledger_by_round_team.get((round_number - 1, team_id))
+            previous_enemy_ledger = ledger_by_round_team.get((round_number - 1, enemy_id))
+            team_observed_prebuy = _team_observed_prebuy(team_players[team_id], economy_by_player)
+            enemy_observed_prebuy = _team_observed_prebuy(team_players[enemy_id], economy_by_player)
+            team_quality_v7, team_quality_reason = _credit_estimate_quality_v7(
+                team_observed_prebuy,
+                float(own_credits["estimated_credits_before_buy"]),
+                round_credit_quality[team_id],
+            )
+            enemy_quality_v7, enemy_quality_reason = _credit_estimate_quality_v7(
+                enemy_observed_prebuy,
+                float(enemy_credits["estimated_credits_before_buy"]),
+                round_credit_quality[enemy_id],
+            )
             team_utility = summarize_team_agent_utility(
                 team_players[team_id],
                 side=side,
@@ -276,9 +409,23 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 estimated_credits=float(enemy_credits["estimated_credits_before_buy"]),
                 prefix="enemy",
             )
-            real_buy_action = classify_team_buy_action(
-                stats_by_team[team_id], {"won": streaks[team_id]["previous_won"]}
+            team_labels = classify_team_economy_labels(
+                stats_by_team[team_id],
+                round_number=round_number,
+                team_prebuy_credits=float(own_credits["estimated_credits_before_buy"]),
+                previous_round_context={"won": streaks[team_id]["previous_won"]},
+                is_last_round_before_switch=round_number in {12, 24},
+                is_overtime=round_number >= 25,
             )
+            enemy_labels = classify_team_economy_labels(
+                stats_by_team[enemy_id],
+                round_number=round_number,
+                team_prebuy_credits=float(enemy_credits["estimated_credits_before_buy"]),
+                previous_round_context={"won": streaks[enemy_id]["previous_won"]},
+                is_last_round_before_switch=round_number in {12, 24},
+                is_overtime=round_number >= 25,
+            )
+            real_buy_action = str(team_labels["real_buy_action"])
             current_max_score = max((scores[value] for value in team_ids), default=0)
             case = classify_economy_case({
                 "is_overtime": int(round_number >= 25),
@@ -303,8 +450,15 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 "enemy_rank_tier_avg": enemy_avg_tier,
                 "enemy_rank_group_mode": get_rank_group(enemy_rounded_tier),
                 "side": side,
-                "team_credit_estimate_quality": round_credit_quality[team_id],
-                "enemy_credit_estimate_quality": round_credit_quality[enemy_id],
+                "team_credit_estimate_quality": _ledger_credit_quality(round_credit_quality[team_id], team_ledger),
+                "enemy_credit_estimate_quality": _ledger_credit_quality(round_credit_quality[enemy_id], enemy_ledger),
+                "prebuy_credits_observed": team_observed_prebuy,
+                "prebuy_credits_rules": own_credits["estimated_credits_before_buy"],
+                "credit_estimate_quality": team_quality_v7,
+                "credit_estimate_inconsistency_reason": team_quality_reason,
+                "enemy_prebuy_credits_observed": enemy_observed_prebuy,
+                "enemy_prebuy_credits_rules": enemy_credits["estimated_credits_before_buy"],
+                "enemy_credit_estimate_inconsistency_reason": enemy_quality_reason,
                 "team_score_before": scores[team_id], "enemy_score_before": scores[enemy_id],
                 "score_diff": scores[team_id] - scores[enemy_id],
                 "previous_round_won": int(bool(streaks[team_id]["previous_won"])),
@@ -330,6 +484,14 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 "enemy_player_credit_estimates": enemy_player_credit_estimates,
                 "team_player_free_light_armor_exceptions": team_free_light_exceptions,
                 "enemy_player_free_light_armor_exceptions": enemy_free_light_exceptions,
+                "team_afk_bonus_inferred": (previous_team_ledger or {}).get("afk_bonus_inferred"),
+                "enemy_afk_bonus_inferred": (previous_enemy_ledger or {}).get("afk_bonus_inferred"),
+                **_ledger_reconciliation_features("team", previous_team_ledger),
+                **_ledger_reconciliation_features("enemy", previous_enemy_ledger),
+                "target_loadout_case": team_labels["target_loadout_case"],
+                "cashflow_case": team_labels["cashflow_case"],
+                "enemy_target_loadout_case": enemy_labels["target_loadout_case"],
+                "enemy_cashflow_case": enemy_labels["cashflow_case"],
                 "real_buy_action": real_buy_action,
                 **case,
                 "round_won": int(str(round_obj.get("winningTeam")) == team_id),

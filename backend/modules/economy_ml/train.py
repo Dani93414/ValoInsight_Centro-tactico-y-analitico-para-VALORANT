@@ -208,9 +208,11 @@ def train_models(dataset: pd.DataFrame, *, enforce_minimums: bool = True) -> dic
     if not leakage["valid"]:
         raise ValueError(f"Forbidden or post-round model features: {leakage}")
     availability = build_data_availability_report()
+    training_match_ids = sorted(str(value) for value in dataset["match_id"].dropna().unique())
     metadata = {
         "schema_version": SCHEMA_VERSION, "created_at": datetime.now(timezone.utc).isoformat(),
         "dataset_rows": len(dataset), "features": MODEL_FEATURES,
+        "training_match_ids": training_match_ids,
         "categorical_features": CATEGORICAL_FEATURES, "numeric_features": NUMERIC_FEATURES,
         "includes_agent_utility": True,
         "agent_utility_features": AGENT_UTILITY_NUMERIC_FEATURES,
