@@ -55,6 +55,10 @@ export type AgentContent = {
     displayIcon?: string;
   };
   abilities?: Array<{
+    uuid?: string;
+    id?: string;
+    assetPath?: string;
+    rawName?: string;
     slot?: string;
     displayName?: string;
     description?: string;

@@ -58,6 +58,11 @@ def _safe_div(num, den):
     return round(num / den, 4) if den else 0.0
 
 
+def _progress_label(done: int, total: int) -> str:
+    pct = (done / total * 100.0) if total else 100.0
+    return f"[{pct:5.1f}%] [{done}/{total}]"
+
+
 def _normalize_region(raw):
     if not raw:
         return "UNKNOWN"
@@ -475,10 +480,14 @@ def rebuild_regions(*, force: bool = False):
     })
 
     # ── 1. Iterate all ranked matches ──
-    cursor = matches_collection.find({"matchInfo.isRanked": True})
+    ranked_query = {"matchInfo.isRanked": True}
+    total_ranked_matches = matches_collection.count_documents(ranked_query)
+    cursor = matches_collection.find(ranked_query)
     doc_count = 0
+    match_count = 0
 
     for match_obj in cursor:
+        match_count += 1
         match_info = match_obj.get("matchInfo") or {}
         match_id = str(match_info.get("matchId") or "")
         region = _normalize_region(match_info.get("region"))
@@ -589,6 +598,9 @@ def rebuild_regions(*, force: bool = False):
 
             if not _has_embedded_armor_stats(overview):
                 _accumulate_raw_armor_stats(rd, match_obj, player)
+
+        if match_count == total_ranked_matches or match_count % 25 == 0:
+            print(f"{_progress_label(match_count, total_ranked_matches)} [REBUILD_REGIONS]")
 
     logger.info("Processed %d analytics documents.", doc_count)
 

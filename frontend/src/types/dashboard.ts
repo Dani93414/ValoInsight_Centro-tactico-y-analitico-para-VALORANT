@@ -248,10 +248,13 @@ export type ActSummary = {
 };
 
 export type RankInfo = {
-  tier?: number;
+  tier?: number | null;
   name: string;
-  image?: string;
-  smallIcon?: string;
+  image?: string | null;
+  smallIcon?: string | null;
+  source?: string;
+  rankSource?: string;
+  isUnranked?: boolean;
 };
 
 export type HeaderVisualCard = {
@@ -308,6 +311,11 @@ export type RankComparisonPayload = {
     Record<RankComparisonMetricKey, RankComparisonMetricComparison>
   >;
   notes?: string[];
+  baseTierSource?: string;
+  baseTierSeasonId?: string | null;
+  visualRankName?: string;
+  cohortReferenceTier?: number | null;
+  cohortReferenceRankName?: string;
 };
 
 export type DashboardPayload = {
@@ -386,6 +394,8 @@ export type DashboardPayload = {
   mostPlayedWeapons?: Array<{
     id: string;
     name: string;
+    type?: string;
+    isAbility?: boolean;
     kills: number;
     matches: number;
     image?: string | null;

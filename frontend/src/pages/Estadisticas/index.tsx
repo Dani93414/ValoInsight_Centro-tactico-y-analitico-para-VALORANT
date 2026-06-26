@@ -384,6 +384,7 @@ export default function Estadisticas() {
 
   const {
     loading,
+    rankComparisonLoading,
     dashboard,
     player,
     filters,
@@ -1221,6 +1222,15 @@ export default function Estadisticas() {
 
   return (
     <div className="stats-container">
+      {rankComparisonLoading && (
+        <div className="stats-loading-modal" role="status" aria-live="polite">
+          <div className="loading-card stats-loading-modal__card">
+            <div className="loading-spinner" />
+            <h2>Cargando cohorte</h2>
+            <p>Comparando el jugador con rangos equivalentes...</p>
+          </div>
+        </div>
+      )}
       <div className="stats-top-actions">
         <BackButton />
         <div className="stats-result-summary" aria-label="Resumen de resultados filtrados">

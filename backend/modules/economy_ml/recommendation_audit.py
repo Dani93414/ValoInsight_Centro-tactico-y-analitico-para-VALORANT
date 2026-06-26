@@ -49,3 +49,44 @@ def summarize_recommendation_distribution(recommendations: list[dict[str, Any]])
             sheriff_eco_recommendations, eco_recommendations
         ),
     }
+
+
+def summarize_pistol_recommendation_safety(recommendations: list[dict[str, Any]]) -> dict[str, Any]:
+    pistol_total = 0
+    sheriff_count = 0
+    sheriff_light_count = 0
+    free_light_count = 0
+    impossible_count = 0
+
+    for recommendation in recommendations:
+        round_number = int(recommendation.get("round_number") or 0)
+        if round_number not in {1, 13}:
+            continue
+        pistol_total += 1
+        for player in recommendation.get("player_recommendations") or []:
+            weapon = str(player.get("recommended_weapon") or "").lower()
+            armor = str(player.get("recommended_armor") or "").lower()
+            has_sheriff = "sheriff" in weapon
+            has_light = "light" in armor
+            free_light = bool(player.get("recommended_armor_is_free_exception"))
+            if has_sheriff:
+                sheriff_count += 1
+            if has_sheriff and has_light:
+                sheriff_light_count += 1
+                if free_light:
+                    free_light_count += 1
+                else:
+                    impossible_count += 1
+            expected_spend = float(player.get("expected_spend") or 0)
+            estimated_credits = float(player.get("estimated_credits") or 0)
+            if expected_spend > estimated_credits and not free_light:
+                impossible_count += 1
+
+    return {
+        "pistol_recommendations": pistol_total,
+        "pistol_sheriff_player_recommendations": sheriff_count,
+        "pistol_sheriff_light_player_recommendations": sheriff_light_count,
+        "pistol_free_light_exceptions": free_light_count,
+        "pistol_impossible_player_recommendations": impossible_count,
+        "pistol_invalid_recommendation_percentage": _pct(impossible_count, pistol_total),
+    }

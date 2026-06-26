@@ -31,6 +31,11 @@ DEFAULT_REQUESTS_PER_MINUTE = int(os.getenv("HENRIK_REQUESTS_PER_MINUTE", "30"))
 DEFAULT_RATE_LIMIT_SAFETY_FACTOR = float(os.getenv("HENRIK_RATE_LIMIT_SAFETY_FACTOR", "1.10"))
 
 
+def progress_label(done: int, total: int) -> str:
+    pct = (done / total * 100.0) if total else 100.0
+    return f"[{pct:5.1f}%] [{done}/{total}]"
+
+
 def run_step(command: list[str], cwd: Path, step_name: str) -> None:
     print(f"\n[STEP] {step_name}")
     print("[CMD]", " ".join(command))
@@ -345,24 +350,26 @@ def main() -> None:
             for src, match_id, started_at in files
         }
 
+        total_files = len(futures)
         for i, future in enumerate(as_completed(futures), start=1):
             src, fallback_match_id = futures[future]
+            progress = progress_label(i, total_files)
             try:
                 match_id, status, error = future.result()
             except Exception as exc:
                 failed += 1
-                print(f"[{i}/{len(files)}] [FAILED] {src.name}: {exc}")
+                print(f"{progress} [FAILED] {src.name}: {exc}")
                 continue
 
             if status == "converted":
                 converted += 1
-                print(f"[{i}/{len(files)}] [OK] {src.name} -> {match_id}")
+                print(f"{progress} [OK] {src.name} -> {match_id}")
             elif status == "skipped_existing":
                 skipped_existing += 1
-                print(f"[{i}/{len(files)}] [SKIP] Ya existe: {match_id}")
+                print(f"{progress} [SKIP] Ya existe: {match_id}")
             else:
                 failed += 1
-                print(f"[{i}/{len(files)}] [FAILED] {src.name} ({fallback_match_id}): {error}")
+                print(f"{progress} [FAILED] {src.name} ({fallback_match_id}): {error}")
 
     print("\n[SUMMARY]")
     print(f"Convertidos: {converted}")

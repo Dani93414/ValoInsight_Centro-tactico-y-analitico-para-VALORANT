@@ -66,6 +66,22 @@ body {
   padding: 2rem 1.5rem 4rem;
 }
 
+.stats-loading-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1900;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(6, 8, 12, 0.58);
+  backdrop-filter: blur(5px);
+}
+
+.stats-loading-modal__card {
+  width: min(360px, 100%);
+  padding: 1.6rem;
+}
+
 .stats-top-actions {
   display: flex;
   align-items: center;

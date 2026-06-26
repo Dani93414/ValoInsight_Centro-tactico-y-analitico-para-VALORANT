@@ -7,18 +7,24 @@ import pandas as pd
 from .action_profiles import minimum_action_credits, simulate_action_features
 from .buy_classifier import BUY_ACTIONS
 from .config import MIN_PROPENSITY
+from .economy_rules import is_pistol_round, pistol_action_guardrail
 from .model_registry import load_model_candidates
+from .plan_allocator import allocate_player_loadouts
 from .schemas import MODEL_FEATURES, PROPENSITY_FEATURES
 from .team_plan import evaluate_team_plan_from_action
 
 MIN_RECOMMENDATION_MARGIN = 0.04
+PISTOL_SHERIFF_MIN_MARGIN = 0.08
 
 
 def _availability(action: str, state: dict, bundle: dict) -> tuple[bool, str | None, int]:
+    allowed, pistol_reason = pistol_action_guardrail(action, state)
     credits = float(state.get("team_estimated_credits_before_buy") or 0)
     minimum = minimum_action_credits(action)
     support = int(bundle.get("action_support", {}).get(action, 0))
     required_support = int(bundle.get("min_action_support", 25))
+    if not allowed:
+        return False, pistol_reason, support
     if credits < minimum:
         return False, f"Créditos estimados insuficientes ({credits:.0f} < {minimum:.0f})", support
     if action == "BONUS_KEEP_WEAPONS" and not state.get("is_bonus_candidate"):
@@ -95,7 +101,11 @@ def _utility_explanations(state: dict) -> list[str]:
 
 
 def _recommend_with_bundle(
-    state: dict, actions: list[str], bundle: dict, scope: str
+    state: dict,
+    actions: list[str],
+    bundle: dict,
+    scope: str,
+    match: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     alternatives = []
     for action in actions:
@@ -122,6 +132,12 @@ def _recommend_with_bundle(
             viable, guardrail_reason = _eco_sheriff_guardrail(action, state, team_plan)
             if not viable:
                 reason = guardrail_reason
+            if viable and match is not None:
+                allocation = allocate_player_loadouts(match, state, action)
+                team_plan["allocation"] = allocation
+                if not allocation.get("valid"):
+                    viable = False
+                    reason = "; ".join(allocation.get("violations") or ["Asignacion individual no viable"])
         alternatives.append({
             "action": action, "estimated_match_win_probability": probability,
             "estimated_round_win_probability": round_probability,
@@ -138,6 +154,28 @@ def _recommend_with_bundle(
         ordered[0]["team_plan"]["team_plan_value"] - ordered[1]["team_plan"]["team_plan_value"]
         if len(ordered) > 1 else 0.0
     )
+    pistol_conservative_reason = None
+    if is_pistol_round(state) and best["action"] == "ECO_ONE_SHERIFF" and margin < PISTOL_SHERIFF_MIN_MARGIN:
+        fallback = next(
+            (
+                item
+                for preferred in ("ECO_PISTOL_UPGRADE", "ECO_CLASSIC")
+                for item in ordered
+                if item["action"] == preferred
+            ),
+            None,
+        )
+        if fallback is not None:
+            best = fallback
+            competitors = [item for item in viable if item is not best]
+            margin = (
+                best["team_plan"]["team_plan_value"]
+                - max(item["team_plan"]["team_plan_value"] for item in competitors)
+                if competitors else 0.0
+            )
+            pistol_conservative_reason = (
+                "Sheriff en pistol requiere margen alto; se elige alternativa conservadora."
+            )
     support_factor = min(1.0, best["historical_support"] / 200)
     confidence = min(1.0, margin * 4) * support_factor
     if margin < MIN_RECOMMENDATION_MARGIN:
@@ -165,6 +203,7 @@ def _recommend_with_bundle(
             "Cada alternativa se evaluo como plan de equipo: armas, escudos, utilidad potencial, ahorro y riesgo futuro.",
             "La compra de habilidades se modela como inversion potencial; no se afirma que esas habilidades se compraran historicamente.",
             "La eleccion final usa team_plan_value, no solo la probabilidad estimada de ganar partida.",
+            *( [pistol_conservative_reason] if pistol_conservative_reason else [] ),
             *_utility_explanations(state),
         ],
         "limitations": [
@@ -174,13 +213,17 @@ def _recommend_with_bundle(
     }
 
 
-def recommend_economy_action(state: dict, available_actions: list[str] | None = None) -> dict[str, Any]:
+def recommend_economy_action(
+    state: dict,
+    available_actions: list[str] | None = None,
+    match: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     candidates = load_model_candidates(state.get("rank_name"), state.get("rank_group"))
     if not candidates:
         return {"available": False, "reason": "No hay modelo compatible entrenado todavía"}
     actions = available_actions or [action for action in BUY_ACTIONS if action != "UNKNOWN"]
     for bundle, scope in candidates:
-        recommendation = _recommend_with_bundle(state, actions, bundle, scope)
+        recommendation = _recommend_with_bundle(state, actions, bundle, scope, match=match)
         if recommendation:
             return recommendation
     return {

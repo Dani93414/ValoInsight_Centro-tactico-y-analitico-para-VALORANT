@@ -3,6 +3,8 @@ import type { MatchCard, RankInfo } from "../types/dashboard";
 import { normalizeLabel } from "../utils/formatters";
 import {
   getRankNameFromTier,
+  getUnrankedRankName,
+  isRankedTier,
   normalizeCompetitiveTierIconPath,
 } from "../utils/rankUtils";
 import { ACT_FILTER_ALL, ACT_FILTER_CURRENT } from "../constants/dashboard";
@@ -16,6 +18,8 @@ export interface RankDisplayResult {
   highestRankVisual: string | null;
   highestRankActId: string | null;
   highestRankActLabel: string;
+  displayedRankIsUnranked: boolean;
+  displayedRankSource: "act_ranked" | "act_unranked" | "global_ranked" | "unknown";
 }
 
 export function useRankDisplay(
@@ -36,39 +40,56 @@ export function useRankDisplay(
     return allMatches.filter((match) => match.seasonId === actIdToUse);
   }, [allMatches, actId, effectiveCurrentActId]);
 
+  const latestMatchForAct = useMemo(() => {
+    const sortedMatches = [...rankContextMatches].sort(
+      (a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0),
+    );
+    return sortedMatches[0] ?? null;
+  }, [rankContextMatches]);
+
   const latestRankMatchForAct = useMemo(() => {
     const rankedMatches = [...rankContextMatches]
-      .filter((match) => (match.competitiveTier ?? 0) >= 3)
+      .filter((match) => isRankedTier(match.competitiveTier))
       .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
     return rankedMatches[0] ?? null;
   }, [rankContextMatches]);
 
-  const latestRankForAct = useMemo(
-    () => latestRankMatchForAct?.competitiveTier ?? null,
-    [latestRankMatchForAct],
-  );
+  const actHasMatches = rankContextMatches.length > 0;
 
   const latestGlobalRankTier = useMemo(() => {
     const rankedMatches = [...allMatches]
-      .filter((match) => (match.competitiveTier ?? 0) >= 3)
+      .filter((match) => isRankedTier(match.competitiveTier))
       .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
     return rankedMatches[0]?.competitiveTier ?? null;
   }, [allMatches]);
 
   const displayedRankTier = useMemo(() => {
     if (actId === ACT_FILTER_ALL) return latestGlobalRankTier;
-    return latestRankForAct;
-  }, [actId, latestGlobalRankTier, latestRankForAct]);
+    return latestRankMatchForAct?.competitiveTier ?? null;
+  }, [actId, latestGlobalRankTier, latestRankMatchForAct]);
+
+  const displayedRankSource = useMemo<
+    RankDisplayResult["displayedRankSource"]
+  >(() => {
+    if (actId === ACT_FILTER_ALL) {
+      return latestGlobalRankTier ? "global_ranked" : "unknown";
+    }
+    if (!actHasMatches) return "unknown";
+    return latestRankMatchForAct ? "act_ranked" : "act_unranked";
+  }, [actHasMatches, actId, latestGlobalRankTier, latestRankMatchForAct]);
+
+  const displayedRankIsUnranked = displayedRankSource === "act_unranked" || !displayedRankTier;
 
   const displayedRankName = useMemo(() => {
-    if (displayedRankTier) return getRankNameFromTier(displayedRankTier);
+    if (isRankedTier(displayedRankTier)) return getRankNameFromTier(displayedRankTier);
+    if (displayedRankSource === "act_unranked") return getUnrankedRankName();
     return currentRank?.name ?? getRankNameFromTier(null);
-  }, [displayedRankTier, currentRank?.name]);
+  }, [displayedRankSource, displayedRankTier, currentRank?.name]);
 
   const rankContextImageByTier = useMemo(() => {
     const imageMap = new Map<number, string>();
     [...rankContextMatches]
-      .filter((m) => (m.competitiveTier ?? 0) >= 3 && m.competitiveTierImage)
+      .filter((m) => isRankedTier(m.competitiveTier) && m.competitiveTierImage)
       .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
       .forEach((m) => {
         const icon = normalizeCompetitiveTierIconPath(
@@ -84,7 +105,7 @@ export function useRankDisplay(
   const rankImageByTier = useMemo(() => {
     const imageMap = new Map<number, string>();
     [...allMatches]
-      .filter((m) => (m.competitiveTier ?? 0) >= 3 && m.competitiveTierImage)
+      .filter((m) => isRankedTier(m.competitiveTier) && m.competitiveTierImage)
       .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
       .forEach((m) => {
         const icon = normalizeCompetitiveTierIconPath(
@@ -98,9 +119,24 @@ export function useRankDisplay(
   }, [allMatches]);
 
   const displayedRankVisual = useMemo(() => {
+    const unrankedIcon =
+      normalizeCompetitiveTierIconPath(
+        rankNameIconMap.get(normalizeLabel(getUnrankedRankName())) ?? null,
+      ) ||
+      normalizeCompetitiveTierIconPath(
+        latestMatchForAct?.competitiveTierImage || null,
+      ) ||
+      normalizeCompetitiveTierIconPath(
+        currentRank?.image || currentRank?.smallIcon || null,
+      );
+
+    if (displayedRankSource === "act_unranked") {
+      return unrankedIcon;
+    }
+
     if (actId === ACT_FILTER_ALL) {
-      if (displayedRankTier) {
-        const byTier = rankImageByTier.get(displayedRankTier);
+      if (isRankedTier(displayedRankTier)) {
+        const byTier = rankImageByTier.get(Number(displayedRankTier));
         if (byTier) return normalizeCompetitiveTierIconPath(byTier);
       }
 
@@ -127,6 +163,8 @@ export function useRankDisplay(
   }, [
     actId,
     displayedRankTier,
+    displayedRankSource,
+    latestMatchForAct,
     latestRankMatchForAct,
     rankContextImageByTier,
     rankImageByTier,
@@ -137,7 +175,7 @@ export function useRankDisplay(
 
   const highestRankMatch = useMemo(() => {
     const rankedMatches = allMatches.filter(
-      (match) => (match.competitiveTier ?? 0) >= 3,
+      (match) => isRankedTier(match.competitiveTier),
     );
     if (rankedMatches.length === 0) return null;
 
@@ -195,6 +233,8 @@ export function useRankDisplay(
     displayedRankTier,
     displayedRankName,
     displayedRankVisual,
+    displayedRankIsUnranked,
+    displayedRankSource,
     highestRankTier,
     highestRankName,
     highestRankVisual,

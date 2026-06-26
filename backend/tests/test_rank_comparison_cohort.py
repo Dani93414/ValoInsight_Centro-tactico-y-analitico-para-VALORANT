@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from modules.players.infrastructure.dashboard_queries import (
     _build_rank_comparison_player_match_stages,
@@ -6,10 +7,61 @@ from modules.players.infrastructure.dashboard_queries import (
 from modules.players.application.player_dashboard_service import (
     _build_rank_comparison_payload_from_players,
     _build_rank_metric_values,
+    get_player_rank_comparison,
 )
 
 
 class RankComparisonCohortTest(unittest.TestCase):
+    @patch("modules.players.application.player_dashboard_service.dashboard_queries")
+    def test_unranked_current_season_uses_previous_rank_for_cohort(self, queries):
+        queries.find_player_latest_rank_reference.return_value = {
+            "latestTier": 0,
+            "timestamp": 2000,
+            "seasonId": "act-new",
+        }
+        queries.find_player_latest_valid_rank.side_effect = [
+            {},
+            {"latestTier": 19, "timestamp": 1000, "seasonId": "act-old"},
+            {"latestTier": 19, "timestamp": 1000, "seasonId": "act-old"},
+        ]
+        queries.find_player_first_match_timestamp.return_value = 2000
+        queries.aggregate_rank_cohort_metric_players.return_value = [
+            {
+                "puuid": "target",
+                "latestTier": 0,
+                "matchCount": 1,
+                "wins": 1,
+                "kills": 20,
+                "deaths": 10,
+                "assists": 3,
+                "rounds": 22,
+                "score": 5000,
+                "headshots": 8,
+                "bodyshots": 12,
+                "legshots": 0,
+                "roundBasedKastRounds": 15,
+                "roundBasedKastSourceRounds": 22,
+                "rawKastFallbackSum": 0,
+                "rawKastFallbackCount": 0,
+                "damageDelta": 40,
+            }
+        ]
+        queries.find_latest_valid_ranks_for_players.return_value = {
+            "target": {"latestTier": 19, "timestamp": 1000, "seasonId": "act-old"}
+        }
+
+        payload = get_player_rank_comparison("target", season_id="act-new")
+
+        self.assertEqual(payload["baseTier"], 19)
+        self.assertEqual(payload["baseTierSource"], "previous_valid_rank")
+        self.assertEqual(payload["baseRankName"], "Diamond 2")
+        self.assertEqual(payload["visualRankName"], "Sin rango")
+        self.assertEqual(payload["cohortReferenceRankName"], "Diamond 2")
+        self.assertTrue(
+            any("ultimo rango valido anterior" in note for note in payload["notes"])
+        )
+        self.assertEqual(payload["metricComparisons"]["k"]["rawValue"], 20.0)
+
     def test_rank_comparison_payload_builds_player_percentiles_per_metric(self):
         cohort_rows = [
             {

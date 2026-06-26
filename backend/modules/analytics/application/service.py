@@ -237,6 +237,11 @@ def rebuild_match_player_analytics(match_obj: dict) -> int:
     return len(analytics_by_puuid)
 
 
+def _progress_label(done: int, total: int) -> str:
+    pct = (done / total * 100.0) if total else 100.0
+    return f"[{pct:5.1f}%] [{done}/{total}]"
+
+
 def rebuild_all_player_match_analytics(batch_size: int = 200) -> dict:
     # Ensure map/agent/weapon names are resolved against the latest content snapshot.
     clear_reference_cache()
@@ -244,6 +249,7 @@ def rebuild_all_player_match_analytics(batch_size: int = 200) -> dict:
     processed_matches = 0
     inserted_docs = 0
     failed_matches = 0
+    total_matches = matches_collection.count_documents({})
 
     last_id = None
     while True:
@@ -264,6 +270,8 @@ def rebuild_all_player_match_analytics(batch_size: int = 200) -> dict:
                 logger.exception("Error generando analytics para una partida: %s", exc)
 
         last_id = docs[-1]["_id"]
+        done = processed_matches + failed_matches
+        print(f"{_progress_label(done, total_matches)} [REBUILD_ANALYTICS]")
 
     return {
         "processed_matches": processed_matches,

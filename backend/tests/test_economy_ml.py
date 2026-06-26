@@ -18,10 +18,16 @@ from modules.economy_ml.dataset_builder import (
 )
 from modules.economy_ml.similar_rounds import find_similar_rounds
 from modules.economy_ml.policy import recommend_economy_action
+from modules.economy_ml.plan_allocator import allocate_player_loadouts
+from modules.economy_ml.player_recommendations import build_player_recommendations
+from modules.economy_ml.ability_planner import recommend_ability_purchase
+from modules.economy_ml.economy_rules import infer_pistol_free_light_armor_from_economy
+from modules.economy_ml.recommendation_backtest import summarize_recommendation_backtest
+from modules.economy_ml.recommendation_validation import validate_player_recommendation_budget
 from modules.economy_ml.train import train_models
 from modules.economy_ml import model_registry
 from modules.economy_ml.rank_mapping import get_rank_group, get_rank_name, normalize_rank_tier
-from modules.economy_ml.schemas import FORBIDDEN_FEATURES, MODEL_FEATURES, PREBUY_NUMERIC_FEATURES
+from modules.economy_ml.schemas import FORBIDDEN_FEATURES, MODEL_FEATURES, PREBUY_NUMERIC_FEATURES, SCHEMA_VERSION
 from modules.economy_ml.state_extractor import extract_match_round_states
 from modules.economy_ml.team_plan import evaluate_team_plan_from_action
 from modules.economy_ml.ability_catalog import (
@@ -36,7 +42,10 @@ from modules.economy_ml.data_availability import build_data_availability_report
 from modules.economy_ml.economy_cases import classify_economy_case
 from modules.economy_ml.plan_coherence import evaluate_plan_coherence
 from modules.economy_ml.plan_evaluator import context_key
-from modules.economy_ml.recommendation_audit import summarize_recommendation_distribution
+from modules.economy_ml.recommendation_audit import (
+    summarize_pistol_recommendation_safety,
+    summarize_recommendation_distribution,
+)
 from modules.economy_ml.ultimate_inference import infer_ultimate_state
 from modules.economy_ml.utility_budget import estimate_player_utility_budget
 
@@ -205,8 +214,9 @@ class EconomyMlTests(unittest.TestCase):
         rows = extract_match_round_states(_match())
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["team_score_before"], 0)
-        self.assertEqual(rows[0]["team_estimated_credits_before_buy"], 4000)
-        self.assertEqual(rows[0]["team_credit_estimate_quality"], "rules_based")
+        self.assertEqual(rows[0]["team_estimated_credits_before_buy"], 10000)
+        self.assertEqual(rows[0]["team_credit_estimate_quality"], "observed_economy")
+        self.assertEqual(rows[0]["team_player_credit_estimates"]["A0"], 2000)
         self.assertEqual(rows[0]["round_won"], 1)
         self.assertEqual(rows[0]["side"], "attack")
         self.assertEqual(rows[1]["side"], "defense")
@@ -215,6 +225,98 @@ class EconomyMlTests(unittest.TestCase):
         self.assertTrue(FORBIDDEN_FEATURES.isdisjoint(MODEL_FEATURES))
         self.assertNotIn("action_total_loadout", PREBUY_NUMERIC_FEATURES)
         self.assertIn("team_total_utility_score", PREBUY_NUMERIC_FEATURES)
+
+    def test_pistol_round_never_recommends_sheriff_light_without_free_exception(self):
+        match = _match()
+        state = {
+            **extract_match_round_states(match)[0],
+            "team_player_free_light_armor_exceptions": {f"A{i}": False for i in range(5)},
+            "pistol_free_light_armor_exception": 0,
+            "team_players_with_free_light_armor_exception": 0,
+        }
+        allocation = allocate_player_loadouts(match, state, "ECO_ONE_SHERIFF")
+        sheriff_players = [
+            player for player in allocation["players"]
+            if str((player.get("weapon") or {}).get("displayName") or "").lower() == "sheriff"
+        ]
+        self.assertEqual(len(sheriff_players), 1)
+        sheriff_player = sheriff_players[0]
+        self.assertIsNone(sheriff_player.get("armor"))
+        self.assertLessEqual(sheriff_player["total_cost"], 800)
+
+    def test_pistol_free_light_exception_allows_free_light_armor(self):
+        economy = {"weapon": "Sheriff", "armor": "Light", "spent": 800, "loadoutValue": 1200}
+        self.assertTrue(infer_pistol_free_light_armor_from_economy(1, economy))
+        match = _match()
+        state = {
+            **extract_match_round_states(match)[0],
+            "team_player_free_light_armor_exceptions": {"A0": True},
+        }
+        allocation = allocate_player_loadouts(match, state, "ECO_ONE_SHERIFF")
+        sheriff_player = next(
+            player for player in allocation["players"]
+            if str((player.get("weapon") or {}).get("displayName") or "").lower() == "sheriff"
+        )
+        self.assertLessEqual(sheriff_player["total_cost"], sheriff_player["estimated_credits"])
+        if sheriff_player["puuid"] == "A0" and sheriff_player.get("armor"):
+            self.assertTrue(sheriff_player["armor_is_free_exception"])
+            self.assertIn("gratuito", " ".join(sheriff_player["reasons"]))
+
+    def test_eco_one_sheriff_allocates_only_one_sheriff(self):
+        match = _match()
+        recommendations = build_player_recommendations(
+            match,
+            extract_match_round_states(match)[0],
+            "ECO_ONE_SHERIFF",
+        )
+        sheriff_count = sum(item.get("recommended_weapon") == "Sheriff" for item in recommendations)
+        self.assertEqual(sheriff_count, 1)
+
+    def test_player_loadout_never_exceeds_estimated_credits(self):
+        match = _match()
+        base_state = extract_match_round_states(match)[0]
+        high_credit_state = {
+            **base_state,
+            "round_number": 4,
+            "is_pistol_round": 0,
+            "team_player_credit_estimates": {f"A{i}": 5000 for i in range(5)},
+            "team_estimated_credits_before_buy": 25000,
+        }
+        actions = [
+            ("ECO_CLASSIC", base_state),
+            ("ECO_PISTOL_UPGRADE", base_state),
+            ("ECO_ONE_SHERIFF", base_state),
+            ("ECO_TWO_SHERIFFS", {**base_state, "round_number": 3, "is_pistol_round": 0}),
+            ("FULL_RIFLES", high_credit_state),
+        ]
+        for action, state in actions:
+            allocation = allocate_player_loadouts(match, state, action)
+            for player in allocation["players"]:
+                self.assertLessEqual(player["total_cost"], player["estimated_credits"])
+
+    def test_new_credit_features_exist_in_state(self):
+        state = extract_match_round_states(_match())[0]
+        expected = [
+            "team_credit_min", "team_credit_max", "team_credit_mean",
+            "team_credit_median", "team_credit_std",
+            "team_players_can_buy_sheriff", "team_players_can_buy_light_armor",
+            "team_players_can_buy_sheriff_light", "team_players_can_buy_ghost_light",
+            "enemy_credit_min", "enemy_credit_max", "enemy_credit_mean",
+            "enemy_credit_median", "enemy_credit_std",
+            "enemy_players_can_buy_sheriff", "enemy_players_can_buy_light_armor",
+            "enemy_players_can_buy_sheriff_light", "enemy_players_can_buy_ghost_light",
+        ]
+        for key in expected:
+            self.assertIn(key, state)
+            self.assertIn(key, PREBUY_NUMERIC_FEATURES)
+        self.assertEqual(state["team_players_can_buy_sheriff"], 5)
+        self.assertEqual(state["team_players_can_buy_sheriff_light"], 5)
+        self.assertEqual(state["team_players_can_buy_ghost_light"], 5)
+        self.assertIn("team_player_credit_estimates", state)
+        self.assertNotIn("team_player_credit_estimates", PREBUY_NUMERIC_FEATURES)
+
+    def test_schema_version_6(self):
+        self.assertEqual(SCHEMA_VERSION, 6)
 
     def test_skipped_round_still_advances_score_and_streak(self):
         match = _match()
@@ -346,6 +448,68 @@ class EconomyMlTests(unittest.TestCase):
         blocked = next(item for item in result["alternatives"] if item["action"] == "ECO_SHERIFF_STACK")
         self.assertFalse(blocked["is_available"])
         self.assertIn("Stack de Sheriffs bloqueado", blocked["reason_if_unavailable"])
+
+    def test_policy_blocks_multi_sheriff_in_pistol(self):
+        class FakePipeline:
+            def predict_proba(self, frame):
+                action = frame.iloc[0]["buy_action"]
+                probability = 0.9 if action in {"ECO_TWO_SHERIFFS", "ECO_SHERIFF_STACK"} else 0.5
+                return np.array([[1 - probability, probability]])
+
+        state = extract_match_round_states(_match())[0]
+        with patch(
+            "modules.economy_ml.policy.load_model_candidates",
+            return_value=[({
+                "pipeline": FakePipeline(),
+                "action_support": {
+                    "ECO_CLASSIC": 100,
+                    "ECO_TWO_SHERIFFS": 100,
+                    "ECO_SHERIFF": 100,
+                    "ECO_SHERIFF_STACK": 100,
+                },
+                "min_action_support": 25,
+            }, "global")],
+        ):
+            result = recommend_economy_action(
+                state,
+                ["ECO_CLASSIC", "ECO_TWO_SHERIFFS", "ECO_SHERIFF", "ECO_SHERIFF_STACK"],
+            )
+        self.assertEqual(result["recommended_action"], "ECO_CLASSIC")
+        for action in ("ECO_TWO_SHERIFFS", "ECO_SHERIFF", "ECO_SHERIFF_STACK"):
+            blocked = next(item for item in result["alternatives"] if item["action"] == action)
+            self.assertFalse(blocked["is_available"])
+            self.assertIn("pistol round", blocked["reason_if_unavailable"])
+
+    def test_pistol_sheriff_requires_high_margin(self):
+        class FakePipeline:
+            def predict_proba(self, _frame):
+                return np.array([[0.4, 0.6]])
+
+        def fake_plan(_state, action, probability):
+            return {"source_action": action, "predicted_match_win": probability, "team_plan_value": 0.5}
+
+        def fake_value(plan, _state):
+            value = 0.54 if plan["source_action"] == "ECO_ONE_SHERIFF" else 0.50
+            return {"team_plan_value": value, "plan_value_context": "pistol", "plan_value_weights": {}}
+
+        state = extract_match_round_states(_match())[0]
+        with patch(
+            "modules.economy_ml.policy.load_model_candidates",
+            return_value=[({
+                "pipeline": FakePipeline(),
+                "action_support": {"ECO_CLASSIC": 100, "ECO_ONE_SHERIFF": 100},
+                "min_action_support": 25,
+            }, "global")],
+        ), patch(
+            "modules.economy_ml.policy.evaluate_team_plan_from_action",
+            side_effect=fake_plan,
+        ), patch(
+            "modules.economy_ml.plan_evaluator.evaluate_plan_value",
+            side_effect=fake_value,
+        ):
+            result = recommend_economy_action(state, ["ECO_CLASSIC", "ECO_ONE_SHERIFF"])
+        self.assertEqual(result["recommended_action"], "ECO_CLASSIC")
+        self.assertIn("margen alto", " ".join(result["explanation"]))
 
     def test_policy_blocks_multi_sheriff_when_credits_are_low(self):
         class FakePipeline:
@@ -495,6 +659,117 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(summary["recommended_action_counts"]["ECO_ONE_SHERIFF"], 1)
         self.assertEqual(summary["real_vs_recommended_matrix"]["ECO_PISTOL_UPGRADE"]["ECO_ONE_SHERIFF"], 1)
         self.assertEqual(summary["sheriff_share_within_eco_recommendations"], 0.5)
+
+    def test_pistol_recommendation_audit_counts_impossible_sheriff_light(self):
+        summary = summarize_pistol_recommendation_safety([
+            {
+                "round_number": 1,
+                "player_recommendations": [
+                    {
+                        "recommended_weapon": "Sheriff",
+                        "recommended_armor": "Light Shield",
+                        "recommended_armor_is_free_exception": False,
+                        "expected_spend": 1200,
+                        "estimated_credits": 800,
+                    },
+                    {
+                        "recommended_weapon": "Sheriff",
+                        "recommended_armor": "Light Shield",
+                        "recommended_armor_is_free_exception": True,
+                        "expected_spend": 800,
+                        "estimated_credits": 800,
+                    },
+                ],
+            }
+        ])
+        self.assertEqual(summary["pistol_sheriff_light_player_recommendations"], 2)
+        self.assertEqual(summary["pistol_free_light_exceptions"], 1)
+        self.assertGreaterEqual(summary["pistol_impossible_player_recommendations"], 1)
+
+    def test_player_recommendation_validation_rejects_total_cost_over_budget(self):
+        valid, reasons = validate_player_recommendation_budget(
+            {"weapon_cost": 2900, "armor_cost": 1000, "ability_cost": 600},
+            estimated_credits=3900,
+        )
+        self.assertFalse(valid)
+        self.assertIn("supera", reasons[0])
+
+    def test_ability_planner_recommends_controller_smoke_when_affordable(self):
+        result = recommend_ability_purchase(
+            agent_name="Omen",
+            agent_id=None,
+            role="Controller",
+            side="attack",
+            available_credits_after_loadout=600,
+            context="fullbuy",
+        )
+        self.assertGreater(result["total_cost"], 0)
+        self.assertTrue(result["abilities"])
+        types = {profile for ability in result["abilities"] for profile in ability["tactical_types"]}
+        self.assertTrue({"smoke", "vision_denial"}.intersection(types))
+
+    def test_full_rifle_controller_prefers_light_plus_smokes_over_illegal_heavy(self):
+        match = _match()
+        for player in match["players"]:
+            if player["teamId"] == "A":
+                player["characterId"] = "Omen"
+                player["characterName"] = "Omen"
+        state = {
+            **extract_match_round_states(match)[0],
+            "round_number": 4,
+            "is_pistol_round": 0,
+            "is_match_point": 0,
+            "is_last_round_before_switch": 0,
+            "is_overtime": 0,
+            "team_player_credit_estimates": {f"A{i}": 3900 for i in range(5)},
+            "team_estimated_credits_before_buy": 19500,
+        }
+        allocation = allocate_player_loadouts(match, state, "FULL_RIFLES")
+        self.assertTrue(allocation["valid"], allocation.get("violations"))
+        for player in allocation["players"]:
+            self.assertLessEqual(player["total_cost"], player["estimated_credits"])
+        rifle_players = [player for player in allocation["players"] if player.get("weapon")]
+        self.assertTrue(rifle_players)
+        self.assertTrue(any(player.get("abilities") for player in rifle_players))
+        self.assertTrue(any((player.get("armor") or {}).get("armor_level") == "light" for player in rifle_players))
+
+    def test_player_recommendations_include_abilities_without_breaking_budget(self):
+        match = _match()
+        for player in match["players"]:
+            if player["teamId"] == "A":
+                player["characterId"] = "Omen"
+                player["characterName"] = "Omen"
+        state = {
+            **extract_match_round_states(match)[0],
+            "round_number": 4,
+            "is_pistol_round": 0,
+            "team_player_credit_estimates": {f"A{i}": 3900 for i in range(5)},
+            "team_estimated_credits_before_buy": 19500,
+        }
+        recommendations = build_player_recommendations(match, state, "FULL_RIFLES")
+        self.assertTrue(any(item["recommended_abilities"] for item in recommendations))
+        for item in recommendations:
+            self.assertLessEqual(item["expected_spend"], item["estimated_credits"])
+            self.assertTrue(item["budget_valid"])
+
+    def test_backtest_reports_zero_invalid_when_budgets_hold(self):
+        summary = summarize_recommendation_backtest([
+            {
+                "recommended_action": "FULL_RIFLES",
+                "team_plan": {"team_plan_value": 0.7, "macro_case": "FULLBUY"},
+                "player_recommendations": [
+                    {
+                        "estimated_credits": 3900,
+                        "recommended_weapon": "Vandal",
+                        "recommended_armor": "Light Shield",
+                        "recommended_abilities": [{"name": "Dark Cover", "cost": 150}],
+                        "role": "Controller",
+                    }
+                ],
+            }
+        ])
+        self.assertEqual(summary["invalid_recommendation_rate"], 0)
+        self.assertGreater(summary["ability_recommendation_rate"], 0)
 
 
 if __name__ == "__main__":

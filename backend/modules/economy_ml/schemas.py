@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 LABEL_COLUMNS = [
     "round_won", "match_won", "next_round_fullbuy_possible",
     "next_round_team_estimated_credits",
@@ -23,6 +23,14 @@ PREBUY_NUMERIC_FEATURES = [
     "credits_before_buy_diff", "team_players_can_full_buy_estimate",
     "enemy_players_can_full_buy_estimate", "team_players_low_money",
     "enemy_players_low_money",
+    "team_credit_min", "team_credit_max", "team_credit_mean",
+    "team_credit_median", "team_credit_std",
+    "team_players_can_buy_sheriff", "team_players_can_buy_light_armor",
+    "team_players_can_buy_sheriff_light", "team_players_can_buy_ghost_light",
+    "enemy_credit_min", "enemy_credit_max", "enemy_credit_mean",
+    "enemy_credit_median", "enemy_credit_std",
+    "enemy_players_can_buy_sheriff", "enemy_players_can_buy_light_armor",
+    "enemy_players_can_buy_sheriff_light", "enemy_players_can_buy_ghost_light",
 ]
 
 AGENT_UTILITY_NUMERIC_FEATURES = [

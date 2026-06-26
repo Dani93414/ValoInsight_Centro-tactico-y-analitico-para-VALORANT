@@ -13,6 +13,10 @@ from modules.analytics.domain.constants import (
     TRADE_WINDOW_MS,
 )
 from modules.players.infrastructure import dashboard_queries
+from modules.players.application.rank_resolution import (
+    coerce_rank_tier_or_none,
+    resolve_current_visual_rank,
+)
 
 
 _DASHBOARD_CONTENT_CACHE: tuple[float, dict[str, Any]] | None = None
@@ -63,10 +67,7 @@ def _coerce_positive_int(value: Any) -> int | None:
 
 
 def _coerce_rank_tier(value: Any) -> int | None:
-    tier = _coerce_positive_int(value)
-    if tier is None or tier < 3:
-        return None
-    return tier
+    return coerce_rank_tier_or_none(value)
 
 
 def _format_tier_name(tier: int | None) -> str:
@@ -1194,6 +1195,25 @@ def _build_act_label_map(content_doc: dict[str, Any]) -> dict[str, str]:
     return label_map
 
 
+def _act_time_millis(value: Any) -> int:
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return 0
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        pass
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return 0
+    return int(parsed.timestamp() * 1000)
+
+
 def _resolve_current_act_id(content_doc: dict[str, Any]) -> str | None:
     acts = content_doc.get("acts", []) or []
     if not acts:
@@ -1238,8 +1258,15 @@ def _resolve_current_act_id(content_doc: dict[str, Any]) -> str | None:
         return None
 
     # Se asume que el contenido viene ordenado del acto más reciente al más antiguo
-    first_act = episode_acts[0]
-    return str(first_act.get("id")) if first_act.get("id") else None
+    episode_acts.sort(
+        key=lambda act: (
+            _act_time_millis(act.get("startTime")),
+            _act_time_millis(act.get("endTime")),
+        ),
+        reverse=True,
+    )
+    latest_act = episode_acts[0]
+    return str(latest_act.get("id")) if latest_act.get("id") else None
 
 
 def _build_agent_maps(
@@ -1441,6 +1468,16 @@ def _load_weapon_usage_summary(
             "$project": {
                 "weapon_id": "$ws.k",
                 "weapon_name": {"$ifNull": ["$ws.v.weapon_name", "Arma desconocida"]},
+                "source_id": {"$ifNull": ["$ws.v.source_id", "$ws.k"]},
+                "source_name": {
+                    "$ifNull": [
+                        "$ws.v.source_name",
+                        {"$ifNull": ["$ws.v.weapon_name", "Arma desconocida"]},
+                    ]
+                },
+                "source_type": {"$ifNull": ["$ws.v.source_type", "weapon"]},
+                "source_icon": "$ws.v.source_icon",
+                "is_ability": {"$ifNull": ["$ws.v.is_ability", False]},
                 "rounds": {
                     "$convert": {
                         "input": "$ws.v.rounds",
@@ -1470,8 +1507,11 @@ def _load_weapon_usage_summary(
         },
         {
             "$group": {
-                "_id": "$weapon_id",
-                "name": {"$first": "$weapon_name"},
+                "_id": "$source_id",
+                "name": {"$first": "$source_name"},
+                "type": {"$first": "$source_type"},
+                "icon": {"$first": "$source_icon"},
+                "isAbility": {"$max": {"$cond": ["$is_ability", 1, 0]}},
                 "rounds": {"$sum": "$rounds"},
                 "kills": {"$sum": "$kills"},
                 "matches": {
@@ -2098,12 +2138,21 @@ def _build_rank_comparison_payload_from_players(
     puuid: str,
     base_tier: int,
     cohort_rows: list[dict[str, Any]],
+    *,
+    extra_fields: dict[str, Any] | None = None,
+    extra_notes: list[str] | None = None,
 ) -> dict[str, Any]:
     if not cohort_rows:
-        return _build_empty_rank_comparison_payload(
+        payload = _build_empty_rank_comparison_payload(
             base_tier,
             reason="No hay jugadores elegibles en la cohorte para los filtros actuales.",
         )
+        if extra_fields:
+            payload.update(extra_fields)
+        if extra_notes:
+            for note in extra_notes:
+                _append_rank_comparison_note(payload["notes"], note)
+        return payload
 
     cohort_tiers = _compute_rank_cohort_tiers(base_tier)
     metric_rows = [
@@ -2116,10 +2165,16 @@ def _build_rank_comparison_payload_from_players(
 
     player_row = next((row for row in metric_rows if row["puuid"] == puuid), None)
     if player_row is None:
-        return _build_empty_rank_comparison_payload(
+        payload = _build_empty_rank_comparison_payload(
             base_tier,
             reason="El jugador no tiene datos validos dentro de la cohorte filtrada.",
         )
+        if extra_fields:
+            payload.update(extra_fields)
+        if extra_notes:
+            for note in extra_notes:
+                _append_rank_comparison_note(payload["notes"], note)
+        return payload
 
     metric_comparisons: dict[str, Any] = {}
     for key, prefer_lower in _RANK_COMPARISON_METRICS:
@@ -2184,12 +2239,151 @@ def _build_rank_comparison_payload_from_players(
     return {
         "baseTier": base_tier,
         "baseRankName": _format_tier_name(base_tier),
+        **(extra_fields or {}),
         "cohortTiers": cohort_tiers,
         "cohortLabels": [_format_tier_name(tier) for tier in cohort_tiers],
         "sampleSize": sample_size,
         "metricComparisons": metric_comparisons,
-        "notes": notes,
+        "notes": [*notes, *(extra_notes or [])],
     }
+
+
+def resolve_cohort_reference_tier(
+    puuid: str,
+    *,
+    queue_id: str | None = None,
+    agent_id: str | None = None,
+    map_name: str | None = None,
+    season_id: str | None = None,
+    party_size: str | None = None,
+) -> dict[str, Any]:
+    if not puuid:
+        return {
+            "tier": None,
+            "source": "none",
+            "seasonId": None,
+            "timestamp": None,
+            "note": None,
+        }
+
+    filtered_ranked = dashboard_queries.find_player_latest_valid_rank(
+        puuid,
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        season_id=season_id,
+        party_size=party_size,
+    )
+    tier = _coerce_rank_tier(filtered_ranked.get("latestTier"))
+    if tier is not None:
+        return {
+            "tier": tier,
+            "source": "filtered_ranked",
+            "seasonId": filtered_ranked.get("seasonId"),
+            "timestamp": filtered_ranked.get("timestamp"),
+            "note": None,
+        }
+
+    first_filtered_timestamp = None
+    if season_id:
+        first_filtered_timestamp = dashboard_queries.find_player_first_match_timestamp(
+            puuid,
+            season_id=season_id,
+            queue_id=queue_id,
+        )
+        previous_ranked = dashboard_queries.find_player_latest_valid_rank(
+            puuid,
+            queue_id=queue_id,
+            agent_id=agent_id,
+            map_name=map_name,
+            party_size=party_size,
+            before_timestamp=first_filtered_timestamp,
+            exclude_season_id=season_id,
+        )
+        tier = _coerce_rank_tier(previous_ranked.get("latestTier"))
+        if tier is not None:
+            return {
+                "tier": tier,
+                "source": "previous_valid_rank",
+                "seasonId": previous_ranked.get("seasonId"),
+                "timestamp": previous_ranked.get("timestamp"),
+                "note": "El jugador esta sin rango en la temporada filtrada; la cohorte usa su ultimo rango valido anterior.",
+            }
+
+    global_ranked = dashboard_queries.find_player_latest_valid_rank(puuid)
+    tier = _coerce_rank_tier(global_ranked.get("latestTier"))
+    if tier is not None:
+        return {
+            "tier": tier,
+            "source": "global_valid_rank",
+            "seasonId": global_ranked.get("seasonId"),
+            "timestamp": global_ranked.get("timestamp"),
+            "note": "No hay rango valido dentro de los filtros; la cohorte usa el ultimo rango valido global.",
+        }
+
+    return {
+        "tier": None,
+        "source": "none",
+        "seasonId": None,
+        "timestamp": first_filtered_timestamp,
+        "note": None,
+    }
+
+
+def aggregate_rank_cohort_players_by_reference_tier(
+    cohort_tiers: list[int],
+    *,
+    queue_id: str | None = None,
+    agent_id: str | None = None,
+    map_name: str | None = None,
+    season_id: str | None = None,
+    party_size: str | None = None,
+    reference_before_timestamp: int | None = None,
+    reference_exclude_season_id: str | None = None,
+) -> list[dict[str, Any]]:
+    clean_tiers = {
+        int(tier)
+        for tier in cohort_tiers
+        if isinstance(tier, (int, float)) and int(tier) >= 3
+    }
+    if not clean_tiers:
+        return []
+
+    metric_rows = dashboard_queries.aggregate_rank_cohort_metric_players(
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        season_id=season_id,
+        party_size=party_size,
+    )
+    reference_by_puuid = dashboard_queries.find_latest_valid_ranks_for_players(
+        [str(row.get("puuid") or "") for row in metric_rows],
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        party_size=party_size,
+        before_timestamp=reference_before_timestamp,
+        exclude_season_id=reference_exclude_season_id,
+    )
+    cohort_rows: list[dict[str, Any]] = []
+    for row in metric_rows:
+        row_puuid = str(row.get("puuid") or "")
+        ranked_ref = reference_by_puuid.get(row_puuid) or {}
+        reference_tier = _coerce_rank_tier(ranked_ref.get("latestTier"))
+        if reference_tier is None and not reference_before_timestamp:
+            reference_tier = _coerce_rank_tier(row.get("latestTier"))
+        if reference_tier not in clean_tiers:
+            continue
+        cohort_rows.append(
+            {
+                **row,
+                "referenceTier": reference_tier,
+                "latestTier": reference_tier,
+                "referenceTimestamp": ranked_ref.get("timestamp"),
+                "referenceSeasonId": ranked_ref.get("seasonId"),
+            }
+        )
+    return cohort_rows
 
 
 def get_player_rank_comparison(
@@ -2221,22 +2415,77 @@ def get_player_rank_comparison(
             reason="El jugador no tiene partidas dentro de los filtros actuales.",
         )
 
-    base_tier = _coerce_rank_tier(latest_reference.get("latestTier"))
-    if base_tier is None:
-        return _build_empty_rank_comparison_payload(
-            None,
-            reason="No se pudo resolver el rango desde la ultima partida valida dentro de los filtros actuales.",
-        )
-
-    cohort_rows = dashboard_queries.aggregate_rank_cohort_players(
-        _compute_rank_cohort_tiers(base_tier),
+    cohort_reference = resolve_cohort_reference_tier(
+        puuid,
         queue_id=queue_id,
         agent_id=agent_id,
         map_name=map_name,
         season_id=season_id,
         party_size=party_size,
     )
-    return _build_rank_comparison_payload_from_players(puuid, base_tier, cohort_rows)
+    base_tier = _coerce_rank_tier(cohort_reference.get("tier"))
+    if base_tier is None:
+        return _build_empty_rank_comparison_payload(
+            None,
+            reason="No se pudo resolver ningun rango valido para construir la cohorte.",
+        )
+
+    cohort_tiers = _compute_rank_cohort_tiers(base_tier)
+    source = str(cohort_reference.get("source") or "none")
+    extra_notes = [cohort_reference["note"]] if cohort_reference.get("note") else []
+    visual_tier = _coerce_rank_tier(latest_reference.get("latestTier"))
+    extra_fields = {
+        "baseTierSource": source,
+        "baseTierSeasonId": cohort_reference.get("seasonId"),
+        "visualRankName": _format_tier_name(visual_tier),
+        "cohortReferenceTier": base_tier,
+        "cohortReferenceRankName": _format_tier_name(base_tier),
+    }
+
+    if source in {"previous_valid_rank", "global_valid_rank"}:
+        reference_before_timestamp = (
+            int(cohort_reference.get("timestamp") or 0) + 1
+            if source == "previous_valid_rank" and cohort_reference.get("timestamp") is not None
+            else None
+        )
+        first_season_timestamp = (
+            dashboard_queries.find_player_first_match_timestamp(
+                puuid,
+                season_id=season_id,
+                queue_id=queue_id,
+            )
+            if season_id
+            else None
+        )
+        if first_season_timestamp is not None:
+            reference_before_timestamp = first_season_timestamp
+        cohort_rows = aggregate_rank_cohort_players_by_reference_tier(
+            cohort_tiers,
+            queue_id=queue_id,
+            agent_id=agent_id,
+            map_name=map_name,
+            season_id=season_id,
+            party_size=party_size,
+            reference_before_timestamp=reference_before_timestamp,
+            reference_exclude_season_id=season_id,
+        )
+    else:
+        cohort_rows = dashboard_queries.aggregate_rank_cohort_players(
+            cohort_tiers,
+            queue_id=queue_id,
+            agent_id=agent_id,
+            map_name=map_name,
+            season_id=season_id,
+            party_size=party_size,
+        )
+
+    return _build_rank_comparison_payload_from_players(
+        puuid,
+        base_tier,
+        cohort_rows,
+        extra_fields=extra_fields,
+        extra_notes=extra_notes,
+    )
 
 
 def build_player_dashboard(
@@ -2309,9 +2558,13 @@ def build_player_dashboard(
         {"id": option["id"], "label": option["label"]} for option in act_options
     ]
 
-    current_act_id = current_act_id_from_content or (
-        act_options_public[0]["id"] if act_options_public else None
-    )
+    latest_player_act_id = act_options_public[0]["id"] if act_options_public else None
+    current_act_id = current_act_id_from_content or latest_player_act_id
+    if latest_player_act_id and current_act_id:
+        latest_player_ts = int(latest_timestamp_by_act.get(latest_player_act_id) or 0)
+        current_content_ts = int(latest_timestamp_by_act.get(current_act_id) or 0)
+        if latest_player_ts > current_content_ts:
+            current_act_id = latest_player_act_id
 
     current_act_matches = (
         act_sections.get(current_act_id, {}).get("matches", []) if current_act_id else []
@@ -2429,14 +2682,18 @@ def build_player_dashboard(
     most_played_weapons: list[dict[str, Any]] = []
     for row in usage_sorted_weapon_rows:
         name = str(row.get("name") or "Arma desconocida")
+        source_type = str(row.get("type") or "weapon")
+        source_icon = row.get("icon")
         most_played_weapons.append(
             {
                 "id": str(row.get("_id") or "unknown"),
                 "name": name,
+                "type": source_type,
+                "isAbility": bool(row.get("isAbility")),
                 "rounds": int(row.get("rounds") or 0),
                 "kills": int(row.get("kills") or 0),
                 "matches": int(row.get("matches") or 0),
-                "image": weapon_icon_by_name.get(_normalize_rank_label(name)),
+                "image": source_icon or weapon_icon_by_name.get(_normalize_rank_label(name)),
             }
         )
 
@@ -2465,55 +2722,17 @@ def build_player_dashboard(
         }
 
     latest_analytics = overview_docs[0] if overview_docs else (analytics_sorted[0] if analytics_sorted else {})
-
-    tier = _coerce_rank_tier(latest_analytics.get("competitive_tier"))
-    latest_raw_rank = _latest_rank_from_matches(str(player.get("puuid") or ""))
-    if tier is None:
-        tier = _coerce_rank_tier(latest_raw_rank.get("tier"))
-    if tier is None:
-        tier = _coerce_rank_tier(
-            player.get("competitiveTier", player.get("competitive_tier"))
-        )
-    if tier is None:
-        ranked_matches = [
-            m
-            for m in mapped_matches
-            if _coerce_rank_tier(m.get("competitiveTier")) is not None
-        ]
-        if ranked_matches:
-            ranked_matches.sort(
-                key=lambda m: int(m.get("timestamp") or 0), reverse=True
-            )
-            tier = _coerce_rank_tier(ranked_matches[0].get("competitiveTier"))
-
-    rank_name = _format_tier_name(tier)
-    rank_name_candidates = [
-        rank_name,
-        player.get("competitiveTierName"),
-        player.get("competitive_tier_name"),
-        latest_analytics.get("competitive_tier_name"),
-        latest_analytics.get("competitiveTierName"),
-    ]
-    rank_icon_by_name = None
-    for candidate in rank_name_candidates:
-        normalized_candidate = _normalize_rank_label(candidate)
-        if not normalized_candidate:
-            continue
-        rank_icon_by_name = rank_icon_by_name_map.get(normalized_candidate)
-        if rank_icon_by_name:
-            break
-
-    rank_image = (
-        (rank_icon_map.get(tier) if tier is not None else None)
-        or rank_icon_by_name
-        or latest_raw_rank.get("image")
-        or player.get("competitiveTierImage")
-        or player.get("competitive_tier_image")
-        or latest_analytics.get("competitive_tier_image")
-        or latest_analytics.get("competitiveTierImage")
-        or latest_analytics.get("rankImage")
+    visual_rank = resolve_current_visual_rank(
+        current_act_docs=current_act_docs,
+        mapped_matches=mapped_matches,
+        player=player,
+        rank_icon_map=rank_icon_map,
+        rank_icon_by_name_map=rank_icon_by_name_map,
     )
-    rank_small_icon = (rank_icon_map.get(tier) if tier is not None else None) or rank_icon_by_name
+    tier = visual_rank.get("tier")
+    rank_name = str(visual_rank.get("name") or _format_tier_name(tier))
+    rank_image = visual_rank.get("image")
+    rank_small_icon = visual_rank.get("smallIcon")
     rank_comparison = get_player_rank_comparison(
         str(player.get("puuid") or ""),
         season_id=current_act_id if current_act_matches else None,
@@ -2653,6 +2872,9 @@ def build_player_dashboard(
             "name": rank_name,
             "image": rank_image,
             "smallIcon": rank_small_icon,
+            "source": visual_rank.get("source"),
+            "rankSource": visual_rank.get("source"),
+            "isUnranked": bool(visual_rank.get("isUnranked")),
         },
         "rankComparison": rank_comparison,
         "headerShowcase": header_showcase,
