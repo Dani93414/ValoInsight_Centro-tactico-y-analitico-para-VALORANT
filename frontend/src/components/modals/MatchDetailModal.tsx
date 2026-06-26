@@ -3793,7 +3793,7 @@ function EconomyOptimalPanel({
       (round) => round.real_buy_action !== round.recommended_action,
     );
     const validDeltas = ml.rounds
-      .map((round) => round.delta_vs_real)
+      .map((round) => round.delta_team_plan_value)
       .filter((value): value is number => typeof value === "number");
     const averageConfidence = safeDivide(
       ml.rounds.reduce((sum, round) => sum + round.confidence, 0),
@@ -3893,6 +3893,10 @@ function EconomyOptimalPanel({
                       {economyRecommendationStatusLabel(round.recommendation_status)}
                     </span>
                     <small>{round.num_viable_alternatives ?? 0} viables</small>
+                    {round.credit_estimate_quality === "inconsistent" ? (
+                      <small>Baja confianza por créditos</small>
+                    ) : null}
+                    {round.in_sample ? <small>En entrenamiento</small> : null}
                   </td>
                   <td>{round.delta_team_plan_value == null ? "N/D" : `${round.delta_team_plan_value >= 0 ? "+" : ""}${formatPercent(round.delta_team_plan_value * 100, 1)}`}</td>
                   <td>{round.delta_round_win == null ? "N/D" : `${round.delta_round_win >= 0 ? "+" : ""}${formatPercent(round.delta_round_win * 100, 1)}`}</td>

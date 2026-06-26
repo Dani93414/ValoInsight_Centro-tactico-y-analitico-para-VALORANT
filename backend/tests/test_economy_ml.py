@@ -31,7 +31,10 @@ from modules.economy_ml.player_recommendations import build_player_recommendatio
 from modules.economy_ml.ability_planner import recommend_ability_purchase
 from modules.economy_ml.economy_rules import infer_pistol_free_light_armor_from_economy
 from modules.economy_ml.recommendation_backtest import summarize_recommendation_backtest
-from modules.economy_ml.recommendation_validation import validate_player_recommendation_budget
+from modules.economy_ml.recommendation_validation import (
+    validate_macro_composition,
+    validate_player_recommendation_budget,
+)
 from modules.economy_ml.train import train_models
 from modules.economy_ml import model_registry
 from modules.economy_ml.rank_mapping import get_rank_group, get_rank_name, normalize_rank_tier
@@ -857,6 +860,39 @@ class EconomyMlTests(unittest.TestCase):
         )
         self.assertFalse(valid)
         self.assertIn("supera", reasons[0])
+
+    def test_macro_composition_validation_is_centralized(self):
+        invalid_full = validate_macro_composition("FULL_RIFLES", {
+            "players": [
+                {"weapon": {"displayName": "Operator"}, "armor": {"armor_level": "heavy"}},
+                {"weapon": {"displayName": "Vandal"}, "armor": {"armor_level": "heavy"}},
+                {"weapon": {"displayName": "Phantom"}, "armor": {"armor_level": "heavy"}},
+                {"weapon": {"displayName": "Bulldog"}, "armor": {"armor_level": "heavy"}},
+                {"weapon": {"displayName": "Guardian"}, "armor": {"armor_level": "heavy"}},
+            ]
+        })
+        self.assertFalse(invalid_full["valid"])
+        self.assertIn("snipers", " ".join(invalid_full["violations"]))
+
+        regen_full = validate_macro_composition("FULL_RIFLES", {
+            "players": [
+                {"weapon": {"displayName": "Vandal"}, "armor": {"armor_level": "regen"}},
+                {"weapon": {"displayName": "Phantom"}, "armor": {"armor_level": "heavy"}},
+                {"weapon": {"displayName": "Bulldog"}, "armor": {"armor_level": "heavy"}},
+                {"weapon": {"displayName": "Guardian"}, "armor": {"armor_level": "heavy"}},
+                {"weapon": {"displayName": "Vandal"}, "armor": {"armor_level": "heavy"}},
+            ]
+        })
+        self.assertTrue(regen_full["valid"])
+        self.assertIn("Regen Shield", " ".join(regen_full["warnings"]))
+
+        invalid_sheriff = validate_macro_composition("ECO_ONE_SHERIFF", {
+            "players": [
+                {"weapon": {"displayName": "Sheriff"}},
+                {"weapon": {"displayName": "Sheriff"}},
+            ]
+        })
+        self.assertFalse(invalid_sheriff["valid"])
 
     def test_ability_planner_recommends_controller_smoke_when_affordable(self):
         result = recommend_ability_purchase(
