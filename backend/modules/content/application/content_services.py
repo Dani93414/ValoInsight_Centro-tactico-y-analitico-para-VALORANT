@@ -59,6 +59,8 @@ CONTENT_FIELDS_ACTS = (
     "acts.parent_id",
     "acts.parentName",
     "acts.isActive",
+    "acts.startTime",
+    "acts.endTime",
 )
 
 CONTENT_FIELDS_AGENTS = (
@@ -70,11 +72,17 @@ CONTENT_FIELDS_AGENTS = (
     "agents.characterTags",
     "agents.isBaseContent",
     "agents.isAvailableForTest",
+    "agents.assetPath",
     "agents.role.displayName",
     "agents.role.description",
+    "agents.abilities.uuid",
+    "agents.abilities.id",
     "agents.abilities.slot",
     "agents.abilities.displayName",
     "agents.abilities.description",
+    "agents.abilities.displayIcon",
+    "agents.abilities.assetPath",
+    "agents.abilities.rawName",
 )
 
 CONTENT_FIELDS_MAPS = (
@@ -429,6 +437,7 @@ def get_agentes():
             "displayName": ag.get("displayName", "—"),
             "description": ag.get("description", "—"),
             "releaseDate": ag.get("releaseDate"),
+            "assetPath": ag.get("assetPath"),
             "characterTags": ag.get("characterTags") or [],
             "isBaseContent": ag.get("isBaseContent"),
             "isAvailableForTest": ag.get("isAvailableForTest"),
@@ -455,9 +464,14 @@ def get_agentes():
             ability_name = hab.get("displayName", "—")
             agente["abilities"].append({
                 "slot": hab.get("slot", "—"),
+                "uuid": hab.get("uuid"),
+                "id": hab.get("id") or hab.get("uuid"),
+                "assetPath": hab.get("assetPath"),
+                "rawName": hab.get("rawName"),
                 "displayName": ability_name,
                 "description": hab.get("description", "—"),
                 "displayIcon": _local_agent_ability_icon(agent_uuid, ability_name)
+                or hab.get("displayIcon")
             })
 
         agentes_response.append(agente)

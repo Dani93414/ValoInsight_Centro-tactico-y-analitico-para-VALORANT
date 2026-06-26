@@ -52,6 +52,18 @@ export function getRankNameFromTier(tier?: number | null): string {
   return RANK_NAMES[tier] ?? `Tier ${tier}`;
 }
 
+export function isRankedTier(tier?: number | null): boolean {
+  return Number.isFinite(tier) && Number(tier) >= MIN_RANK_TIER;
+}
+
+export function isUnrankedTier(tier?: number | null): boolean {
+  return !isRankedTier(tier);
+}
+
+export function getUnrankedRankName(): string {
+  return "Sin rango";
+}
+
 export function roundRankTier(value: number): number | null {
   if (!Number.isFinite(value)) return null;
   return Math.max(MIN_RANK_TIER, Math.min(MAX_RANK_TIER, Math.round(value)));

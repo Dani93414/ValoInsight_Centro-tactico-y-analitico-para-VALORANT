@@ -48,10 +48,10 @@ Fase 1 y Fase 2 (estructura) aplicadas:
 ## Flujo Final De Partidas (Un Comando)
 
 Pipeline recomendado para descargar partidas nuevas, evitar duplicados contra MongoDB,
-convertir al formato final y subirlas a la base de datos:
+convertir al formato final, subirlas con insercion paralela y reconstruir estadisticas derivadas:
 
 ```bash
-python scripts/pipeline_partidas.py --matches-per-player 5
+python scripts/pipeline_partidas.py --matches-per-player 5 --fill-requested --delete-duplicates
 ```
 
 Opciones útiles:
@@ -59,7 +59,7 @@ Opciones útiles:
 - Jugadores concretos:
 
 ```bash
-python scripts/pipeline_partidas.py --matches-per-player 5 --players "No Screams#GFS" "No Smoking#Camel"
+python scripts/pipeline_partidas.py --matches-per-player 5 --fill-requested --delete-duplicates --players "No Screams#GFS" "No Smoking#Camel"
 ```
 
 - Sin subida a Mongo (solo descarga+conversión):
@@ -71,5 +71,11 @@ python scripts/pipeline_partidas.py --matches-per-player 5 --skip-upload
 - Verificación final de integridad:
 
 ```bash
-python scripts/pipeline_partidas.py --matches-per-player 5 --verify --expected-per-player 405
+python scripts/pipeline_partidas.py --matches-per-player 5 --fill-requested --delete-duplicates --verify --expected-per-player 405
+```
+
+- Sacar 700 partidas nuevas buscando anteriores si hay repetidas:
+
+```bash
+python scripts/pipeline_partidas.py --matches-per-player 700 --fill-requested --no-max-history-scan --delete-duplicates
 ```

@@ -26,6 +26,11 @@ DEFAULT_SAFE_INPUT_ROOT = project_root / "data" / "BaseDatos_Partidas"
 DEFAULT_UPLOAD_WORKERS = int(os.getenv("MONGO_UPLOAD_WORKERS", "6"))
 
 
+def progress_label(done: int, total: int) -> str:
+    pct = (done / total * 100.0) if total else 100.0
+    return f"[{pct:5.1f}%] [{done}/{total}]"
+
+
 def iter_match_files(base_dir: Path, recursive: bool) -> list[Path]:
     pattern = "**/*.json" if recursive else "*.json"
     return sorted(base_dir.glob(pattern))
@@ -117,12 +122,8 @@ def main() -> None:
         )
         raise SystemExit(1)
 
-    files = iter_match_files(input_dir, args.recursive)
-    if not files:
-        print(f"[INFO] No JSON files found in: {input_dir}")
-        return
-
     ensure_indexes()
+    files = iter_match_files(input_dir, args.recursive)
 
     stats = {
         "processed": 0,
@@ -138,54 +139,59 @@ def main() -> None:
     print(f"[INFO] Files found: {len(files)}")
     print(f"[INFO] Workers: {args.workers}")
 
-    with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {
-            executor.submit(
-                upload_one_file,
-                file_path,
-                input_dir,
-                args.delete_duplicates,
-                args.no_delete,
-            ): file_path
-            for file_path in files
-        }
+    if files:
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            futures = {
+                executor.submit(
+                    upload_one_file,
+                    file_path,
+                    input_dir,
+                    args.delete_duplicates,
+                    args.no_delete,
+                ): file_path
+                for file_path in files
+            }
 
-        for idx, future in enumerate(as_completed(futures), start=1):
-            file_path = futures[future]
-            stats["processed"] += 1
+            total_files = len(futures)
+            for idx, future in enumerate(as_completed(futures), start=1):
+                file_path = futures[future]
+                progress = progress_label(idx, total_files)
+                stats["processed"] += 1
 
-            try:
-                result = future.result()
-            except Exception as exc:
-                stats["failed"] += 1
-                print(f"[{idx}/{len(files)}] [FAILED] {file_path.name}: {exc}")
-                continue
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    stats["failed"] += 1
+                    print(f"{progress} [FAILED] {file_path.name}: {exc}")
+                    continue
 
-            status = result["status"]
-            stats[status] += 1
-            if result["read_error"]:
-                stats["read_errors"] += 1
-            if result["deleted"]:
-                stats["deleted"] += 1
-            if result["delete_error"]:
-                stats["delete_errors"] += 1
+                status = result["status"]
+                stats[status] += 1
+                if result["read_error"]:
+                    stats["read_errors"] += 1
+                if result["deleted"]:
+                    stats["deleted"] += 1
+                if result["delete_error"]:
+                    stats["delete_errors"] += 1
 
-            if status == "inserted":
-                label = "INSERTED"
-            elif status == "already_exists":
-                label = "DUPLICATE"
-            else:
-                label = "FAILED"
+                if status == "inserted":
+                    label = "INSERTED"
+                elif status == "already_exists":
+                    label = "DUPLICATE"
+                else:
+                    label = "FAILED"
 
-            suffix = ""
-            if result["deleted"]:
-                suffix = " deleted"
-            elif result["delete_error"]:
-                suffix = f" delete_error={result['delete_error']}"
-            elif result["error"]:
-                suffix = f" error={result['error']}"
+                suffix = ""
+                if result["deleted"]:
+                    suffix = " deleted"
+                elif result["delete_error"]:
+                    suffix = f" delete_error={result['delete_error']}"
+                elif result["error"]:
+                    suffix = f" error={result['error']}"
 
-            print(f"[{idx}/{len(files)}] [{label}] {file_path.name}{suffix}")
+                print(f"{progress} [{label}] {file_path.name}{suffix}")
+    else:
+        print(f"[INFO] No JSON files found in: {input_dir}")
 
     print("\n[SUMMARY]")
     print(f"processed: {stats['processed']}")

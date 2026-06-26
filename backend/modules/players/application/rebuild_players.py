@@ -12,6 +12,11 @@ except ModuleNotFoundError:
 logger = logging.getLogger(__name__)
 
 
+def _progress_label(done: int, total: int) -> str:
+    pct = (done / total * 100.0) if total else 100.0
+    return f"[{pct:5.1f}%] [{done}/{total}]"
+
+
 def rebuild_players_from_matches() -> dict:
     """
     Reconstruye players desde cero a partir de matches.
@@ -22,6 +27,7 @@ def rebuild_players_from_matches() -> dict:
     processed = 0
     failed = 0
 
+    total_matches = matches_collection.count_documents({})
     cursor = matches_collection.find({}, {"_id": 0}).sort("matchInfo.gameStartMillis", 1)
 
     for match_obj in cursor:
@@ -35,6 +41,10 @@ def rebuild_players_from_matches() -> dict:
                 (match_obj.get("matchInfo") or {}).get("matchId"),
                 exc,
             )
+
+        done = processed + failed
+        if done == total_matches or done % 25 == 0:
+            print(f"{_progress_label(done, total_matches)} [REBUILD_PLAYERS]")
 
     return {
         "processed_matches": processed,

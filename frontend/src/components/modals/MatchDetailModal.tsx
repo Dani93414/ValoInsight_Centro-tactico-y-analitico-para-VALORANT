@@ -95,6 +95,10 @@ import {
   isValidKill,
   validAssistants,
 } from "../../utils/stats/combatEvents";
+import {
+  resolveKillDamageSource,
+  shouldSuppressKillConnectionLine,
+} from "../../utils/damageAttribution";
 import "./DetailModals.css";
 
 type Props = {
@@ -151,6 +155,12 @@ type KillRoundEvent = {
   weaponName: string;
   weaponIcon?: string | null;
   damageType?: string;
+  damageSourceType?: "weapon" | "ability" | "melee" | "fall" | "bomb" | "unknown";
+  abilityId?: string;
+  abilityName?: string;
+  abilityIcon?: string | null;
+  isAbilityKill?: boolean;
+  suppressConnectionLine?: boolean;
   playerLocations: RawPlayerLocation[];
   killerLocation?: RawLocation;
   victimLocation?: RawLocation;
@@ -4825,7 +4835,7 @@ function MatchEventMapCanvas({
   }
 
   const killConnection =
-    selectedEvent.kind === "kill"
+    selectedEvent.kind === "kill" && !selectedEvent.suppressConnectionLine
       ? (() => {
           const killerId = cleanId(selectedEvent.killer);
           const killerMarker = eventMapState.markers.find(
@@ -5404,20 +5414,12 @@ export default function MatchDetailModal({
         const damageType = String(
           kill.finishingDamage?.damageType ?? "",
         ).trim();
-        const damageItem = cleanId(
-          kill.finishingDamage?.damageItem ?? kill.finishingDamage?.item,
+        const damageSource = resolveKillDamageSource(
+          kill,
+          killer,
+          weaponById,
+          agentById,
         );
-        const weaponData = damageItem ? weaponById.get(damageItem) : undefined;
-
-        const weaponName =
-          damageType && damageType.toLowerCase() !== "weapon"
-            ? damageType
-            : (weaponData?.displayName ?? "Arma desconocida");
-
-        const weaponIcon =
-          damageType.toLowerCase() === "weapon"
-            ? (weaponData?.displayIcon ?? null)
-            : null;
 
         const isPlayerKill =
           validKill && killerId === effectiveSelectedPlayerId;
@@ -5471,10 +5473,19 @@ export default function MatchDetailModal({
             victimAgent?.displayIconSmall ??
             victimAgent?.displayIcon ??
             undefined,
-          weaponId: damageItem || undefined,
-          weaponName,
-          weaponIcon,
+          weaponId: damageSource.id || undefined,
+          weaponName: damageSource.name,
+          weaponIcon: damageSource.icon ?? null,
           damageType: damageType || undefined,
+          damageSourceType: damageSource.type,
+          abilityId: damageSource.isAbility ? damageSource.id : undefined,
+          abilityName: damageSource.isAbility ? damageSource.name : undefined,
+          abilityIcon: damageSource.isAbility ? damageSource.icon ?? null : undefined,
+          isAbilityKill: damageSource.isAbility,
+          suppressConnectionLine: shouldSuppressKillConnectionLine(
+            damageSource,
+            killerAgent,
+          ),
           playerLocations: Array.isArray(kill.playerLocations)
             ? kill.playerLocations
             : [],
@@ -6757,10 +6768,17 @@ export default function MatchDetailModal({
 
           <div className="match-round-event-meta">
             <span className="match-round-event-weapon">
-              {event.weaponIcon && (
-                <img src={event.weaponIcon} alt={event.weaponName} />
+              {(event.isAbilityKill ? event.abilityIcon : event.weaponIcon) && (
+                <img
+                  src={(event.isAbilityKill ? event.abilityIcon : event.weaponIcon) ?? ""}
+                  alt={event.isAbilityKill ? event.abilityName ?? event.weaponName : event.weaponName}
+                />
               )}
-              <span>{event.weaponName}</span>
+              <span>
+                {event.isAbilityKill
+                  ? event.abilityName ?? event.weaponName
+                  : event.weaponName}
+              </span>
             </span>
             <span className="match-round-event-time">
               {toSecondsLabel(event.timeMs)}
@@ -6979,7 +6997,9 @@ export default function MatchDetailModal({
       <button
         key={event.id}
         type="button"
-        className={`match-playback-action ${isActive ? "is-active" : ""}`}
+        className={`match-playback-action ${
+          event.kind === "plant" || event.kind === "defuse" ? "is-objective" : ""
+        } ${isActive ? "is-active" : ""}`}
         data-playback-index={index}
         onClick={() => setPlaybackIndex(index)}
         aria-current={isActive ? "true" : undefined}

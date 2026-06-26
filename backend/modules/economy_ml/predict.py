@@ -85,7 +85,7 @@ def predict_match_economy_recommendations(match: dict) -> dict:
     dataset = pd.read_parquet(dataset_path) if dataset_path.exists() else pd.DataFrame()
     recommendations = []
     for state in extract_match_round_states(match):
-        result = recommend_economy_action(state)
+        result = recommend_economy_action(state, match=match)
         if not result.get("available"):
             continue
         real_action = state["real_buy_action"]

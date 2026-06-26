@@ -38,6 +38,8 @@ _DASHBOARD_CONTENT_PROJECTION = {
     "acts.parent.name": 1,
     "acts.type": 1,
     "acts.isActive": 1,
+    "acts.startTime": 1,
+    "acts.endTime": 1,
     "competitiveTiers.uuid": 1,
     "competitiveTiers.id": 1,
     "competitiveTiers.tiers": 1,
@@ -208,6 +210,7 @@ def _build_rank_comparison_player_match_stages(
             "$project": {
                 "_id": 0,
                 "puuid": "$players.puuid",
+                "seasonId": "$matchInfo.seasonId",
                 "timestamp": {
                     "$convert": {
                         "input": "$matchInfo.gameStartMillis",
@@ -653,6 +656,146 @@ def find_player_latest_rank_reference(
     return rows[0] if rows else {}
 
 
+def find_player_first_match_timestamp(
+    puuid: str,
+    *,
+    season_id: str | None = None,
+    queue_id: str | None = None,
+) -> int | None:
+    if not puuid:
+        return None
+    query: dict[str, Any] = {"players.puuid": puuid, "matchInfo.isRanked": True}
+    if season_id:
+        query["matchInfo.seasonId"] = season_id
+    if queue_id:
+        query["matchInfo.queueId"] = queue_id
+    row = matches_collection.find_one(
+        query,
+        {"_id": 0, "matchInfo.gameStartMillis": 1},
+        sort=[("matchInfo.gameStartMillis", 1)],
+    )
+    if not row:
+        return None
+    try:
+        return int((row.get("matchInfo") or {}).get("gameStartMillis") or 0)
+    except (TypeError, ValueError):
+        return None
+
+
+def find_player_latest_valid_rank(
+    puuid: str,
+    *,
+    queue_id: str | None = None,
+    agent_id: str | None = None,
+    map_name: str | None = None,
+    season_id: str | None = None,
+    party_size: str | None = None,
+    before_timestamp: int | None = None,
+    exclude_season_id: str | None = None,
+) -> dict[str, Any]:
+    if not puuid:
+        return {}
+
+    pipeline = _build_rank_comparison_player_match_stages(
+        puuid=puuid,
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        season_id=season_id,
+        party_size=party_size,
+    )
+    extra_match: dict[str, Any] = {"tier": {"$gte": 3}}
+    if before_timestamp is not None:
+        extra_match["timestamp"] = {"$lt": before_timestamp}
+    if exclude_season_id:
+        extra_match["seasonId"] = {"$ne": exclude_season_id}
+    pipeline.extend(
+        [
+            {"$match": extra_match},
+            {"$sort": {"timestamp": -1}},
+            {"$limit": 1},
+            {
+                "$project": {
+                    "_id": 0,
+                    "puuid": 1,
+                    "timestamp": 1,
+                    "latestTier": "$tier",
+                    "seasonId": 1,
+                }
+            },
+        ]
+    )
+    rows = list(
+        matches_collection.aggregate(
+            pipeline,
+            allowDiskUse=True,
+            maxTimeMS=QUERY_MAX_TIME_MS,
+        )
+    )
+    return rows[0] if rows else {}
+
+
+def find_latest_valid_ranks_for_players(
+    puuids: list[str],
+    *,
+    queue_id: str | None = None,
+    agent_id: str | None = None,
+    map_name: str | None = None,
+    party_size: str | None = None,
+    before_timestamp: int | None = None,
+    exclude_season_id: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    clean_puuids = sorted({str(puuid) for puuid in puuids if puuid})
+    if not clean_puuids:
+        return {}
+
+    pipeline = _build_rank_comparison_player_match_stages(
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        party_size=party_size,
+    )
+    extra_match: dict[str, Any] = {
+        "puuid": {"$in": clean_puuids},
+        "tier": {"$gte": 3},
+    }
+    if before_timestamp is not None:
+        extra_match["timestamp"] = {"$lt": before_timestamp}
+    if exclude_season_id:
+        extra_match["seasonId"] = {"$ne": exclude_season_id}
+    pipeline.extend(
+        [
+            {"$match": extra_match},
+            {"$sort": {"puuid": 1, "timestamp": -1}},
+            {
+                "$group": {
+                    "_id": "$puuid",
+                    "latestTier": {"$first": "$tier"},
+                    "timestamp": {"$first": "$timestamp"},
+                    "seasonId": {"$first": "$seasonId"},
+                }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "puuid": "$_id",
+                    "latestTier": 1,
+                    "timestamp": 1,
+                    "seasonId": 1,
+                }
+            },
+        ]
+    )
+    rows = list(
+        matches_collection.aggregate(
+            pipeline,
+            allowDiskUse=True,
+            maxTimeMS=QUERY_MAX_TIME_MS,
+        )
+    )
+    return {str(row.get("puuid") or ""): row for row in rows if row.get("puuid")}
+
+
 def aggregate_rank_cohort_players(
     cohort_tiers: list[int],
     *,
@@ -705,6 +848,81 @@ def aggregate_rank_cohort_players(
                 }
             },
             {"$match": {"latestTier": {"$in": clean_tiers}}},
+            {
+                "$project": {
+                    "_id": 0,
+                    "puuid": "$_id",
+                    "latestTier": 1,
+                    "latestTimestamp": 1,
+                    "matchCount": 1,
+                    "wins": 1,
+                    "kills": 1,
+                    "deaths": 1,
+                    "assists": 1,
+                    "rounds": 1,
+                    "score": 1,
+                    "headshots": 1,
+                    "bodyshots": 1,
+                    "legshots": 1,
+                    "roundBasedKastRounds": 1,
+                    "roundBasedKastSourceRounds": 1,
+                    "rawKastFallbackSum": 1,
+                    "rawKastFallbackCount": 1,
+                    "damageDelta": 1,
+                }
+            },
+        ]
+    )
+
+    return list(
+        matches_collection.aggregate(
+            pipeline,
+            allowDiskUse=True,
+            maxTimeMS=QUERY_MAX_TIME_MS,
+        )
+    )
+
+
+def aggregate_rank_cohort_metric_players(
+    *,
+    queue_id: str | None = None,
+    agent_id: str | None = None,
+    map_name: str | None = None,
+    season_id: str | None = None,
+    party_size: str | None = None,
+) -> list[dict[str, Any]]:
+    pipeline = _build_rank_comparison_player_match_stages(
+        queue_id=queue_id,
+        agent_id=agent_id,
+        map_name=map_name,
+        season_id=season_id,
+        party_size=party_size,
+    )
+    pipeline.extend(
+        [
+            {"$sort": {"puuid": 1, "timestamp": -1}},
+            {
+                "$group": {
+                    "_id": "$puuid",
+                    "latestTier": {"$first": "$tier"},
+                    "latestTimestamp": {"$first": "$timestamp"},
+                    "matchCount": {"$sum": 1},
+                    "wins": {"$sum": "$wins"},
+                    "kills": {"$sum": "$kills"},
+                    "deaths": {"$sum": "$deaths"},
+                    "assists": {"$sum": "$assists"},
+                    "rounds": {"$sum": "$rounds"},
+                    "score": {"$sum": "$score"},
+                    "headshots": {"$sum": "$headshots"},
+                    "bodyshots": {"$sum": "$bodyshots"},
+                    "legshots": {"$sum": "$legshots"},
+                    "roundBasedKastRounds": {"$sum": "$roundBasedKastRounds"},
+                    "roundBasedKastSourceRounds": {"$sum": "$roundBasedKastSourceRounds"},
+                    "rawKastFallbackSum": {"$sum": "$rawKastFallbackValue"},
+                    "rawKastFallbackCount": {"$sum": "$rawKastFallbackCount"},
+                    "damageDelta": {"$sum": "$damageDelta"},
+                }
+            },
             {
                 "$project": {
                     "_id": 0,

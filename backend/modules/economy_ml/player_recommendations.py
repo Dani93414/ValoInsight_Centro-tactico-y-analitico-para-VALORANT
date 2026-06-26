@@ -10,8 +10,14 @@ from modules.analytics.infrastructure.reference_data import (
 from .content_catalog import find_gear, find_weapon, load_gear_catalog, load_weapon_catalog
 from .agent_utility import agent_utility, player_agent_utility_features
 from .economy_cases import classify_economy_case
+from .economy_rules import is_pistol_round, is_sheriff_weapon, item_cost
+from .plan_allocator import allocate_player_loadouts
 from .player_form import build_player_form
 from .player_style import build_match_player_style, player_weapon_fit_score
+from .recommendation_validation import (
+    player_recommendation_total_cost,
+    validate_player_recommendation_budget,
+)
 from .ultimate_inference import infer_ultimate_state
 from .utility_budget import estimate_player_utility_budget
 
@@ -82,7 +88,13 @@ def _pick_armor(level: str, budget: float) -> dict[str, Any] | None:
 
 
 def _recommend_loadout(
-    action: str, budget: float, role: str, utility: dict[str, Any]
+    action: str,
+    budget: float,
+    role: str,
+    utility: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    allow_sheriff_light_exception: bool = False,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str]]:
     role_norm = str(role or "").lower()
     weapon_dependency = float(utility.get("weapon_dependency_score") or 0.5)
@@ -98,7 +110,8 @@ def _recommend_loadout(
     elif action in {"FULL_RIFLES", "FORCE_2_RIFLES", "FORCE_RIFLE_LIGHT"}:
         weapon = _pick_weapon("rifle_default", budget)
         armor_level = "light" if action == "FORCE_RIFLE_LIGHT" else "heavy"
-        armor = _pick_armor("heavy", max(0, budget - float((weapon or {}).get("cost") or 0))) or _pick_armor(armor_level, budget)
+        remaining_after_weapon = max(0, budget - float((weapon or {}).get("cost") or 0))
+        armor = _pick_armor("heavy", remaining_after_weapon) or _pick_armor(armor_level, remaining_after_weapon)
         reasons.append("La recomendacion de equipo busca armas principales con escudo adecuado.")
     elif action == "FORCE_OUTLAW":
         weapon = _pick_named_weapon("outlaw", budget) or _pick_weapon("sniper", budget)
@@ -129,8 +142,15 @@ def _recommend_loadout(
     if weapon_dependency >= 0.65 and action not in {"ECO_CLASSIC", "BONUS_KEEP_WEAPONS"}:
         reasons.append("El agente depende mas del impacto con arma; se prioriza arma/escudo si la economia lo permite.")
     if low_econ_resilience >= 0.65 and weapon_dependency < 0.6 and armor is None and action not in {"ECO_CLASSIC"}:
-        armor = _pick_armor("light", budget)
+        remaining_after_weapon = max(0.0, budget - _item_cost(weapon))
+        armor = _pick_armor("light", remaining_after_weapon)
         reasons.append("Se valora supervivencia para conservar utilidad potencial de apoyo/control.")
+    if is_pistol_round(state) and is_sheriff_weapon(weapon) and armor is not None:
+        if allow_sheriff_light_exception:
+            reasons.append("Escudo ligero permitido por excepcion inferida de escudo gratuito en pistol round.")
+        else:
+            armor = None
+            reasons.append("En pistol round normal, Sheriff + escudo ligero no es legal con 800 creditos.")
     if "duelist" in role_norm and weapon and "close_range" in (weapon.get("usage_profile") or []):
         reasons.append("El rol puede aprovechar mejor armas de entrada y contacto cercano.")
     if weapon is None and action not in {"ECO_CLASSIC", "BONUS_KEEP_WEAPONS"}:
@@ -196,28 +216,66 @@ def build_player_recommendations(
         }
         break
 
+    allocation = allocate_player_loadouts(match, state, recommended_action)
+    allocations_by_puuid = {
+        str(item.get("puuid")): item
+        for item in allocation.get("players") or []
+    }
     team_budget = _number(state.get("team_estimated_credits_before_buy"))
     per_player_budget = team_budget / max(len(players), 1)
     result: list[dict[str, Any]] = []
     for player in players:
         puuid = str(player.get("puuid"))
         economy = (pstats_by_puuid.get(puuid) or {}).get("economy") or {}
-        estimated_credits = max(per_player_budget, _number(economy.get("remaining")) + _number(economy.get("spent")))
+        assignment = allocations_by_puuid.get(puuid) or {}
+        estimated_credits = _number(assignment.get("estimated_credits")) or max(
+            per_player_budget,
+            _number(economy.get("remaining")) + _number(economy.get("spent")),
+        )
         agent_id = str(player.get("characterId") or "UNKNOWN")
         role = resolve_agent_role(agent_id)
         utility = agent_utility(agent_id)
         utility_features = player_agent_utility_features(agent_id, str(state.get("side") or "unknown"))
-        weapon, armor, reasons = _recommend_loadout(recommended_action, estimated_credits, role, utility)
-        loadout_spend = _item_cost(weapon) + _item_cost(armor)
+        weapon = assignment.get("weapon")
+        armor = assignment.get("armor")
+        armor_is_free_exception = bool(assignment.get("armor_is_free_exception"))
+        reasons = list(assignment.get("reasons") or [])
+        if not assignment:
+            weapon, armor, reasons = _recommend_loadout(
+                recommended_action,
+                estimated_credits,
+                role,
+                utility,
+                state,
+                allow_sheriff_light_exception=armor_is_free_exception,
+            )
+        armor_spend = 0.0 if armor_is_free_exception else item_cost(armor)
+        loadout_spend = item_cost(weapon) + armor_spend
         macro_case = classify_economy_case(state, recommended_action)["macro_buy_case"]
-        utility_budget_payload = estimate_player_utility_budget(
-            agent_id,
-            str(state.get("side") or "unknown"),
-            max(0.0, estimated_credits - loadout_spend),
-            macro_case,
-        )
-        utility_budget = utility_budget_payload.get("recommended_ability_budget")
-        total_recommended_spend = min(estimated_credits, loadout_spend + _number(utility_budget))
+        ability_plan = assignment.get("ability_plan") or {}
+        recommended_abilities = list(assignment.get("abilities") or ability_plan.get("abilities") or [])
+        if not assignment:
+            utility_budget_payload = estimate_player_utility_budget(
+                agent_id,
+                str(state.get("side") or "unknown"),
+                max(0.0, estimated_credits - loadout_spend),
+                macro_case,
+            )
+            utility_budget = utility_budget_payload.get("recommended_ability_budget")
+        else:
+            utility_budget_payload = {
+                "recommended_ability_budget": assignment.get("ability_budget"),
+                "priority_utility_profiles": [
+                    profile
+                    for ability in recommended_abilities
+                    for profile in ability.get("tactical_types", [])
+                ][:3],
+                "reason": "Utilidad concreta planificada dentro del presupuesto individual.",
+                "ability_budget_unknown": ability_plan.get("ability_budget_unknown"),
+                "ability_cost_available": ability_plan.get("ability_cost_available"),
+            }
+            utility_budget = assignment.get("ability_budget")
+        total_recommended_spend = loadout_spend + _number(utility_budget)
         expected_remaining = max(0.0, estimated_credits - total_recommended_spend)
         utility_profiles = utility.get("utility_profiles") or ["unknown"]
         style = build_match_player_style(player)
@@ -225,10 +283,11 @@ def build_player_recommendations(
         ultimate = infer_ultimate_state(match, puuid, resolve_agent_name(agent_id), int(state.get("round_number") or 1))
         weapon_fit = player_weapon_fit_score(style, (weapon or {}).get("displayName"))
         form_score = max(0.0, min(1.0, 0.5 + float(form.get("hot_streak_score") or 0) * 0.25 - float(form.get("cold_streak_score") or 0) * 0.25))
-        role_fit = 0.65 if utility_budget_payload.get("priority_utility_profiles", ["unknown"])[0] != "unknown" else 0.5
+        priority_profiles = utility_budget_payload.get("priority_utility_profiles") or ["unknown"]
+        role_fit = 0.65 if priority_profiles[0] != "unknown" else 0.5
         player_fit = round(max(0.0, min(1.0, (weapon_fit + form_score + role_fit) / 3)), 4)
         ability_reason = utility_budget_payload.get("reason")
-        result.append({
+        recommendation = {
             "puuid": puuid,
             "player_name": _display_player_name(player),
             "agent_id": agent_id,
@@ -243,13 +302,22 @@ def build_player_recommendations(
             "recommended_weapon": (weapon or {}).get("displayName"),
             "recommended_armor_id": (armor or {}).get("uuid"),
             "recommended_armor": (armor or {}).get("displayName"),
+            "recommended_armor_is_free_exception": armor_is_free_exception,
+            "recommended_abilities": recommended_abilities,
             "recommended_ability_budget": utility_budget,
+            "recommended_ability_cost": _number(utility_budget),
             "recommended_utility_focus": utility_budget_payload.get("priority_utility_profiles") or _utility_focus(utility, str(state.get("side") or "unknown")),
+            "recommended_ability_focus": utility_budget_payload.get("priority_utility_profiles") or _utility_focus(utility, str(state.get("side") or "unknown")),
+            "ability_cost_available": utility_budget_payload.get("ability_cost_available"),
+            "ability_budget_unknown": utility_budget_payload.get("ability_budget_unknown"),
             "ability_purchase_certainty": "estimated_plan_not_observed",
             "expected_spend": round(total_recommended_spend, 2),
             "expected_remaining": round(expected_remaining, 2),
             "estimated_total_recommended_spend": round(total_recommended_spend, 2),
             "expected_remaining_after_buy": round(expected_remaining, 2),
+            "loadout_slot": assignment.get("slot"),
+            "allocation_valid": bool(allocation.get("valid")),
+            "allocation_violations": allocation.get("violations") or [],
             "style_profile": style,
             "form": form,
             "ultimate_estimate": ultimate,
@@ -269,5 +337,20 @@ def build_player_recommendations(
             ],
             "confidence": None,
             "player_weapon_stats": None,
+        }
+        costs = player_recommendation_total_cost(recommendation)
+        valid_budget, budget_reasons = validate_player_recommendation_budget(
+            recommendation,
+            estimated_credits=estimated_credits,
+        )
+        recommendation.update({
+            "recommended_weapon_cost": costs["weapon_cost"],
+            "recommended_armor_cost": costs["armor_cost"],
+            "recommended_total_cost": costs["total_cost"],
+            "budget_valid": valid_budget,
+            "budget_validation_reasons": budget_reasons,
         })
+        if not valid_budget:
+            recommendation["reason"] = recommendation["reason"] + budget_reasons
+        result.append(recommendation)
     return result

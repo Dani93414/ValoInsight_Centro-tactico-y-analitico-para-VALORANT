@@ -2,9 +2,16 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+DEFAULT_DOWNLOAD_WORKERS = int(os.getenv("HENRIK_DOWNLOAD_WORKERS", "4"))
+DEFAULT_CONVERT_WORKERS = int(os.getenv("MATCH_CONVERT_WORKERS", "4"))
+DEFAULT_REQUESTS_PER_MINUTE = int(os.getenv("HENRIK_REQUESTS_PER_MINUTE", "30"))
+DEFAULT_RATE_LIMIT_SAFETY_FACTOR = float(os.getenv("HENRIK_RATE_LIMIT_SAFETY_FACTOR", "1.10"))
+DEFAULT_UPLOAD_WORKERS = int(os.getenv("MONGO_UPLOAD_WORKERS", "6"))
 
 
 def run_step(command: list[str], cwd: Path, step_name: str) -> None:
@@ -134,6 +141,59 @@ def main() -> None:
         help="No sube a Mongo tras convertir (solo descarga y formatea).",
     )
     parser.add_argument(
+        "--legacy-upload",
+        action="store_true",
+        help="Usa el uploader secuencial antiguo en vez del uploader paralelo.",
+    )
+    parser.add_argument(
+        "--upload-workers",
+        type=int,
+        default=DEFAULT_UPLOAD_WORKERS,
+        help=f"Workers para subir matches a Mongo en paralelo (default: {DEFAULT_UPLOAD_WORKERS}).",
+    )
+    parser.add_argument(
+        "--download-workers",
+        type=int,
+        default=DEFAULT_DOWNLOAD_WORKERS,
+        help=f"Workers para descargar detalles de partidas (default: {DEFAULT_DOWNLOAD_WORKERS}).",
+    )
+    parser.add_argument(
+        "--convert-workers",
+        type=int,
+        default=DEFAULT_CONVERT_WORKERS,
+        help=f"Workers para convertir JSONs en paralelo (default: {DEFAULT_CONVERT_WORKERS}).",
+    )
+    parser.add_argument(
+        "--requests-per-minute",
+        type=int,
+        default=DEFAULT_REQUESTS_PER_MINUTE,
+        help=f"Limite global de requests/minuto para Henrik API (default: {DEFAULT_REQUESTS_PER_MINUTE}).",
+    )
+    parser.add_argument(
+        "--rate-limit-safety-factor",
+        type=float,
+        default=DEFAULT_RATE_LIMIT_SAFETY_FACTOR,
+        help=(
+            "Factor de seguridad del rate limit de Henrik "
+            f"(default: {DEFAULT_RATE_LIMIT_SAFETY_FACTOR})."
+        ),
+    )
+    parser.add_argument(
+        "--no-delete",
+        action="store_true",
+        help="No borra JSONs locales tras subirlos a Mongo.",
+    )
+    parser.add_argument(
+        "--delete-duplicates",
+        action="store_true",
+        help="Borra JSONs locales cuando la partida ya existe en Mongo.",
+    )
+    parser.add_argument(
+        "--skip-rebuild-derived",
+        action="store_true",
+        help="No reconstruye analytics, players ni regions al final de la subida paralela.",
+    )
+    parser.add_argument(
         "--verify",
         action="store_true",
         help="Ejecuta verificacion de integridad al final (--expected-per-player requerido).",
@@ -167,6 +227,18 @@ def main() -> None:
 
     if args.max_history_scan is not None and args.max_history_scan <= 0:
         raise RuntimeError("--max-history-scan debe ser mayor que 0")
+    if args.download_workers <= 0:
+        raise RuntimeError("--download-workers debe ser mayor que 0")
+    if args.convert_workers <= 0:
+        raise RuntimeError("--convert-workers debe ser mayor que 0")
+    if args.upload_workers <= 0:
+        raise RuntimeError("--upload-workers debe ser mayor que 0")
+    if args.requests_per_minute <= 0:
+        raise RuntimeError("--requests-per-minute debe ser mayor que 0")
+    if args.rate_limit_safety_factor < 1.0:
+        raise RuntimeError("--rate-limit-safety-factor debe ser mayor o igual que 1.0")
+    if args.legacy_upload and args.skip_rebuild_derived:
+        raise RuntimeError("--skip-rebuild-derived solo aplica al uploader paralelo")
 
     project_root = Path(__file__).resolve().parents[1]
     staging_dir = project_root / "backend" / "ingestion"
@@ -207,20 +279,44 @@ def main() -> None:
     if args.no_max_history_scan:
         download_cmd.append("--no-max-history-scan")
 
+    download_cmd.extend(["--requests-per-minute", str(args.requests_per_minute)])
+    download_cmd.extend(["--rate-limit-safety-factor", str(args.rate_limit_safety_factor)])
+    download_cmd.extend(["--download-workers", str(args.download_workers)])
+    download_cmd.extend(["--convert-workers", str(args.convert_workers)])
+
     run_step(download_cmd, project_root, "Descarga y conversion")
 
     if not args.keep_staging_files:
         cleanup_staging_files(staging_dir, "posterior")
 
     if not args.skip_upload:
-        upload_cmd = [
-            python_exe,
-            str(scripts_dir / "upload_matches_to_mongo.py"),
-            "--input-dir",
-            "data/BaseDatos_Partidas",
-        ]
-        if args.fill_requested:
-            upload_cmd.append("--delete-duplicates")
+        if args.legacy_upload:
+            upload_cmd = [
+                python_exe,
+                str(scripts_dir / "upload_matches_to_mongo.py"),
+                "--input-dir",
+                "data/BaseDatos_Partidas",
+            ]
+            if args.no_delete:
+                upload_cmd.append("--no-delete")
+            if args.delete_duplicates or args.fill_requested:
+                upload_cmd.append("--delete-duplicates")
+        else:
+            upload_cmd = [
+                python_exe,
+                str(scripts_dir / "upload_matches_to_mongo_parallel.py"),
+                "--input-dir",
+                "data/BaseDatos_Partidas",
+                "--workers",
+                str(args.upload_workers),
+            ]
+            if args.no_delete:
+                upload_cmd.append("--no-delete")
+            if args.delete_duplicates or args.fill_requested:
+                upload_cmd.append("--delete-duplicates")
+            if not args.skip_rebuild_derived:
+                upload_cmd.append("--rebuild-derived")
+
         run_step(upload_cmd, project_root, "Subida a MongoDB")
 
     if args.verify:

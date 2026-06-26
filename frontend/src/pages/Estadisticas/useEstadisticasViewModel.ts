@@ -351,7 +351,11 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
     ],
   );
 
-  const { data: rankComparisonRaw } = usePlayerRankComparison(
+  const {
+    data: rankComparisonRaw,
+    isLoading: rankComparisonLoading,
+    isFetching: rankComparisonFetching,
+  } = usePlayerRankComparison(
     playerId,
     rankComparisonFilters,
     Boolean(playerId && dashboard),
@@ -1717,6 +1721,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
   return {
     // loading / data
     loading,
+    rankComparisonLoading: rankComparisonLoading || rankComparisonFetching,
     dashboard,
     player,
 

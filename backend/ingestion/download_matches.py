@@ -60,6 +60,11 @@ def safe_name(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", s).strip("_")
 
 
+def progress_label(done: int, total: int) -> str:
+    pct = (done / total * 100.0) if total else 100.0
+    return f"[{pct:5.1f}%] [{done}/{total}]"
+
+
 class ThreadSafeRateLimiter:
     """
     Rate limiter global para una sola API key.
@@ -632,23 +637,25 @@ def main():
                     for i, match_id in enumerate(match_ids, start=1)
                 }
 
-                for future in as_completed(futures):
+                total_downloads = len(futures)
+                for completed, future in enumerate(as_completed(futures), start=1):
                     match_id = futures[future]
+                    progress = progress_label(completed, total_downloads)
 
                     try:
                         downloaded_match_id, ok, error = future.result()
                     except Exception as exc:
                         failed += 1
-                        print(f"[FAILED] {match_id}: {exc}")
+                        print(f"{progress} [FAILED] {match_id}: {exc}")
                         continue
 
                     if ok:
                         saved += 1
                         existing_match_ids.add(downloaded_match_id)
-                        print(f"[OK] {downloaded_match_id}")
+                        print(f"{progress} [OK] {downloaded_match_id}")
                     else:
                         failed += 1
-                        print(f"[FAILED] {downloaded_match_id}: {error}")
+                        print(f"{progress} [FAILED] {downloaded_match_id}: {error}")
 
             print(f"[OK] {riot_id}: guardadas {saved}, fallidas {failed} en: {OUT_DIR.resolve()}")
     finally:

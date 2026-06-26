@@ -88,6 +88,11 @@ def _extract_player_weapon_stats(match_obj: dict, puuid: str) -> dict[str, dict[
             "uses": int(payload.get("rounds", 0) or 0),
             "kills": int(payload.get("kills", 0) or 0),
             "deaths": int(payload.get("deaths", 0) or 0),
+            "source_id": payload.get("source_id") or weapon_id,
+            "source_name": payload.get("source_name") or payload.get("weapon_name"),
+            "source_type": payload.get("source_type") or "weapon",
+            "source_icon": payload.get("source_icon"),
+            "is_ability": bool(payload.get("is_ability")),
         }
     return weapon_stats
 
@@ -99,6 +104,9 @@ def _merge_nested_weapon_stats(
     for weapon_id, payload in (incoming or {}).items():
         if weapon_id not in merged:
             merged[weapon_id] = {"uses": 0, "kills": 0, "deaths": 0}
+        for key in ("source_id", "source_name", "source_type", "source_icon", "is_ability"):
+            if payload.get(key) is not None:
+                merged[weapon_id][key] = payload.get(key)
         merged[weapon_id]["uses"] += int(payload.get("uses", 0) or 0)
         merged[weapon_id]["kills"] += int(payload.get("kills", 0) or 0)
         merged[weapon_id]["deaths"] += int(payload.get("deaths", 0) or 0)

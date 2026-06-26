@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 from modules.analytics.infrastructure.reference_data import (
-    resolve_melee_weapon_id,
     resolve_weapon_or_gear_name,
 )
 
 from shared.combat_events import is_valid_kill, valid_assistants
+from shared.damage_attribution import resolve_damage_source
 from shared.math_utils import safe_div as _safe_div_raw
 
 
@@ -35,12 +35,11 @@ def _normalize_weapon_id(value: Any) -> str:
 
 
 def _damage_item_weapon_id(kill: dict[str, Any], fallback_weapon_id: str) -> str:
-    finishing_damage = kill.get("finishingDamage") or {}
-    damage_item = _normalize_weapon_id(finishing_damage.get("damageItem"))
-    damage_type = str(finishing_damage.get("damageType") or "").strip().lower()
-    if damage_type == "melee" and damage_item == "UNKNOWN":
-        return resolve_melee_weapon_id()
-    return damage_item if damage_item != "UNKNOWN" else fallback_weapon_id
+    return resolve_damage_source(
+        kill,
+        fallback_weapon_id=fallback_weapon_id,
+        killer_agent_id=kill.get("killerAgentId") or kill.get("killerAgentID"),
+    )["source_id"]
 
 
 def _unique_kill_key(kill: dict[str, Any]) -> tuple[Any, Any, Any, tuple[str, ...]]:
@@ -88,15 +87,29 @@ def _find_player_round_stats(
 def _ensure_weapon_bucket(
     weapon_stats: dict[str, dict[str, Any]],
     weapon_id: str,
+    source: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_weapon_id = _normalize_weapon_id(weapon_id)
     bucket = weapon_stats.get(normalized_weapon_id)
     if bucket is not None:
+        if source:
+            bucket.setdefault("source_id", source.get("source_id") or normalized_weapon_id)
+            bucket.setdefault("source_name", source.get("source_name") or bucket.get("weapon_name"))
+            bucket.setdefault("source_type", source.get("source_type") or "weapon")
+            bucket.setdefault("source_icon", source.get("icon"))
+            bucket.setdefault("is_ability", bool(source.get("is_ability")))
         return bucket
 
+    source_name = (source or {}).get("source_name") or resolve_weapon_or_gear_name(normalized_weapon_id)
+    source_type = (source or {}).get("source_type") or "weapon"
     bucket = {
         "weapon_id": normalized_weapon_id,
-        "weapon_name": resolve_weapon_or_gear_name(normalized_weapon_id),
+        "weapon_name": source_name,
+        "source_id": (source or {}).get("source_id") or normalized_weapon_id,
+        "source_name": source_name,
+        "source_type": source_type,
+        "source_icon": (source or {}).get("icon"),
+        "is_ability": bool((source or {}).get("is_ability")),
         "rounds": 0,
         "kills": 0,
         "deaths": 0,
@@ -152,10 +165,16 @@ def compute_precise_weapon_stats_core(
             if death_time_ms is not None and kill_time_ms > death_time_ms:
                 continue
 
-            kill_weapon_id = _damage_item_weapon_id(kill, current_known_weapon_id)
-            _ensure_weapon_bucket(weapon_stats, kill_weapon_id)["kills"] += 1
+            damage_source = resolve_damage_source(
+                kill,
+                fallback_weapon_id=current_known_weapon_id,
+                killer_agent_id=kill.get("killerAgentId") or kill.get("killerAgentID"),
+            )
+            kill_weapon_id = _normalize_weapon_id(damage_source.get("source_id"))
+            _ensure_weapon_bucket(weapon_stats, kill_weapon_id, damage_source)["kills"] += 1
             kill_weapon_ids.append(kill_weapon_id)
-            current_known_weapon_id = kill_weapon_id
+            if not damage_source.get("is_ability"):
+                current_known_weapon_id = kill_weapon_id
 
         death_weapon_id: str | None = None
         if death_time_ms is not None:
@@ -226,18 +245,33 @@ def merge_precise_weapon_core_stats(
         merged[weapon_id] = {**entry}
         merged[weapon_id]["weapon_id"] = entry.get("weapon_id") or weapon_id
         merged[weapon_id]["weapon_name"] = entry.get("weapon_name") or resolve_weapon_or_gear_name(weapon_id)
+        merged[weapon_id]["source_id"] = entry.get("source_id") or merged[weapon_id]["weapon_id"]
+        merged[weapon_id]["source_name"] = entry.get("source_name") or merged[weapon_id]["weapon_name"]
+        merged[weapon_id]["source_type"] = entry.get("source_type") or "weapon"
+        merged[weapon_id]["source_icon"] = entry.get("source_icon")
+        merged[weapon_id]["is_ability"] = bool(entry.get("is_ability"))
 
     for weapon_id, bucket in (precise_core_stats or {}).items():
         if weapon_id not in merged:
             merged[weapon_id] = {
                 "weapon_id": weapon_id,
                 "weapon_name": bucket.get("weapon_name") or resolve_weapon_or_gear_name(weapon_id),
+                "source_id": bucket.get("source_id") or weapon_id,
+                "source_name": bucket.get("source_name") or bucket.get("weapon_name") or resolve_weapon_or_gear_name(weapon_id),
+                "source_type": bucket.get("source_type") or "weapon",
+                "source_icon": bucket.get("source_icon"),
+                "is_ability": bool(bucket.get("is_ability")),
             }
 
     for weapon_id, entry in merged.items():
         bucket = (precise_core_stats or {}).get(weapon_id) or {}
         entry["weapon_id"] = entry.get("weapon_id") or weapon_id
         entry["weapon_name"] = entry.get("weapon_name") or resolve_weapon_or_gear_name(weapon_id)
+        entry["source_id"] = bucket.get("source_id") or entry.get("source_id") or weapon_id
+        entry["source_name"] = bucket.get("source_name") or entry.get("source_name") or entry["weapon_name"]
+        entry["source_type"] = bucket.get("source_type") or entry.get("source_type") or "weapon"
+        entry["source_icon"] = bucket.get("source_icon") or entry.get("source_icon")
+        entry["is_ability"] = bool(bucket.get("is_ability") or entry.get("is_ability"))
         entry["rounds"] = int(bucket.get("rounds", 0) or 0)
         entry["kills"] = int(bucket.get("kills", 0) or 0)
         entry["deaths"] = int(bucket.get("deaths", 0) or 0)

@@ -19,6 +19,20 @@ from .state_extractor import extract_match_round_states
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DATASET_PATH = Path(__file__).parent / "artifacts" / "economy_round_dataset.parquet"
+NON_DATASET_STATE_COLUMNS = {
+    "team_player_credit_estimates",
+    "enemy_player_credit_estimates",
+    "team_player_free_light_armor_exceptions",
+    "enemy_player_free_light_armor_exceptions",
+}
+
+
+def _dataset_safe_row(row: dict) -> dict:
+    return {
+        key: value
+        for key, value in row.items()
+        if key not in NON_DATASET_STATE_COLUMNS
+    }
 
 
 def build_economy_dataset_from_matches(matches: list[dict]) -> pd.DataFrame:
@@ -40,7 +54,7 @@ def build_economy_dataset_from_matches(matches: list[dict]) -> pd.DataFrame:
             continue
         valid_rows = [row for row in extracted if row.get("real_buy_action") != "UNKNOWN"]
         discarded["unknown_action_rows"] += len(extracted) - len(valid_rows)
-        rows.extend(valid_rows)
+        rows.extend(_dataset_safe_row(row) for row in valid_rows)
     LOGGER.info("Economy dataset: %s rows; discarded=%s", len(rows), discarded)
     return pd.DataFrame(rows)
 
