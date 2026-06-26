@@ -85,10 +85,30 @@ def _propensity_weights(train: pd.DataFrame) -> tuple[Pipeline | None, np.ndarra
     marginal = actions.value_counts(normalize=True).to_dict()
     stabilized = np.array([marginal[action] / max(observed[index], 0.01) for index, action in enumerate(actions)])
     weights = np.clip(stabilized, 0.1, MAX_IPW_WEIGHT)
+    action_support = actions.value_counts().astype(int).to_dict()
+    clipping_rate = float((stabilized > MAX_IPW_WEIGHT).mean())
+    effective_sample_size = float((weights.sum() ** 2) / np.square(weights).sum()) if len(weights) else 0.0
+    propensity_by_action = {
+        str(action): {
+            "samples": int((actions == action).sum()),
+            "mean_observed_probability": float(observed[actions.to_numpy() == action].mean()),
+            "min_observed_probability": float(observed[actions.to_numpy() == action].min()),
+        }
+        for action in classes
+        if (actions == action).any()
+    }
     return propensity, weights, {
         "available": True, "classes": classes,
         "min_observed_probability": float(observed.min()),
         "max_weight": float(weights.max()),
+        "clipping_rate": clipping_rate,
+        "effective_sample_size": effective_sample_size,
+        "propensity_by_action": propensity_by_action,
+        "low_support_actions": {
+            action: count for action, count in action_support.items()
+            if count < MIN_ACTION_SUPPORT
+        },
+        "aipw_status": "not_implemented_experimental_placeholder",
     }
 
 
@@ -219,6 +239,10 @@ def train_models(dataset: pd.DataFrame, *, enforce_minimums: bool = True) -> dic
         "labels": MODEL_LABELS,
         "available_data_report_hash": availability.get("report_hash"),
         "ability_cost_available": ability_costs_available(),
+        "prebuy_credit_source": "selected_from_observed_rules_reconciliation",
+        "supports_regen_shield": True,
+        "weapon_taxonomy_version": "valorant-content-taxonomy-v2",
+        "planned_cashflow_available": True,
         "agent_utility_available": True,
         "player_style_available": "fallback_or_embedded_analytics",
         "player_form_available": True,

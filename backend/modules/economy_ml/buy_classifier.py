@@ -30,10 +30,10 @@ def _weapon_category_contains(weapon_id: Any, text: str) -> bool:
 
 def _weapon_name_contains(weapon_id: Any, text: str) -> bool:
     weapon = find_weapon(weapon_id)
-    return bool(weapon and _norm(text) in _norm(weapon.get("displayName")))
+    return bool(_norm(text) in _norm((weapon or {}).get("displayName") or weapon_id))
 
 
-def is_rifle(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "rifle" or weapon_has_profile(weapon_id, "rifle_default")
+def is_rifle(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "rifle"
 def is_smg(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "smg" or _weapon_category_contains(weapon_id, "smg")
 def is_machine_gun(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "heavy" or weapon_has_profile(weapon_id, "machine_gun")
 def is_shotgun(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "shotgun" or weapon_has_profile(weapon_id, "shotgun")

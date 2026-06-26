@@ -106,7 +106,7 @@ def _team_observed_prebuy(players: list[dict[str, Any]], economy_by_player: dict
     return sum(float(value or 0) for value in values)
 
 
-def _credit_estimate_quality_v7(observed: float | None, rules: float, fallback_quality: str) -> tuple[str, str | None]:
+def _credit_estimate_quality_v9(observed: float | None, rules: float, fallback_quality: str) -> tuple[str, str | None]:
     if observed is not None:
         gap = abs(float(observed) - float(rules))
         if gap <= 100:
@@ -117,6 +117,14 @@ def _credit_estimate_quality_v7(observed: float | None, rules: float, fallback_q
     if rules > 0:
         return "rules_only", None
     return "inconsistent", f"missing_observed_and_rules_{fallback_quality}"
+
+
+def _select_prebuy_credits(observed: float | None, rules: float, quality: str, *, force_rules: bool = False) -> float:
+    if force_rules or observed is None:
+        return float(rules)
+    if quality in {"exact_observed", "reconciled_team"}:
+        return float(observed)
+    return float(rules)
 
 
 def fixed_round_start_credits(round_number: int) -> float | None:
@@ -156,6 +164,42 @@ def _round_player_credit_values(
     else:
         quality = "rules_based"
     return values, quality
+
+
+def _rules_player_credit_values(
+    players: list[dict[str, Any]],
+    previous_team_ledger: dict | None,
+    fallback_player_credits: dict[str, float],
+    round_number: int,
+) -> dict[str, float]:
+    fixed_start = fixed_round_start_credits(round_number)
+    if fixed_start is not None:
+        return {str(player["puuid"]): fixed_start for player in players}
+    previous_players = {
+        str(player.get("puuid")): player
+        for player in ((previous_team_ledger or {}).get("players") or [])
+        if player.get("puuid")
+    }
+    result: dict[str, float] = {}
+    for player in players:
+        puuid = str(player["puuid"])
+        previous = previous_players.get(puuid)
+        if previous and previous.get("expected_next_round_credits") is not None:
+            result[puuid] = min(9000.0, _number(previous.get("expected_next_round_credits")))
+        else:
+            result[puuid] = min(9000.0, _number(fallback_player_credits.get(puuid)))
+    return result
+
+
+def _selected_player_credit_values(
+    observed_values: dict[str, float],
+    rules_values: dict[str, float],
+    observed_team_total: float | None,
+    quality: str,
+) -> dict[str, float]:
+    if observed_team_total is None or quality not in {"exact_observed", "reconciled_team"}:
+        return dict(rules_values)
+    return dict(observed_values)
 
 
 def _prefixed_credit_features(prefix: str, values: list[float]) -> dict[str, float | int]:
@@ -361,22 +405,13 @@ def extract_match_round_states(match: dict) -> list[dict]:
             enemy_avg_tier = sum(valid_enemy_tiers) / len(valid_enemy_tiers) if valid_enemy_tiers else 0
             rounded_tier = int(round(avg_tier)) if valid_tiers else None
             enemy_rounded_tier = int(round(enemy_avg_tier)) if valid_enemy_tiers else None
-            own_credits, enemy_credits = credits[team_id], credits[enemy_id]
-            team_player_credit_estimates = {
+            observed_team_player_credits = {
                 str(player["puuid"]): round_player_credits[team_id][str(player["puuid"])]
                 for player in team_players[team_id]
             }
-            enemy_player_credit_estimates = {
+            observed_enemy_player_credits = {
                 str(player["puuid"]): round_player_credits[enemy_id][str(player["puuid"])]
                 for player in team_players[enemy_id]
-            }
-            team_free_light_exceptions = {
-                puuid: bool(free_light_exceptions.get(puuid))
-                for puuid in team_player_credit_estimates
-            }
-            enemy_free_light_exceptions = {
-                puuid: bool(free_light_exceptions.get(puuid))
-                for puuid in enemy_player_credit_estimates
             }
             map_id = str(match_info.get("mapId") or "UNKNOWN")
             side = _team_side(team_id, round_number, starting_attack_team)
@@ -387,32 +422,83 @@ def extract_match_round_states(match: dict) -> list[dict]:
             previous_enemy_ledger = ledger_by_round_team.get((round_number - 1, enemy_id))
             team_observed_prebuy = _team_observed_prebuy(team_players[team_id], economy_by_player)
             enemy_observed_prebuy = _team_observed_prebuy(team_players[enemy_id], economy_by_player)
-            team_quality_v7, team_quality_reason = _credit_estimate_quality_v7(
+            team_rules_player_credits = _rules_player_credit_values(
+                team_players[team_id],
+                previous_team_ledger,
+                player_credits,
+                round_number,
+            )
+            enemy_rules_player_credits = _rules_player_credit_values(
+                team_players[enemy_id],
+                previous_enemy_ledger,
+                player_credits,
+                round_number,
+            )
+            team_rules_prebuy = sum(team_rules_player_credits.values())
+            enemy_rules_prebuy = sum(enemy_rules_player_credits.values())
+            team_quality_v7, team_quality_reason = _credit_estimate_quality_v9(
                 team_observed_prebuy,
-                float(own_credits["estimated_credits_before_buy"]),
+                team_rules_prebuy,
                 round_credit_quality[team_id],
             )
-            enemy_quality_v7, enemy_quality_reason = _credit_estimate_quality_v7(
+            enemy_quality_v7, enemy_quality_reason = _credit_estimate_quality_v9(
                 enemy_observed_prebuy,
-                float(enemy_credits["estimated_credits_before_buy"]),
+                enemy_rules_prebuy,
                 round_credit_quality[enemy_id],
             )
+            force_rules_prebuy = fixed_round_start_credits(round_number) is not None
+            team_selected_prebuy = _select_prebuy_credits(
+                team_observed_prebuy,
+                team_rules_prebuy,
+                team_quality_v7,
+                force_rules=force_rules_prebuy,
+            )
+            enemy_selected_prebuy = _select_prebuy_credits(
+                enemy_observed_prebuy,
+                enemy_rules_prebuy,
+                enemy_quality_v7,
+                force_rules=force_rules_prebuy,
+            )
+            team_player_credit_estimates = _selected_player_credit_values(
+                observed_team_player_credits,
+                team_rules_player_credits,
+                team_observed_prebuy,
+                team_quality_v7,
+            )
+            enemy_player_credit_estimates = _selected_player_credit_values(
+                observed_enemy_player_credits,
+                enemy_rules_player_credits,
+                enemy_observed_prebuy,
+                enemy_quality_v7,
+            )
+            own_credits = _credits_summary(list(team_player_credit_estimates.values()))
+            enemy_credits = _credits_summary(list(enemy_player_credit_estimates.values()))
+            own_credits["estimated_credits_before_buy"] = team_selected_prebuy
+            enemy_credits["estimated_credits_before_buy"] = enemy_selected_prebuy
+            team_free_light_exceptions = {
+                puuid: bool(free_light_exceptions.get(puuid))
+                for puuid in team_player_credit_estimates
+            }
+            enemy_free_light_exceptions = {
+                puuid: bool(free_light_exceptions.get(puuid))
+                for puuid in enemy_player_credit_estimates
+            }
             team_utility = summarize_team_agent_utility(
                 team_players[team_id],
                 side=side,
-                estimated_credits=float(own_credits["estimated_credits_before_buy"]),
+                estimated_credits=team_selected_prebuy,
                 prefix="team",
             )
             enemy_utility = summarize_team_agent_utility(
                 team_players[enemy_id],
                 side=enemy_side,
-                estimated_credits=float(enemy_credits["estimated_credits_before_buy"]),
+                estimated_credits=enemy_selected_prebuy,
                 prefix="enemy",
             )
             team_labels = classify_team_economy_labels(
                 stats_by_team[team_id],
                 round_number=round_number,
-                team_prebuy_credits=float(own_credits["estimated_credits_before_buy"]),
+                team_prebuy_credits=team_selected_prebuy,
                 previous_round_context={"won": streaks[team_id]["previous_won"]},
                 is_last_round_before_switch=round_number in {12, 24},
                 is_overtime=round_number >= 25,
@@ -420,7 +506,7 @@ def extract_match_round_states(match: dict) -> list[dict]:
             enemy_labels = classify_team_economy_labels(
                 stats_by_team[enemy_id],
                 round_number=round_number,
-                team_prebuy_credits=float(enemy_credits["estimated_credits_before_buy"]),
+                team_prebuy_credits=enemy_selected_prebuy,
                 previous_round_context={"won": streaks[enemy_id]["previous_won"]},
                 is_last_round_before_switch=round_number in {12, 24},
                 is_overtime=round_number >= 25,
@@ -453,11 +539,16 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 "team_credit_estimate_quality": _ledger_credit_quality(round_credit_quality[team_id], team_ledger),
                 "enemy_credit_estimate_quality": _ledger_credit_quality(round_credit_quality[enemy_id], enemy_ledger),
                 "prebuy_credits_observed": team_observed_prebuy,
-                "prebuy_credits_rules": own_credits["estimated_credits_before_buy"],
+                "prebuy_credits_rules": team_rules_prebuy,
+                "prebuy_credits_selected": team_selected_prebuy,
+                "team_prebuy_credits_observed": team_observed_prebuy,
+                "team_prebuy_credits_rules": team_rules_prebuy,
+                "team_prebuy_credits_selected": team_selected_prebuy,
                 "credit_estimate_quality": team_quality_v7,
                 "credit_estimate_inconsistency_reason": team_quality_reason,
                 "enemy_prebuy_credits_observed": enemy_observed_prebuy,
-                "enemy_prebuy_credits_rules": enemy_credits["estimated_credits_before_buy"],
+                "enemy_prebuy_credits_rules": enemy_rules_prebuy,
+                "enemy_prebuy_credits_selected": enemy_selected_prebuy,
                 "enemy_credit_estimate_inconsistency_reason": enemy_quality_reason,
                 "team_score_before": scores[team_id], "enemy_score_before": scores[enemy_id],
                 "score_diff": scores[team_id] - scores[enemy_id],
@@ -468,15 +559,15 @@ def extract_match_round_states(match: dict) -> list[dict]:
                 "is_bonus_candidate": int(round_number in {3, 15} and streaks[team_id]["win"] >= 2),
                 "is_last_round_before_switch": int(round_number in {12, 24}),
                 "is_match_point": int(current_max_score >= 12), "is_overtime": int(round_number >= 25),
-                "team_estimated_credits_before_buy": own_credits["estimated_credits_before_buy"],
-                "enemy_estimated_credits_before_buy": enemy_credits["estimated_credits_before_buy"],
-                "credits_before_buy_diff": own_credits["estimated_credits_before_buy"] - enemy_credits["estimated_credits_before_buy"],
+                "team_estimated_credits_before_buy": team_selected_prebuy,
+                "enemy_estimated_credits_before_buy": enemy_selected_prebuy,
+                "credits_before_buy_diff": team_selected_prebuy - enemy_selected_prebuy,
                 "team_players_can_full_buy_estimate": own_credits["players_can_full_buy_estimate"],
                 "enemy_players_can_full_buy_estimate": enemy_credits["players_can_full_buy_estimate"],
                 "team_players_low_money": own_credits["players_low_money"],
                 "enemy_players_low_money": enemy_credits["players_low_money"],
-                **_prefixed_credit_features("team", credit_distributions[team_id]),
-                **_prefixed_credit_features("enemy", credit_distributions[enemy_id]),
+                **_prefixed_credit_features("team", list(team_player_credit_estimates.values())),
+                **_prefixed_credit_features("enemy", list(enemy_player_credit_estimates.values())),
                 "pistol_free_light_armor_exception": int(any(team_free_light_exceptions.values())),
                 "team_players_with_free_light_armor_exception": sum(team_free_light_exceptions.values()),
                 "enemy_players_with_free_light_armor_exception": sum(enemy_free_light_exceptions.values()),

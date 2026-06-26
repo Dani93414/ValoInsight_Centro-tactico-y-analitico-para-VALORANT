@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .buy_classifier import is_light_armor, is_sheriff
+from .buy_classifier import is_heavy_armor, is_light_armor, is_regen_armor, is_sheriff
 from .content_catalog import find_gear, find_weapon, load_gear_catalog, load_weapon_catalog
 
 SHERIFF_COST = 800.0
 LIGHT_ARMOR_COST = 400.0
+REGEN_ARMOR_COST = 650.0
+HEAVY_ARMOR_COST = 1000.0
 GHOST_COST = 500.0
 SHERIFF_LIGHT_COST = SHERIFF_COST + LIGHT_ARMOR_COST
 GHOST_LIGHT_COST = GHOST_COST + LIGHT_ARMOR_COST
@@ -92,6 +94,10 @@ def weapon_cost(value: Any) -> float:
 def armor_cost(value: Any) -> float:
     if is_light_armor(value):
         return LIGHT_ARMOR_COST
+    if is_regen_armor(value):
+        return REGEN_ARMOR_COST
+    if is_heavy_armor(value):
+        return HEAVY_ARMOR_COST
     cost = _catalog_armor_cost(value)
     return _number(cost)
 

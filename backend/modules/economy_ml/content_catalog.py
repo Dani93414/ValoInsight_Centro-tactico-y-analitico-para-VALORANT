@@ -121,6 +121,8 @@ def _weapon_usage_profile(item: dict[str, Any]) -> list[str]:
     elif role == "heavy":
         profiles.append("machine_gun")
     for profile, category_terms, name_terms in USAGE_PROFILE_RULES:
+        if profile == "rifle_default" and role != "rifle":
+            continue
         if any(_compact(term) in compact_haystack for term in category_terms):
             profiles.append(profile)
             continue
@@ -279,7 +281,7 @@ def weapon_catalog_role(value: Any) -> str:
 
 def gear_armor_level(value: Any) -> str:
     gear = find_gear(value)
-    return str((gear or {}).get("armor_level") or "none")
+    return str((gear or {}).get("armor_level") or armor_role(value) or "none")
 
 
 def build_content_report() -> dict[str, Any]:

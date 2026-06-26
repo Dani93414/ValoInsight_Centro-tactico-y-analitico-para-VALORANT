@@ -15,6 +15,7 @@ def evaluate_plan_coherence(plan: dict[str, Any], state: dict[str, Any] | None =
     macro = str(plan.get("macro_case") or plan.get("team_buy_case") or "UNKNOWN")
     weapon_spend = _num(plan.get("estimated_weapon_spend") or plan.get("weapon_spend_estimate"))
     armor_spend = _num(plan.get("estimated_armor_spend") or plan.get("armor_spend_estimate"))
+    regen_spend = _num(plan.get("estimated_regen_armor_spend"))
     ability_spend = plan.get("estimated_ability_spend", plan.get("ability_spend_estimate"))
     ability_unknown = bool(plan.get("ability_budget_unknown"))
     total = _num(plan.get("estimated_total_spend") or plan.get("total_team_spend"))
@@ -31,6 +32,9 @@ def evaluate_plan_coherence(plan: dict[str, Any], state: dict[str, Any] | None =
     if macro == "FULLBUY" and armor_spend < 3000:
         penalty += 0.15
         warnings.append("FULLBUY sin escudos suficientes.")
+    if macro == "FULLBUY" and regen_spend > 0:
+        penalty += min(0.16, regen_spend / 6500)
+        warnings.append("Regen Shield en FULLBUY se considera downgrade de escudo pesado.")
     if macro == "FULLBUY" and not ability_unknown and _num(ability_spend) < 1000:
         penalty += 0.12
         warnings.append("FULLBUY sin margen minimo de utilidad.")

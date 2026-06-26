@@ -1,66 +1,100 @@
 # Economy ML
 
-Sistema conservador de recomendación económica orientado al valor de partida.
+Sistema conservador de recomendacion economica para VALORANT. El modelo es
+observacional: estima valor de plan con soporte historico, pero no demuestra
+causalidad ni garantiza que una accion sea optima.
 
-## Contrato de datos
+## Contrato De Datos
 
 Cada fila separa tres conceptos:
 
-- `estado_precompra`: marcador, ronda, lado, rachas, rango y créditos estimados
-  secuencialmente desde el saldo anterior y las reglas de ingreso;
-- `acción`: categoría de compra y perfil postcompra observado;
-- `labels`: victoria de ronda y victoria de partida.
+- Estado precompra: marcador, ronda, lado, rachas, rango, composicion y
+  creditos seleccionados antes de comprar.
+- Accion: categoria de compra y perfil postcompra observado o simulado.
+- Labels: resultado de ronda, partida y economia futura.
 
-Armas, armaduras y loadout observados no forman parte del estado precompra.
-Durante la recomendación, cada alternativa genera un perfil postcompra
-contrafactual coherente mediante `action_profiles.py`. El modelo nunca evalúa
-una ECO conservando los rifles de la compra real.
+No se usan como features pre-round kills, damage, resultado de la ronda actual,
+plant/defuse actual, score post-round ni loadout enemigo post-buy.
 
-No se usan como features kills, damage, resultado de la ronda actual,
-plant/defuse ni economía rival postcompra.
+## Creditos
 
-La estimación de créditos y las features del modelo no usan `spent + remaining`
-ni `action_total_spent` de la ronda actual porque
-en algunas fuentes `spent` se deriva del loadout y filtraría la acción real.
-Se reinicia en pistolas/cambio de mitad/overtime y se actualiza con saldo
-anterior, victoria/racha de derrotas y bonus de plant de la ronda anterior.
+La economia separa tres valores:
 
-## Interpretación
+- `prebuy_credits_observed`: suma `remaining + spent` cuando la fuente lo trae.
+- `prebuy_credits_rules`: reconstruccion por reglas desde la ronda anterior:
+  saldo tras compra, win/loss reward, loss streak, kill reward, spike plant
+  reward, save penalty, resets de pistol/cambio de mitad/overtime y cap 9000.
+- `prebuy_credits_selected`: valor usado por el modelo. En resets obligatorios
+  usa reglas. Si observed falta, usa reglas. Si observed y rules chocan mucho,
+  usa reglas y marca `credit_estimate_quality = inconsistent`.
 
-El entrenamiento estima valor de partida con datos observacionales y ajuste por
-propensión mediante pesos estabilizados. Las probabilidades se calibran sobre
-partidas posteriores y se evalúan en un tercer bloque temporal.
-Si menos del 90% de filas tiene fecha válida, el dataset se rechaza en
-lugar de simular una validación temporal.
+Los alias `team_estimated_credits_before_buy` y
+`enemy_estimated_credits_before_buy` apuntan al valor selected por
+compatibilidad. `prebuy_credits_rules` no debe copiar directamente
+`spent + remaining` de la ronda actual.
 
-Esto reduce sesgo, pero no demuestra causalidad ni convierte la salida en una
-acción óptima demostrada. Una acción solo puede recomendarse cuando:
+## Taxonomia
 
-- es económicamente viable;
-- tiene soporte histórico suficiente en el scope cargado;
-- su propensión estimada en el estado actual supera el mínimo configurado.
+Solo Bulldog, Guardian, Phantom y Vandal cuentan como rifles reales. Operator,
+Outlaw y Marshal son snipers y nunca reciben `rifle_default`.
 
-La confianza mostrada es un margen ajustado por soporte, no una garantía.
+Regen Shield es armadura real intermedia:
+
+- Light Shield: 400 creditos.
+- Regen Shield: 650 creditos.
+- Heavy Shield: 1000 creditos.
+
+Regen cuenta como armadura fuerte parcial. En fullbuy se permite como downgrade
+explicito frente a Heavy Shield con warning y penalty de coherencia.
+
+## Planes Y Cashflow
+
+El plan separa:
+
+- `target_loadout_case`: loadout objetivo observado o contrafactual.
+- `observed_cashflow_case`: cashflow real observado.
+- `planned_cashflow_case`: cashflow calculado para la accion candidata.
+- `cashflow_case`: alias compatible que en planes contrafactuales apunta al
+  planned cashflow.
+
+La recomendacion se ordena por `team_plan_value`. `delta_team_plan_value` es la
+metrica principal frente a la compra real. `delta_vs_real` se conserva solo como
+diferencia secundaria de probabilidad estimada de partida.
+
+## Limitaciones
+
+- Modelo observacional, no causal.
+- La compra real de habilidades puede no ser observable.
+- Drops y transferencias pueden requerir reconciliacion.
+- AFK compensation se marca como inferida si no esta confirmada.
+- Datos incompletos o corruptos de la API pueden degradar la confianza.
 
 ## Comandos
 
-```bash
-python -m backend.modules.economy_ml.dataset_builder ./partidas --output backend/modules/economy_ml/artifacts/economy_round_dataset.parquet
-python -m backend.modules.economy_ml.train --dataset backend/modules/economy_ml/artifacts/economy_round_dataset.parquet
+Reentrenamiento local:
+
+```powershell
+venv\Scripts\python.exe scripts\entrenamiento_economia.py
 ```
 
-Endpoints:
+Tests backend:
 
-- `GET /economy-ml/status`
-- `POST /economy-ml/train`
-- `GET /matches/{match_id}/economy-ml`
+```powershell
+$env:PYTHONPATH='backend'; venv\Scripts\python.exe -m unittest backend.tests.test_economy_ml backend.tests.test_economy_ledger
+```
 
-Los artefactos incluyen una versión de esquema. Artefactos antiguos, parciales
-o incompatibles no se cargan. El entrenamiento publica modelos mediante una
-carpeta temporal y solo sustituye los artefactos previos cuando se ha generado
-al menos un modelo compatible. Si no hay un modelo compatible, la API devuelve
-`available: false` y la UI mantiene la heurística como fallback visual.
+Build frontend:
 
-El entrenamiento HTTP está deshabilitado salvo que exista
-`ECONOMY_ML_TRAIN_TOKEN`; requiere ese valor en
-`X-Economy-ML-Train-Token` y bloquea entrenamientos concurrentes.
+```powershell
+cd frontend
+npm run build
+```
+
+Comprobar status del modelo:
+
+```powershell
+$env:PYTHONPATH='backend'; venv\Scripts\python.exe -c "from modules.economy_ml.model_registry import status; print(status())"
+```
+
+Los artefactos incluyen `schema_version`. Con `SCHEMA_VERSION = 9`, artefactos
+v8 o anteriores se rechazan hasta reentrenar.

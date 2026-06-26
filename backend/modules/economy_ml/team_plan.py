@@ -4,7 +4,7 @@ from typing import Any
 
 from .action_profiles import simulate_action_features
 from .ability_catalog import ability_costs_available
-from .economy_action_labels import normalize_target_loadout_case
+from .economy_action_labels import classify_cashflow_case, normalize_target_loadout_case
 from .economy_cases import classify_economy_case
 from .future_economy import simulate_next_round_economy
 from .plan_coherence import evaluate_plan_coherence
@@ -37,7 +37,7 @@ WEAPON_COST_ESTIMATES = {
     "smg": 1600,
     "sheriff": 800,
 }
-ARMOR_COST_ESTIMATES = {"heavy": 1000, "light": 400}
+ARMOR_COST_ESTIMATES = {"heavy": 1000, "regen": 650, "light": 400}
 
 
 def _number(value: Any) -> float:
@@ -61,6 +61,7 @@ def _estimate_weapon_cost(features: dict[str, Any]) -> float:
 def _estimate_armor_cost(features: dict[str, Any]) -> float:
     return (
         _number(features.get("action_heavy_armor_count")) * ARMOR_COST_ESTIMATES["heavy"]
+        + _number(features.get("action_regen_armor_count")) * ARMOR_COST_ESTIMATES["regen"]
         + _number(features.get("action_light_armor_count")) * ARMOR_COST_ESTIMATES["light"]
     )
 
@@ -123,6 +124,7 @@ def _coherence_penalty(
     rifles = _number(features.get("action_rifle_count"))
     snipers = _number(features.get("action_sniper_count"))
     heavy = _number(features.get("action_heavy_armor_count"))
+    regen = _number(features.get("action_regen_armor_count"))
     light = _number(features.get("action_light_armor_count"))
     strong_weapons = rifles + snipers
     utility_score = _number(state.get("team_total_utility_score") or 0.5)
@@ -130,9 +132,12 @@ def _coherence_penalty(
     if buy_case == "ECO" and strong_weapons >= 2:
         penalty += 0.35
         reasons.append("La estrategia ECO contradice una inversion alta en armas.")
-    if buy_case == "FULLBUY" and (strong_weapons < 4 or heavy < 4):
+    if buy_case == "FULLBUY" and (strong_weapons < 4 or heavy + regen < 4):
         penalty += 0.25
-        reasons.append("La fullbuy queda incompleta en armas fuertes o escudo pesado.")
+        reasons.append("La fullbuy queda incompleta en armas fuertes o armadura suficiente.")
+    if buy_case == "FULLBUY" and regen > 0:
+        penalty += min(0.2, regen * 0.04)
+        reasons.append("Regen Shield en fullbuy se trata como downgrade frente a escudo pesado.")
     if buy_case in {"SEMIBUY", "ESTABILIZACION"} and strong_weapons >= 4:
         penalty += 0.18
         reasons.append("La compra parcial se parece demasiado a una fullbuy sin estabilidad clara.")
@@ -147,7 +152,7 @@ def _coherence_penalty(
     if not ability_budget_unknown and buy_case == "FULLBUY" and utility_spend < 1200:
         penalty += 0.1
         reasons.append("La fullbuy no contempla suficiente margen para utilidad clave.")
-    if strong_weapons == 0 and heavy + light >= 4 and buy_case not in {"ECO", "BONUS"}:
+    if strong_weapons == 0 and heavy + regen + light >= 4 and buy_case not in {"ECO", "BONUS"}:
         penalty += 0.15
         reasons.append("El plan compra demasiado escudo sin armas minimas suficientes.")
     return round(min(1.0, penalty), 4), reasons
@@ -165,7 +170,11 @@ def evaluate_team_plan_from_action(
         action,
         round_number=int(_number(state.get("round_number"))),
     )
-    credits = _number(state.get("team_estimated_credits_before_buy"))
+    credits = _number(
+        state.get("team_estimated_credits_before_buy")
+        or state.get("team_prebuy_credits_selected")
+        or state.get("prebuy_credits_selected")
+    )
     base_spend = _number(features.get("action_total_spent"))
     weapon_spend = min(base_spend, _estimate_weapon_cost(features))
     armor_spend = min(max(0.0, base_spend - weapon_spend), _estimate_armor_cost(features))
@@ -173,6 +182,14 @@ def evaluate_team_plan_from_action(
     utility_spend = None if ability_unknown else min(max(0.0, credits - base_spend), _utility_budget(state, buy_case, credits))
     total_spend = min(credits, base_spend + _number(utility_spend))
     remaining = max(0.0, credits - total_spend)
+    planned_cashflow = classify_cashflow_case(
+        team_spent=total_spend,
+        team_loadout=_number(features.get("action_total_loadout")),
+        team_prebuy_credits=credits,
+        target_loadout_case=target_loadout_case,
+        is_last_round_before_switch=bool(state.get("is_last_round_before_switch")),
+        is_overtime=bool(state.get("is_overtime")),
+    )
     future = simulate_next_round_economy(state, {"expected_remaining": remaining})
     next_fullbuy = float(future.get("next_round_fullbuy_probability") or _next_round_fullbuy_probability(remaining, buy_case, state))
     coherence_penalty, coherence_reasons = _coherence_penalty(
@@ -190,7 +207,8 @@ def evaluate_team_plan_from_action(
         "macro_case": buy_case,
         "subtype": subtype,
         "target_loadout_case": target_loadout_case,
-        "cashflow_case": state.get("cashflow_case"),
+        "cashflow_case": planned_cashflow,
+        "planned_cashflow_case": planned_cashflow,
         "observed_target_loadout_case": state.get("target_loadout_case"),
         "observed_cashflow_case": state.get("cashflow_case"),
         "round_context_case": case["round_context_case"],
@@ -198,6 +216,11 @@ def evaluate_team_plan_from_action(
         "estimated_total_spend": round(total_spend, 2),
         "estimated_weapon_spend": round(weapon_spend, 2),
         "estimated_armor_spend": round(armor_spend, 2),
+        "estimated_regen_armor_spend": round(
+            _number(features.get("action_regen_armor_count")) * ARMOR_COST_ESTIMATES["regen"],
+            2,
+        ),
+        "action_regen_armor_count": int(_number(features.get("action_regen_armor_count"))),
         "estimated_ability_spend": None if ability_unknown else round(_number(utility_spend), 2),
         "expected_remaining": round(remaining, 2),
         "future_economy_score": next_fullbuy,
