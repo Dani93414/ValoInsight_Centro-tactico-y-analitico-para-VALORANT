@@ -15,7 +15,7 @@ from modules.analytics.infrastructure.reference_data import (
 from .content_catalog import find_gear, find_weapon
 from .agent_utility import player_agent_utility_features
 from .schemas import FORBIDDEN_FEATURES, MODEL_FEATURES, validate_no_feature_leakage
-from .state_extractor import extract_match_round_states
+from .state_extractor import fixed_round_start_credits, extract_match_round_states
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DATASET_PATH = Path(__file__).parent / "artifacts" / "economy_round_dataset.parquet"
@@ -118,6 +118,7 @@ def build_player_economy_dataset_from_matches(matches: list[dict]) -> pd.DataFra
                 if not state:
                     continue
                 economy = pstat.get("economy") or {}
+                fixed_credits = fixed_round_start_credits(round_number)
                 agent_id = str(player.get("characterId") or "UNKNOWN")
                 rows.append({
                     "match_id": state["match_id"],
@@ -141,7 +142,11 @@ def build_player_economy_dataset_from_matches(matches: list[dict]) -> pd.DataFra
                     "player_remaining": _number(economy.get("remaining")),
                     "player_spent": _number(economy.get("spent")),
                     "player_loadout": _number(economy.get("loadoutValue")),
-                    "player_estimated_credits_before_buy": _number(economy.get("remaining")) + _number(economy.get("spent")),
+                    "player_estimated_credits_before_buy": (
+                        fixed_credits
+                        if fixed_credits is not None
+                        else _number(economy.get("remaining")) + _number(economy.get("spent"))
+                    ),
                     **_weapon_payload(economy.get("weapon")),
                     **_armor_payload(economy.get("armor")),
                     "team_total_remaining": state.get("action_total_remaining"),

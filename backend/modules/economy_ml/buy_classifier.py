@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .content_catalog import find_weapon, gear_armor_level, weapon_has_profile
+from .content_catalog import find_weapon, gear_armor_level, weapon_catalog_role, weapon_has_profile
 
 BUY_ACTIONS = [
     "ECO_CLASSIC", "ECO_PISTOL_UPGRADE", "ECO_ONE_SHERIFF",
@@ -33,18 +33,19 @@ def _weapon_name_contains(weapon_id: Any, text: str) -> bool:
     return bool(weapon and _norm(text) in _norm(weapon.get("displayName")))
 
 
-def is_rifle(weapon_id: Any) -> bool: return weapon_has_profile(weapon_id, "rifle_default")
-def is_smg(weapon_id: Any) -> bool: return _weapon_category_contains(weapon_id, "smg")
-def is_machine_gun(weapon_id: Any) -> bool: return weapon_has_profile(weapon_id, "machine_gun")
-def is_shotgun(weapon_id: Any) -> bool: return weapon_has_profile(weapon_id, "shotgun")
+def is_rifle(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "rifle" or weapon_has_profile(weapon_id, "rifle_default")
+def is_smg(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "smg" or _weapon_category_contains(weapon_id, "smg")
+def is_machine_gun(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "heavy" or weapon_has_profile(weapon_id, "machine_gun")
+def is_shotgun(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "shotgun" or weapon_has_profile(weapon_id, "shotgun")
 def is_operator(weapon_id: Any) -> bool: return _weapon_name_contains(weapon_id, "operator")
 def is_outlaw(weapon_id: Any) -> bool: return _weapon_name_contains(weapon_id, "outlaw")
 def is_marshal(weapon_id: Any) -> bool: return _weapon_name_contains(weapon_id, "marshal")
 def is_sheriff(weapon_id: Any) -> bool: return _weapon_name_contains(weapon_id, "sheriff")
-def is_sidearm(weapon_id: Any) -> bool: return weapon_has_profile(weapon_id, "sidearm")
+def is_sidearm(weapon_id: Any) -> bool: return weapon_catalog_role(weapon_id) == "sidearm" or weapon_has_profile(weapon_id, "sidearm")
 def is_sniper(weapon_id: Any) -> bool: return is_operator(weapon_id) or is_outlaw(weapon_id) or is_marshal(weapon_id)
 def is_heavy_armor(armor_id: Any) -> bool: return gear_armor_level(armor_id) == "heavy"
 def is_light_armor(armor_id: Any) -> bool: return gear_armor_level(armor_id) == "light"
+def is_regen_armor(armor_id: Any) -> bool: return gear_armor_level(armor_id) == "regen"
 
 
 def classify_team_buy_action(
@@ -67,13 +68,14 @@ def classify_team_buy_action(
     sidearms = sum(is_sidearm(weapon) for weapon in weapons)
     heavy = sum(is_heavy_armor(economy.get("armor")) for economy in economies)
     light = sum(is_light_armor(economy.get("armor")) for economy in economies)
+    regen = sum(is_regen_armor(economy.get("armor")) for economy in economies)
     premium_primaries = rifles + machine_guns
 
     if previous_round_context and previous_round_context.get("won") and spent < 5000 and total >= 12000:
         return "BONUS_KEEP_WEAPONS"
     if operators and total >= 18000:
         return "FULL_OPERATOR"
-    if premium_primaries >= 4 and heavy >= 3 and total >= 16000:
+    if premium_primaries >= 4 and heavy + regen >= 3 and total >= 16000:
         return "FULL_RIFLES"
     if premium_primaries >= 2 and total >= 12000:
         return "FORCE_2_RIFLES"

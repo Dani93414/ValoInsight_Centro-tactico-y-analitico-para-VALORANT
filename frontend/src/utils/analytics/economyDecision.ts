@@ -47,6 +47,7 @@ export type EconomyRecommendation = {
 export type EconomyRoundTeamAnalysis = EconomyRecommendation & {
   loadout: number;
   credits?: number;
+  spent?: number;
   result: "win" | "loss";
 };
 
@@ -75,6 +76,8 @@ export type EconomyRoundInput = {
   roundNumber: number;
   teamALoadout: number;
   teamBLoadout: number;
+  teamASpent?: number;
+  teamBSpent?: number;
   teamACredits?: number;
   teamBCredits?: number;
   teamAScore: number;
@@ -269,6 +272,7 @@ export function analyzeEconomyEfficiency(
       }),
       loadout: round.teamALoadout,
       credits: round.teamACredits,
+      spent: round.teamASpent,
       result: teamAWon ? "win" : "loss",
     } satisfies EconomyRoundTeamAnalysis;
 
@@ -289,6 +293,7 @@ export function analyzeEconomyEfficiency(
       }),
       loadout: round.teamBLoadout,
       credits: round.teamBCredits,
+      spent: round.teamBSpent,
       result: teamBWon ? "win" : "loss",
     } satisfies EconomyRoundTeamAnalysis;
 

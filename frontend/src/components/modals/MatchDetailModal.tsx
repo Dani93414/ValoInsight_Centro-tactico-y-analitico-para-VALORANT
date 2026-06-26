@@ -3730,6 +3730,45 @@ function getEfficiencyLabel(efficiency: EconomyEfficiency): string {
   }
 }
 
+function economyRecommendationStatusLabel(status?: string | null): string {
+  switch (status) {
+    case "no_supported_counterfactual":
+      return "Sin contrafactual";
+    case "only_one_viable_action":
+      return "Única viable";
+    case "matched_real":
+      return "Coincide real";
+    case "actionable_recommendation":
+      return "Accionable";
+    default:
+      return "Observacional";
+  }
+}
+
+function economyCreditQualityLabel(quality?: string | null): string {
+  switch (quality) {
+    case "exact_observed":
+      return "Exacta";
+    case "reconciled_team":
+      return "Reconciliada";
+    case "rules_only":
+      return "Reglas";
+    case "inconsistent":
+      return "Inconsistente";
+    case "observed_economy":
+      return "Observada";
+    case "observed_with_reconciliation_warnings":
+      return "Avisos";
+    default:
+      return "N/D";
+  }
+}
+
+function economyCaseLabel(value?: string | null): string {
+  if (!value) return "N/D";
+  return value.replaceAll("_", " ").toLowerCase();
+}
+
 function EconomyOptimalPanel({
   ml,
   analysis,
@@ -3817,7 +3856,9 @@ function EconomyOptimalPanel({
           <table className="match-economy-optimal-table">
             <thead><tr>
               <th>Ronda</th><th>Equipo</th><th>Rango</th><th>Compra real</th>
-              <th>Recomendación</th><th>Valor real</th><th>Valor recomendado</th>
+              <th>Créditos inicio</th><th>Spent</th><th>Loadout</th>
+              <th>Calidad créditos</th><th>Caso</th>
+              <th>Recomendación</th><th>Estado</th><th>Δ plan</th><th>Δ ronda</th><th>Δ fullbuy</th><th>Valor real</th><th>Valor recomendado</th>
               <th>Diferencia</th><th>Confianza</th><th>Motivo</th>
             </tr></thead>
             <tbody>
@@ -3827,7 +3868,31 @@ function EconomyOptimalPanel({
                   <td>{teamLabel(round.team_id)}</td>
                   <td>{round.rank_name}</td>
                   <td>{round.real_buy_action}</td>
+                  <td className="match-economy-number-cell">{formatNumber(round.team_credits_before_buy ?? 0)}</td>
+                  <td className="match-economy-number-cell">{formatNumber(round.team_spent ?? 0)}</td>
+                  <td className="match-economy-number-cell">{formatNumber(round.team_loadout ?? 0)}</td>
+                  <td>
+                    <span className={`match-economy-quality-pill is-${round.credit_estimate_quality ?? "unknown"}`}>
+                      {economyCreditQualityLabel(round.credit_estimate_quality)}
+                    </span>
+                    {(round.team_possible_drop_credit_gap ?? 0) > 0 ? (
+                      <small>gap {formatNumber(round.team_possible_drop_credit_gap ?? 0)}</small>
+                    ) : null}
+                  </td>
+                  <td>
+                    <span className="match-economy-case-label">{economyCaseLabel(round.target_loadout_case)}</span>
+                    <small>{economyCaseLabel(round.cashflow_case)}</small>
+                  </td>
                   <td>{round.recommended_action}</td>
+                  <td>
+                    <span className={`match-economy-status-pill is-${round.recommendation_status ?? "unknown"}`}>
+                      {economyRecommendationStatusLabel(round.recommendation_status)}
+                    </span>
+                    <small>{round.num_viable_alternatives ?? 0} viables</small>
+                  </td>
+                  <td>{round.delta_team_plan_value == null ? "N/D" : `${round.delta_team_plan_value >= 0 ? "+" : ""}${formatPercent(round.delta_team_plan_value * 100, 1)}`}</td>
+                  <td>{round.delta_round_win == null ? "N/D" : `${round.delta_round_win >= 0 ? "+" : ""}${formatPercent(round.delta_round_win * 100, 1)}`}</td>
+                  <td>{round.delta_next_fullbuy == null ? "N/D" : `${round.delta_next_fullbuy >= 0 ? "+" : ""}${formatPercent(round.delta_next_fullbuy * 100, 1)}`}</td>
                   <td>{round.real_action_estimated_match_win_probability === null ? "N/D" : formatPercent(round.real_action_estimated_match_win_probability * 100, 1)}</td>
                   <td>{formatPercent(round.estimated_match_win_probability * 100, 1)}</td>
                   <td>{round.delta_vs_real === null ? "N/D" : `${round.delta_vs_real >= 0 ? "+" : ""}${formatPercent(round.delta_vs_real * 100, 1)}`}</td>
@@ -3836,7 +3901,12 @@ function EconomyOptimalPanel({
                     <details className="match-economy-ml-detail">
                       <summary>{round.explanation[0] ?? "Ver explicación"}</summary>
                       <p>{round.explanation.join(" ")}</p>
-                      <small>Scope: {round.model_scope} · Similares: {round.similar_rounds_summary.similar_rounds_found}</small>
+                      <small>
+                        Scope: {round.model_scope} · Similares: {round.similar_rounds_summary.similar_rounds_found}
+                        {" · "}Créditos: {economyCreditQualityLabel(round.credit_estimate_quality)}
+                        {round.credit_estimate_inconsistency_reason ? ` · ${round.credit_estimate_inconsistency_reason}` : ""}
+                        {round.team_drop_reconciliation_status ? ` · ${economyCaseLabel(round.team_drop_reconciliation_status)}` : ""}
+                      </small>
                       {round.utility_summary && (
                         <div className="match-economy-ml-utility">
                           <span>Utilidad de composición: <strong>{formatPercent((round.utility_summary.team_total_utility_score ?? 0) * 100, 1)}</strong></span>
@@ -3889,13 +3959,18 @@ function EconomyOptimalPanel({
                       </ul>
                       {(round.player_recommendations?.length ?? 0) > 0 && (
                         <div className="match-economy-ml-players">
-                          <strong>Jugadores</strong>
-                          <table>
+                          <div className="match-economy-ml-players-header">
+                            <strong>Plan por jugador</strong>
+                            <span>{teamLabel(round.team_id)} · ronda {round.round_number}</span>
+                          </div>
+                          <table className="match-economy-player-table">
                             <thead>
                               <tr>
                                 <th>Jugador</th>
                                 <th>Agente</th>
-                                <th>Créditos</th>
+                                <th>Créditos inicio</th>
+                                <th>Spent</th>
+                                <th>Loadout</th>
                                 <th>Compra real</th>
                                 <th>Recomendación</th>
                                 <th>Utilidad / ajuste</th>
@@ -3904,12 +3979,34 @@ function EconomyOptimalPanel({
                             <tbody>
                               {round.player_recommendations?.map((player) => (
                                 <tr key={player.puuid}>
-                                  <td>{player.player_name}</td>
-                                  <td>{player.agent ?? "N/D"} · {player.role ?? "N/D"}</td>
-                                  <td>{formatNumber(player.estimated_credits ?? 0)}</td>
-                                  <td>{[player.real_weapon, player.real_armor].filter(Boolean).join(" + ") || "N/D"}</td>
                                   <td>
-                                    {[player.recommended_weapon, player.recommended_armor].filter(Boolean).join(" + ") || "Ahorrar"}
+                                    <strong className="match-economy-player-name">{player.player_name}</strong>
+                                  </td>
+                                  <td>
+                                    <span className="match-economy-player-agent">{player.agent ?? "N/D"}</span>
+                                    <small>{player.role ?? "N/D"}</small>
+                                  </td>
+                                  <td className="match-economy-number-cell">
+                                    {formatNumber(player.credits_before_buy ?? player.estimated_credits ?? 0)}
+                                    <small>pre-buy</small>
+                                  </td>
+                                  <td className="match-economy-number-cell">
+                                    {formatNumber(player.real_spent ?? 0)}
+                                    <small>gastado</small>
+                                  </td>
+                                  <td className="match-economy-number-cell">
+                                    {formatNumber(player.real_loadout_value ?? 0)}
+                                    <small>equipo</small>
+                                  </td>
+                                  <td>
+                                    <span className="match-economy-loadout-chip">
+                                      {[player.real_weapon, player.real_armor].filter(Boolean).join(" + ") || "N/D"}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span className="match-economy-loadout-chip is-recommended">
+                                      {[player.recommended_weapon, player.recommended_armor].filter(Boolean).join(" + ") || "Ahorrar"}
+                                    </span>
                                     <small>
                                       Utilidad {formatPercent((player.agent_utility_score ?? 0) * 100, 1)}
                                       {" · "}
@@ -4101,6 +4198,8 @@ function EconomyOptimalPanel({
               <th>Equipo</th>
               <th>Compra real</th>
               <th>Compra recomendada</th>
+              <th>Créditos inicio</th>
+              <th>Spent</th>
               <th>Loadout</th>
               <th>Resultado</th>
               <th>Eficiencia</th>
@@ -4120,6 +4219,8 @@ function EconomyOptimalPanel({
                   <td>{row.team}</td>
                   <td>{row.data.realType}</td>
                   <td>{row.data.recommendedType}</td>
+                  <td className="match-economy-number-cell">{formatNumber(row.data.credits ?? 0)}</td>
+                  <td className="match-economy-number-cell">{formatNumber(row.data.spent ?? 0)}</td>
                   <td>{formatNumber(row.data.loadout)}</td>
                   <td>{row.data.result === "win" ? "Victoria" : "Derrota"}</td>
                   <td>
@@ -6174,6 +6275,8 @@ export default function MatchDetailModal({
         roundNumber: round.roundNum + 1,
         teamALoadout: round.teamAValue,
         teamBLoadout: round.teamBValue,
+        teamASpent: round.teamASpent,
+        teamBSpent: round.teamBSpent,
         teamACredits: round.teamACredits > 0 ? round.teamACredits : undefined,
         teamBCredits: round.teamBCredits > 0 ? round.teamBCredits : undefined,
         teamAScore: beforeTeamAScore,

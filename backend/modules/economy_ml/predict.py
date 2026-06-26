@@ -83,6 +83,8 @@ def predict_match_economy_recommendations(match: dict) -> dict:
         return {**current_status, "match_id": match_id, "rounds": []}
     dataset_path = Path(DEFAULT_DATASET_PATH)
     dataset = pd.read_parquet(dataset_path) if dataset_path.exists() else pd.DataFrame()
+    metadata = load_metadata()
+    in_sample = match_id in set(str(value) for value in metadata.get("training_match_ids") or [])
     recommendations = []
     for state in extract_match_round_states(match):
         result = recommend_economy_action(state, match=match)
@@ -116,13 +118,31 @@ def predict_match_economy_recommendations(match: dict) -> dict:
             "round_number": state["round_number"], "team_id": state["team_id"],
             "team_label": state["team_id"], "rank_name": state["rank_name"],
             "rank_group": state["rank_group"], "real_buy_action": real_action,
+            "team_credits_before_buy": state.get("team_estimated_credits_before_buy"),
+            "team_spent": state.get("action_total_spent"),
+            "team_loadout": state.get("action_total_loadout"),
             "recommended_action": result["recommended_action"],
             "decision_type": _decision_type(real_action, result["recommended_action"]),
             "model_scope": result["model_scope"], "confidence": result["confidence"],
             "confidence_kind": result.get("confidence_kind"),
             "recommendation_strength": result.get("recommendation_strength"),
             "recommendation_margin": result.get("recommendation_margin"),
+            "recommendation_status": result.get("recommendation_status"),
+            "num_viable_alternatives": result.get("num_viable_alternatives"),
+            "delta_team_plan_value": result.get("delta_team_plan_value"),
+            "delta_round_win": result.get("delta_round_win"),
+            "delta_next_fullbuy": result.get("delta_next_fullbuy"),
+            "support_count_best_action": result.get("support_count_best_action"),
+            "credit_estimate_quality": result.get("credit_estimate_quality"),
+            "credit_estimate_inconsistency_reason": state.get("credit_estimate_inconsistency_reason"),
+            "team_drop_reconciliation_status": state.get("team_drop_reconciliation_status"),
+            "team_possible_drop_credit_gap": state.get("team_possible_drop_credit_gap"),
+            "team_spent_over_prebuy": state.get("team_spent_over_prebuy"),
+            "target_loadout_case": state.get("target_loadout_case"),
+            "cashflow_case": state.get("cashflow_case"),
+            "in_sample": in_sample,
             "support_factor": result.get("support_factor"),
+            "credit_quality_factor": result.get("credit_quality_factor"),
             "low_confidence_reason": result.get("low_confidence_reason"),
             "estimated_match_win_probability": result["estimated_match_win_probability"],
             "estimated_round_win_probability": recommended_team_plan.get("predicted_round_win"),
@@ -144,7 +164,6 @@ def predict_match_economy_recommendations(match: dict) -> dict:
             "match_won": bool(state["match_won"]),
             "limitations": result.get("limitations", []),
         })
-    metadata = load_metadata()
     return {
         "available": True, "match_id": match_id,
         "model_metadata": _metadata_payload(metadata),

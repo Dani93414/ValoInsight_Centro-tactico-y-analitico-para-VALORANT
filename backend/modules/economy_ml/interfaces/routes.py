@@ -17,6 +17,7 @@ from modules.economy_ml.dataset_builder import (
     build_economy_dataset_from_matches, build_player_economy_dataset_from_matches,
     save_dataset, validate_dataset,
 )
+from modules.economy_ml.economy_ledger import build_economy_ledger_report
 from modules.economy_ml.model_registry import status
 from modules.economy_ml.predict import predict_match_economy_recommendations
 from modules.economy_ml.train import train_models
@@ -68,6 +69,13 @@ def build_economy_ml_dataset():
             "matches": int(player_dataset["match_id"].nunique()) if "match_id" in player_dataset else 0,
         },
     }
+
+
+@router.get("/economy-ledger-report")
+def economy_ml_ledger_report():
+    limit = int(os.getenv("ECONOMY_ML_TRAIN_MATCH_LIMIT", "10000"))
+    matches = mongo_match_repo.list_training_matches(limit)
+    return build_economy_ledger_report(matches)
 
 
 @router.get("/map-rank-report")

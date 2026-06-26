@@ -30,6 +30,7 @@ from modules.economy_ml.rank_mapping import get_rank_group, get_rank_name, norma
 from modules.economy_ml.schemas import FORBIDDEN_FEATURES, MODEL_FEATURES, PREBUY_NUMERIC_FEATURES, SCHEMA_VERSION
 from modules.economy_ml.state_extractor import extract_match_round_states
 from modules.economy_ml.team_plan import evaluate_team_plan_from_action
+from modules.economy_ml.content_catalog import armor_role, weapon_role
 from modules.economy_ml.ability_catalog import (
     ability_costs_available,
     build_ability_catalog_report,
@@ -214,9 +215,9 @@ class EconomyMlTests(unittest.TestCase):
         rows = extract_match_round_states(_match())
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["team_score_before"], 0)
-        self.assertEqual(rows[0]["team_estimated_credits_before_buy"], 10000)
-        self.assertEqual(rows[0]["team_credit_estimate_quality"], "observed_economy")
-        self.assertEqual(rows[0]["team_player_credit_estimates"]["A0"], 2000)
+        self.assertEqual(rows[0]["team_estimated_credits_before_buy"], 4000)
+        self.assertEqual(rows[0]["team_credit_estimate_quality"], "rules_based_reset")
+        self.assertEqual(rows[0]["team_player_credit_estimates"]["A0"], 800)
         self.assertEqual(rows[0]["round_won"], 1)
         self.assertEqual(rows[0]["side"], "attack")
         self.assertEqual(rows[1]["side"], "defense")
@@ -225,6 +226,21 @@ class EconomyMlTests(unittest.TestCase):
         self.assertTrue(FORBIDDEN_FEATURES.isdisjoint(MODEL_FEATURES))
         self.assertNotIn("action_total_loadout", PREBUY_NUMERIC_FEATURES)
         self.assertIn("team_total_utility_score", PREBUY_NUMERIC_FEATURES)
+
+    def test_pistol_round_ignores_observed_credit_anomalies(self):
+        match = _match()
+        economies = [
+            {"remaining": 700, "spent": 0, "loadoutValue": 0, "weapon": "Classic"},
+            {"remaining": 300, "spent": 500, "loadoutValue": 500, "weapon": "Ghost"},
+            {"remaining": 450, "spent": 400, "loadoutValue": 400, "weapon": "Classic", "armor": "Light"},
+            {"remaining": 0, "spent": 500, "loadoutValue": 500, "weapon": "Ghost"},
+            {"remaining": 250, "spent": 800, "loadoutValue": 800, "weapon": "Sheriff"},
+        ]
+        for index, economy in enumerate(economies):
+            match["roundResults"][0]["playerStats"][index]["economy"] = economy
+        state = extract_match_round_states(match)[0]
+        self.assertEqual(state["team_estimated_credits_before_buy"], 4000)
+        self.assertEqual(set(state["team_player_credit_estimates"].values()), {800.0})
 
     def test_pistol_round_never_recommends_sheriff_light_without_free_exception(self):
         match = _match()
@@ -310,13 +326,30 @@ class EconomyMlTests(unittest.TestCase):
             self.assertIn(key, state)
             self.assertIn(key, PREBUY_NUMERIC_FEATURES)
         self.assertEqual(state["team_players_can_buy_sheriff"], 5)
-        self.assertEqual(state["team_players_can_buy_sheriff_light"], 5)
-        self.assertEqual(state["team_players_can_buy_ghost_light"], 5)
+        self.assertEqual(state["team_players_can_buy_sheriff_light"], 0)
+        self.assertEqual(state["team_players_can_buy_ghost_light"], 0)
         self.assertIn("team_player_credit_estimates", state)
         self.assertNotIn("team_player_credit_estimates", PREBUY_NUMERIC_FEATURES)
 
-    def test_schema_version_6(self):
-        self.assertEqual(SCHEMA_VERSION, 6)
+    def test_schema_version_8(self):
+        self.assertEqual(SCHEMA_VERSION, 8)
+
+    def test_content_taxonomy_knows_bandit_and_regen_shield(self):
+        self.assertEqual(weapon_role({"displayName": "Bandit"}), "sidearm")
+        self.assertEqual(armor_role({"displayName": "Regen Shield"}), "regen")
+
+    def test_state_includes_target_loadout_and_cashflow_cases(self):
+        state = extract_match_round_states(_match())[0]
+        self.assertIn("target_loadout_case", state)
+        self.assertIn("cashflow_case", state)
+        self.assertIn("credit_estimate_quality", state)
+        self.assertIn("team_drop_reconciliation_status", state)
+        self.assertIn("team_possible_drop_credit_gap", state)
+        self.assertIn("team_spent_over_prebuy", state)
+        self.assertIn("target_loadout_case", MODEL_FEATURES)
+        self.assertIn("cashflow_case", MODEL_FEATURES)
+        self.assertIn("team_drop_reconciliation_status", MODEL_FEATURES)
+        self.assertIn("team_possible_drop_credit_gap", MODEL_FEATURES)
 
     def test_skipped_round_still_advances_score_and_streak(self):
         match = _match()
@@ -390,6 +423,22 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("agent_base_utility_score", frame.columns)
         self.assertIn("agent_weapon_dependency_score", frame.columns)
 
+    def test_player_recommendations_use_state_prebuy_credits(self):
+        match = _match()
+        match["roundResults"][0]["playerStats"][0]["economy"] = {
+            "remaining": 700,
+            "spent": 600,
+            "loadoutValue": 700,
+            "weapon": "Classic",
+        }
+        state = extract_match_round_states(match)[0]
+        recommendations = build_player_recommendations(match, state, "ECO_CLASSIC")
+        player = next(item for item in recommendations if item["puuid"] == "A0")
+        self.assertEqual(state["team_player_credit_estimates"]["A0"], 800)
+        self.assertEqual(player["credits_before_buy"], 800)
+        self.assertEqual(player["real_spent"], 600)
+        self.assertEqual(player["real_loadout_value"], 700)
+
     def test_policy_generates_alternatives_and_rejects_impossible_full_buy(self):
         class FakePipeline:
             seen = {}
@@ -427,6 +476,7 @@ class EconomyMlTests(unittest.TestCase):
 
         state = {
             **extract_match_round_states(_match())[0],
+            "credit_estimate_quality": "exact_observed",
             "round_number": 3,
             "is_pistol_round": 0,
             "is_match_point": 0,
@@ -520,6 +570,8 @@ class EconomyMlTests(unittest.TestCase):
 
         state = {
             **extract_match_round_states(_match())[0],
+            "credit_estimate_quality": "exact_observed",
+            "credit_estimate_inconsistency_reason": None,
             "round_number": 3,
             "is_pistol_round": 0,
             "is_match_point": 0,
@@ -559,6 +611,8 @@ class EconomyMlTests(unittest.TestCase):
             "is_match_point": 0,
             "is_overtime": 0,
             "team_estimated_credits_before_buy": 6000,
+            "credit_estimate_quality": "exact_observed",
+            "credit_estimate_inconsistency_reason": None,
         }
         with patch(
             "modules.economy_ml.policy.load_model_candidates",
@@ -578,6 +632,36 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(result["recommendation_strength"], "low")
         self.assertLess(result["recommendation_margin"], 0.04)
         self.assertIn("Margen insuficiente", result["low_confidence_reason"])
+
+    def test_policy_downgrades_inconsistent_credit_quality(self):
+        class FakePipeline:
+            def predict_proba(self, frame):
+                action = frame.iloc[0]["buy_action"]
+                probability = 0.62 if action == "ECO_CLASSIC" else 0.5
+                return np.array([[1 - probability, probability]])
+
+        state = {
+            **extract_match_round_states(_match())[0],
+            "round_number": 3,
+            "is_pistol_round": 0,
+            "is_match_point": 0,
+            "is_overtime": 0,
+            "team_estimated_credits_before_buy": 6000,
+            "credit_estimate_quality": "inconsistent",
+            "credit_estimate_inconsistency_reason": "observed_rules_gap_gt_600",
+        }
+        with patch(
+            "modules.economy_ml.policy.load_model_candidates",
+            return_value=[({
+                "pipeline": FakePipeline(),
+                "action_support": {"ECO_CLASSIC": 100, "ECO_ONE_SHERIFF": 100},
+                "min_action_support": 25,
+            }, "global")],
+        ):
+            result = recommend_economy_action(state, ["ECO_CLASSIC", "ECO_ONE_SHERIFF"])
+        self.assertEqual(result["recommendation_strength"], "low")
+        self.assertLess(result["credit_quality_factor"], 1.0)
+        self.assertIn("Calidad de creditos inconsistente", result["low_confidence_reason"])
 
     def test_policy_rejects_action_without_historical_support(self):
         state = {**extract_match_round_states(_match())[0], "team_estimated_credits_before_buy": 25000}
@@ -730,6 +814,10 @@ class EconomyMlTests(unittest.TestCase):
             self.assertLessEqual(player["total_cost"], player["estimated_credits"])
         rifle_players = [player for player in allocation["players"] if player.get("weapon")]
         self.assertTrue(rifle_players)
+        self.assertFalse(any(
+            str((player.get("weapon") or {}).get("displayName") or "").lower() in {"operator", "outlaw", "marshal"}
+            for player in rifle_players
+        ))
         self.assertTrue(any(player.get("abilities") for player in rifle_players))
         self.assertTrue(any((player.get("armor") or {}).get("armor_level") == "light" for player in rifle_players))
 
