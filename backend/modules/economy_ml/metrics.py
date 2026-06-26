@@ -39,9 +39,27 @@ def evaluate_slices(frame: pd.DataFrame, probabilities: Any) -> dict:
     evaluated = frame.copy()
     evaluated["_probability"] = probabilities
     result: dict[str, Any] = {"global": classification_metrics(evaluated["match_won"], evaluated["_probability"])}
-    for column in ("rank_group", "rank_name", "real_buy_action"):
+    for column in (
+        "rank_group",
+        "rank_name",
+        "real_buy_action",
+        "macro_buy_case",
+        "credit_estimate_quality",
+    ):
+        if column not in evaluated:
+            continue
         result[column] = {
             str(value): classification_metrics(group["match_won"], group["_probability"])
             for value, group in evaluated.groupby(column, dropna=False)
         }
+    binary_slices = {
+        "pistol": "is_pistol_round",
+        "bonus": "is_bonus_candidate",
+        "overtime": "is_overtime",
+    }
+    for label, column in binary_slices.items():
+        if column in evaluated:
+            mask = evaluated[column].astype(bool)
+            if mask.any():
+                result[label] = classification_metrics(evaluated.loc[mask, "match_won"], evaluated.loc[mask, "_probability"])
     return result

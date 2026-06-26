@@ -3859,7 +3859,7 @@ function EconomyOptimalPanel({
               <th>Créditos inicio</th><th>Spent</th><th>Loadout</th>
               <th>Calidad créditos</th><th>Caso</th>
               <th>Recomendación</th><th>Estado</th><th>Δ plan</th><th>Δ ronda</th><th>Δ fullbuy</th><th>Valor real</th><th>Valor recomendado</th>
-              <th>Diferencia</th><th>Confianza</th><th>Motivo</th>
+              <th>Δ prob. partida</th><th>Confianza</th><th>Motivo</th>
             </tr></thead>
             <tbody>
               {ml.rounds.map((round) => (
@@ -3868,7 +3868,10 @@ function EconomyOptimalPanel({
                   <td>{teamLabel(round.team_id)}</td>
                   <td>{round.rank_name}</td>
                   <td>{round.real_buy_action}</td>
-                  <td className="match-economy-number-cell">{formatNumber(round.team_credits_before_buy ?? 0)}</td>
+                  <td className="match-economy-number-cell">
+                    {formatNumber(round.prebuy_credits_selected ?? round.team_credits_before_buy ?? 0)}
+                    <small>selected</small>
+                  </td>
                   <td className="match-economy-number-cell">{formatNumber(round.team_spent ?? 0)}</td>
                   <td className="match-economy-number-cell">{formatNumber(round.team_loadout ?? 0)}</td>
                   <td>
@@ -3881,7 +3884,8 @@ function EconomyOptimalPanel({
                   </td>
                   <td>
                     <span className="match-economy-case-label">{economyCaseLabel(round.target_loadout_case)}</span>
-                    <small>{economyCaseLabel(round.cashflow_case)}</small>
+                    <small>obs. {economyCaseLabel(round.observed_cashflow_case ?? round.cashflow_case)}</small>
+                    <small>plan {economyCaseLabel(round.planned_cashflow_case)}</small>
                   </td>
                   <td>{round.recommended_action}</td>
                   <td>
@@ -3904,6 +3908,10 @@ function EconomyOptimalPanel({
                       <small>
                         Scope: {round.model_scope} · Similares: {round.similar_rounds_summary.similar_rounds_found}
                         {" · "}Créditos: {economyCreditQualityLabel(round.credit_estimate_quality)}
+                        {" · "}Rules {formatNumber(round.prebuy_credits_rules ?? 0)}
+                        {" · "}Observed {round.prebuy_credits_observed == null ? "N/D" : formatNumber(round.prebuy_credits_observed)}
+                        {" · "}Selected {formatNumber(round.prebuy_credits_selected ?? round.team_credits_before_buy ?? 0)}
+                        {round.in_sample ? " · Partida dentro del entrenamiento" : ""}
                         {round.credit_estimate_inconsistency_reason ? ` · ${round.credit_estimate_inconsistency_reason}` : ""}
                         {round.team_drop_reconciliation_status ? ` · ${economyCaseLabel(round.team_drop_reconciliation_status)}` : ""}
                       </small>

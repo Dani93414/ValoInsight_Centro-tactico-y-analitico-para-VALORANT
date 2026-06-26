@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 LABEL_COLUMNS = [
     "round_won", "match_won", "next_round_fullbuy_possible",
     "next_round_team_estimated_credits",
@@ -23,8 +23,9 @@ PREBUY_NUMERIC_FEATURES = [
     "win_streak", "loss_streak", "enemy_win_streak", "enemy_loss_streak",
     "is_pistol_round", "is_second_round", "is_bonus_candidate",
     "is_last_round_before_switch", "is_match_point", "is_overtime",
-    "prebuy_credits_observed", "prebuy_credits_rules",
-    "enemy_prebuy_credits_observed", "enemy_prebuy_credits_rules",
+    "prebuy_credits_observed", "prebuy_credits_rules", "prebuy_credits_selected",
+    "team_prebuy_credits_observed", "team_prebuy_credits_rules", "team_prebuy_credits_selected",
+    "enemy_prebuy_credits_observed", "enemy_prebuy_credits_rules", "enemy_prebuy_credits_selected",
     "team_estimated_credits_before_buy", "enemy_estimated_credits_before_buy",
     "credits_before_buy_diff", "team_players_can_full_buy_estimate",
     "enemy_players_can_full_buy_estimate", "team_players_low_money",
@@ -96,10 +97,12 @@ PREBUY_NUMERIC_FEATURES += AGENT_UTILITY_NUMERIC_FEATURES
 # observed post-buy loadout. For alternatives they are generated coherently.
 ACTION_NUMERIC_FEATURES = [
     "action_total_loadout", "action_total_remaining",
-    "action_heavy_armor_count", "action_light_armor_count", "action_no_armor_count",
+    "action_heavy_armor_count", "action_regen_armor_count",
+    "action_light_armor_count", "action_no_armor_count",
     "action_rifle_count", "action_smg_count", "action_sniper_count",
     "action_operator_count", "action_outlaw_count", "action_marshal_count",
     "action_sheriff_count", "action_players_without_heavy_armor",
+    "action_players_without_strong_armor",
 ]
 
 PLAN_NUMERIC_FEATURES = [

@@ -10,6 +10,7 @@ from .content_catalog import load_gear_catalog, load_weapon_catalog, weapon_cata
 from .economy_rules import (
     GHOST_COST,
     LIGHT_ARMOR_COST,
+    REGEN_ARMOR_COST,
     SHERIFF_COST,
     is_light_armor_item,
     is_pistol_round,
@@ -60,6 +61,18 @@ def _pick_armor(level: str, budget: float) -> dict[str, Any] | None:
         and _number(gear.get("cost")) <= budget
     ]
     if not candidates:
+        fallback = {
+            "light": ("Light Shield", LIGHT_ARMOR_COST),
+            "regen": ("Regen Shield", REGEN_ARMOR_COST),
+            "heavy": ("Heavy Shield", 1000.0),
+        }.get(level)
+        if fallback and fallback[1] <= budget:
+            return {
+                "uuid": f"synthetic-{level}-shield",
+                "displayName": fallback[0],
+                "armor_level": level,
+                "cost": fallback[1],
+            }
         return None
     return max(candidates, key=lambda item: _number(item.get("cost")))
 
@@ -140,15 +153,16 @@ def _slot_loadout(slot: str, credits: float) -> tuple[dict[str, Any] | None, dic
         armor = _pick_armor("light", max(0.0, credits - item_cost(weapon)))
     elif slot == "rifle_light":
         weapon = _pick_weapon_by_profile("rifle_default", credits)
-        armor = _pick_armor("light", max(0.0, credits - item_cost(weapon)))
+        remaining = max(0.0, credits - item_cost(weapon))
+        armor = _pick_armor("regen", remaining) or _pick_armor("light", remaining)
     elif slot == "rifle_heavy":
         weapon = _pick_weapon_by_profile("rifle_default", credits)
         remaining = max(0.0, credits - item_cost(weapon))
-        armor = _pick_armor("heavy", remaining) or _pick_armor("light", remaining)
+        armor = _pick_armor("heavy", remaining) or _pick_armor("regen", remaining) or _pick_armor("light", remaining)
     elif slot == "operator_heavy":
         weapon = _pick_weapon_by_name("operator", credits)
         remaining = max(0.0, credits - item_cost(weapon))
-        armor = _pick_armor("heavy", remaining) or _pick_armor("light", remaining)
+        armor = _pick_armor("heavy", remaining) or _pick_armor("regen", remaining) or _pick_armor("light", remaining)
     elif slot == "light":
         armor = _pick_armor("light", credits)
     return weapon, armor
@@ -181,8 +195,10 @@ def _weapon_name(weapon: dict[str, Any] | None) -> str:
 
 def _allocation_hard_constraint_violations(action: str, assignments: list[dict[str, Any]]) -> list[str]:
     weapons = [item.get("weapon") for item in assignments]
+    armors = [item.get("armor") for item in assignments]
     roles = [weapon_catalog_role(weapon) for weapon in weapons if weapon]
     names = [_weapon_name(weapon).strip().lower() for weapon in weapons if weapon]
+    armor_levels = [str((armor or {}).get("armor_level") or "") for armor in armors if armor]
     violations: list[str] = []
     if action == "FULL_RIFLES":
         sniper_count = sum(role == "sniper" for role in roles)
@@ -193,11 +209,29 @@ def _allocation_hard_constraint_violations(action: str, assignments: list[dict[s
             violations.append("FULL_RIFLES debe asignar al menos 4 rifles.")
     if action == "FULL_OPERATOR":
         operator_count = sum(name == "operator" for name in names)
+        rifle_count = sum(role == "rifle" for role in roles)
         if operator_count != 1:
             violations.append("FULL_OPERATOR debe asignar exactamente una Operator.")
+        if rifle_count < 3:
+            violations.append("FULL_OPERATOR debe asignar al menos 3 rifles reales adicionales si hay presupuesto.")
     if action == "FORCE_RIFLE_LIGHT":
-        if any(name == "outlaw" for name in names):
-            violations.append("FORCE_RIFLE_LIGHT no puede asignar Outlaw.")
+        if any(name in {"operator", "outlaw", "marshal"} for name in names):
+            violations.append("FORCE_RIFLE_LIGHT no puede asignar snipers en slots de rifle.")
+    expected_exact = {
+        "FORCE_OUTLAW": ("outlaw", 2),
+        "SEMI_MARSHAL": ("marshal", 2),
+        "ECO_ONE_SHERIFF": ("sheriff", 1),
+        "ECO_TWO_SHERIFFS": ("sheriff", 2),
+        "ECO_SHERIFF": ("sheriff", 2),
+        "ECO_SHERIFF_STACK": ("sheriff", 5),
+    }.get(action)
+    if expected_exact:
+        name, expected = expected_exact
+        actual = sum(item == name for item in names)
+        if actual != expected:
+            violations.append(f"{action} debe asignar exactamente {expected} {name}.")
+    if action == "FULL_RIFLES" and "light" in armor_levels:
+        violations.append("FULL_RIFLES no acepta escudo ligero como armadura principal.")
     return violations
 
 
@@ -314,5 +348,11 @@ def allocate_player_loadouts(
     validation = validate_team_plan_allocation(allocation)
     allocation["valid"] = bool(allocation["valid"] and validation["valid"])
     allocation["violations"] = list(dict.fromkeys(violations + validation["violations"]))
-    allocation["warnings"] = validation["warnings"]
+    armor_warnings = []
+    if action in {"FULL_RIFLES", "FULL_OPERATOR"} and any(
+        str((item.get("armor") or {}).get("armor_level") or "") == "regen"
+        for item in assignments
+    ):
+        armor_warnings.append("Regen Shield usado como downgrade de escudo pesado.")
+    allocation["warnings"] = list(dict.fromkeys(validation["warnings"] + armor_warnings))
     return allocation

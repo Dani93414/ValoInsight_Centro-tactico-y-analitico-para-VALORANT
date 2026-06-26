@@ -249,6 +249,12 @@ export type EconomyMlRoundRecommendation = {
   rank_group: string;
   real_buy_action: string;
   team_credits_before_buy?: number | null;
+  prebuy_credits_observed?: number | null;
+  prebuy_credits_rules?: number | null;
+  prebuy_credits_selected?: number | null;
+  team_prebuy_credits_observed?: number | null;
+  team_prebuy_credits_rules?: number | null;
+  team_prebuy_credits_selected?: number | null;
   team_spent?: number | null;
   team_loadout?: number | null;
   recommended_action: string;
@@ -268,6 +274,9 @@ export type EconomyMlRoundRecommendation = {
   team_spent_over_prebuy?: number | null;
   target_loadout_case?: string | null;
   cashflow_case?: string | null;
+  observed_cashflow_case?: string | null;
+  planned_cashflow_case?: string | null;
+  action_regen_armor_count?: number | null;
   in_sample?: boolean;
   credit_quality_factor?: number | null;
   estimated_match_win_probability: number;
