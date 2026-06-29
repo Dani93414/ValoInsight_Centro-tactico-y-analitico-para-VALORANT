@@ -1,8 +1,13 @@
 # Economy ML
 
-Sistema conservador de recomendacion economica para VALORANT. El modelo es
-observacional: estima valor de plan con soporte historico, pero no demuestra
-causalidad ni garantiza que una accion sea optima.
+Motor player-first de recomendacion economica para VALORANT. La legalidad,
+inventario individual, drops y economia futura gobiernan la decision. El ML es
+un estimador auxiliar y nunca puede convertir un plan ilegal en viable.
+
+El endpoint de partida usa `RoundEconomyRecommender`: infiere varias hipotesis
+de compra real, genera compras legales por jugador, resuelve drops de armas y
+puntua planes completos. `ACTION_TEMPLATES` queda relegado al flujo historico
+legacy y no es la fuente de las recomendaciones expuestas por la API.
 
 ## Contrato De Datos
 
@@ -49,7 +54,7 @@ explicito frente a Heavy Shield con warning y penalty de coherencia.
 
 ## Planes Y Cashflow
 
-El plan separa:
+El analisis postpartida legacy separa:
 
 - `target_loadout_case`: loadout objetivo observado o contrafactual.
 - `observed_cashflow_case`: cashflow real observado.
@@ -57,15 +62,15 @@ El plan separa:
 - `cashflow_case`: alias compatible que en planes contrafactuales apunta al
   planned cashflow.
 
-La recomendacion se ordena por `team_plan_value`. `delta_team_plan_value` es la
-metrica principal frente a la compra real. `delta_vs_real` se conserva solo como
-diferencia secundaria de probabilidad estimada de partida.
+Estas etiquetas proceden del post-buy observado y por ello no pertenecen a
+`MODEL_FEATURES`. El motor player-first puntua combinaciones individuales
+legales y conserva los creditos restantes de cada jugador para las proyecciones.
 
 ## Limitaciones
 
 - Modelo observacional, no causal.
 - La compra real de habilidades puede no ser observable.
-- Drops y transferencias pueden requerir reconciliacion.
+- Las pickups y drops observados pueden ser hipotesis con confianza reducida.
 - AFK compensation se marca como inferida si no esta confirmada.
 - Datos incompletos o corruptos de la API pueden degradar la confianza.
 
@@ -96,5 +101,6 @@ Comprobar status del modelo:
 $env:PYTHONPATH='backend'; venv\Scripts\python.exe -c "from modules.economy_ml.model_registry import status; print(status())"
 ```
 
-Los artefactos incluyen `schema_version`. Con `SCHEMA_VERSION = 9`, artefactos
-v8 o anteriores se rechazan hasta reentrenar.
+Los artefactos incluyen `schema_version`. Con `SCHEMA_VERSION = 10`, artefactos
+v9 o anteriores se rechazan hasta reentrenar porque se eliminaron features con
+leakage derivadas del post-buy observado.

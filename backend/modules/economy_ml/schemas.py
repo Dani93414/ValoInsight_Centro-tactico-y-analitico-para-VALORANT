@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 LABEL_COLUMNS = [
     "round_won", "match_won", "next_round_fullbuy_possible",
     "next_round_team_estimated_credits",
@@ -13,8 +13,7 @@ PREBUY_CATEGORICAL_FEATURES = [
     "team_credit_estimate_quality", "enemy_credit_estimate_quality",
     "team_previous_round_reconciliation_quality", "enemy_previous_round_reconciliation_quality",
     "team_drop_reconciliation_status", "enemy_drop_reconciliation_status",
-    "credit_estimate_quality", "target_loadout_case", "cashflow_case",
-    "enemy_target_loadout_case", "enemy_cashflow_case",
+    "credit_estimate_quality",
     "macro_buy_case", "economy_intent", "round_context_case",
 ]
 PREBUY_NUMERIC_FEATURES = [
@@ -134,6 +133,10 @@ FORBIDDEN_FEATURES = {
     "enemy_heavy_armor_count", "ability.ultimateEffects",
     "used_ultimate_this_round", "current_round_kills", "current_round_damage",
     "current_round_score",
+    # These are labels derived from the observed purchase/loadout. They may be
+    # emitted for post-match analysis, but are not realistic pre-buy inputs.
+    "target_loadout_case", "cashflow_case", "enemy_target_loadout_case",
+    "enemy_cashflow_case",
 }
 
 POST_ROUND_ONLY_COLUMNS = {
