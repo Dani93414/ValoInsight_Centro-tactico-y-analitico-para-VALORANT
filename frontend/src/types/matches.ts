@@ -147,6 +147,10 @@ export type EconomyItem = {
   cost?: number | null;
   armor_level?: string;
   usage_profile?: string[];
+  purchase_cost?: number;
+  weapon_value?: number;
+  source?: "bought_self" | "carried" | "dropped" | "unknown" | string;
+  warnings?: string[];
 };
 
 export type EconomyAbilityPurchase = {
@@ -180,6 +184,9 @@ export type LegalPlayerPurchase = {
   keep_weapon: boolean;
   self_cost: number;
   weapon_cost: number;
+  weapon_purchase_cost: number;
+  weapon_value: number;
+  weapon_source: "bought_self" | "carried" | "dropped" | "none" | "unknown" | string;
   armor_cost: number;
   ability_cost: number;
   expected_remaining: number;
@@ -210,6 +217,9 @@ export type EconomyProjection = {
   synchronization?: number;
   economic_risk?: number;
   team_spend?: number;
+  weapon_value?: number;
+  armor_value?: number;
+  utility_value?: number;
   rule_penalty?: number;
   data_confidence?: number;
   players?: EconomyPlayerProjection[];

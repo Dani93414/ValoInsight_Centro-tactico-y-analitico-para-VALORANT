@@ -25,6 +25,21 @@ Los `warnings` indican costes ausentes, hipotesis no observables, falta de apoyo
 ML o penalizaciones de composicion. Un warning reduce confianza; no convierte
 un plan ilegal en valido.
 
+## Coste Y Valor De Armas
+
+El motor no mezcla el pago de la ronda con la potencia del inventario:
+
+- `weapon_cost`: creditos pagados por ese jugador por su arma esta ronda.
+- `weapon_purchase_cost`: precio que debe pagar quien compra el arma; en un
+  drop lo paga el donor, no el receptor.
+- `weapon_value`: valor tactico/economico del arma equipada para el scoring.
+- `weapon_source`: `bought_self`, `carried`, `dropped` o `none`.
+- `keep_weapon`: solo es `true` cuando `weapon_source == carried`.
+
+Una Vandal conservada tiene `weapon_cost = 0` y `weapon_value = 2900`. Una
+Vandal recibida por drop tambien cuesta 0 al receptor, conserva valor 2900 y
+carga los 2900 creditos al comprador.
+
 ## Contrato De Datos
 
 Cada fila separa tres conceptos:

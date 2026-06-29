@@ -3847,7 +3847,15 @@ function PlayerFirstEconomyPanel({
                                 <td><strong>{player.player_name || player.puuid}</strong><small>{player.agent || "N/D"} · {player.role || "N/D"}</small></td>
                                 <td>{[player.observed_weapon, player.observed_armor].filter(Boolean).join(" + ") || "N/D"}</td>
                                 <td>{economyCaseLabel(player.inferred_real_purchase.weapon_source)}<small>{formatPercent(player.inferred_real_purchase.confidence * 100, 1)}</small></td>
-                                <td>{economyItemLabel(purchase.weapon)} + {economyItemLabel(purchase.armor)}<small>{player.reason}</small></td>
+                                <td>
+                                  {economyItemLabel(purchase.weapon)} + {economyItemLabel(purchase.armor)}
+                                  <small>
+                                    {purchase.keep_weapon ? "Conservada" : purchase.bought_by ? "Recibida por drop" : "Compra propia"}
+                                    {" · "}Coste arma {formatNumber(purchase.weapon_cost)}
+                                    {" · "}Valor {formatNumber(purchase.weapon_value)}
+                                  </small>
+                                  <small>{player.reason}</small>
+                                </td>
                                 <td>
                                   {purchase.bought_by ? <small>Recibe de {purchase.bought_by}</small> : null}
                                   {purchase.buys_for ? <small>Compra para {Array.isArray(purchase.buys_for) ? purchase.buys_for.join(", ") : purchase.buys_for}</small> : null}
