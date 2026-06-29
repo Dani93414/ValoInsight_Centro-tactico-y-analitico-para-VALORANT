@@ -153,6 +153,26 @@ export type EconomyItem = {
   warnings?: string[];
 };
 
+export type EconomyDisplayRecommendation = {
+  weapon_label: string;
+  armor_label: string;
+  loadout_label: string;
+  ability_label: string;
+  spend_label: string;
+  source_label: string;
+};
+
+export type ObservedPlayerEconomy = RawRoundPlayerEconomy & {
+  weapon_raw?: unknown;
+  armor_raw?: unknown;
+  weapon?: string;
+  armor?: string;
+  weapon_display: EconomyItem;
+  armor_display: EconomyItem;
+  warnings: string[];
+  debug_warnings: string[];
+};
+
 export type EconomyAbilityPurchase = {
   name: string;
   charges: number;
@@ -163,7 +183,7 @@ export type EconomyAbilityPurchase = {
 };
 
 export type EconomyPurchaseHypothesis = {
-  weapon_source: "default" | "bought_self" | "bought_by_teammate" | "carried" | "picked_up" | "unknown" | string;
+  weapon_source: "default_spawn_weapon" | "bought_self" | "bought_by_teammate" | "carried" | "picked_up" | "unknown" | string;
   armor_source: "bought_self" | "carried" | "unknown" | string;
   confidence: number;
   estimated_self_spend: number | null;
@@ -174,6 +194,7 @@ export type EconomyPurchaseHypothesis = {
   utility_status: "estimated" | "unknown" | string;
   reasons: string[];
   warnings: string[];
+  debug_warnings?: string[];
 };
 
 export type LegalPlayerPurchase = {
@@ -193,6 +214,7 @@ export type LegalPlayerPurchase = {
   bought_by?: string | null;
   buys_for?: string | string[] | null;
   warnings: string[];
+  display?: EconomyDisplayRecommendation;
 };
 
 export type EconomyPlayerProjection = {
@@ -237,6 +259,7 @@ export type TeamPlanAlternative = {
   economy_projection: EconomyProjection;
   valid: boolean;
   warnings: string[];
+  debug_warnings?: string[];
 };
 
 export type EconomyMlPlayerRecommendation = {
@@ -251,6 +274,7 @@ export type EconomyMlPlayerRecommendation = {
   recommended_purchase: LegalPlayerPurchase;
   reason: string;
   warnings: string[];
+  debug_warnings?: string[];
   confidence: number;
 };
 
@@ -260,7 +284,7 @@ export type EconomyMlRoundRecommendation = {
   team_id: string;
   side: string;
   score_before: { team: number | null; enemy: number | null };
-  real_team_buy_observed: Record<string, RawRoundPlayerEconomy>;
+  real_team_buy_observed: Record<string, ObservedPlayerEconomy>;
   inferred_team_buy: Record<string, EconomyPurchaseHypothesis[]>;
   recommended_team_buy: string;
   team_plan_score: number;
@@ -269,6 +293,7 @@ export type EconomyMlRoundRecommendation = {
   alternatives: TeamPlanAlternative[];
   economy_projection: EconomyProjection;
   warnings: string[];
+  debug_warnings: string[];
 };
 
 export type EconomyMlResponse = {
@@ -279,4 +304,5 @@ export type EconomyMlResponse = {
   match_id: string;
   rounds: EconomyMlRoundRecommendation[];
   limitations: string[];
+  debug_limitations?: string[];
 };

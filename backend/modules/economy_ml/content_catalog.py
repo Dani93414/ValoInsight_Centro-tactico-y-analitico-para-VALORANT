@@ -33,14 +33,17 @@ WEAPON_ROLE_ALLOWLIST = {
 }
 
 ARMOR_ROLE_ALLOWLIST = {
+    "light": "light",
     "light shields": "light",
     "light shield": "light",
     "escudo ligero": "light",
     "arm. ligera": "light",
     "regen shield": "regen",
+    "regen": "regen",
     "escudo regen": "regen",
     "heavy shields": "heavy",
     "heavy shield": "heavy",
+    "heavy": "heavy",
     "escudo pesado": "heavy",
     "arm. pesada": "heavy",
 }
@@ -242,29 +245,50 @@ def build_weapon_usage_taxonomy() -> dict[str, list[dict[str, Any]]]:
 
 
 def find_weapon(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        for key in ("uuid", "id", "assetPath", "displayName", "name"):
+            found = find_weapon(value.get(key)) if value.get(key) else None
+            if found:
+                return found
+        return None
     text = str(value or "").strip()
     if not text:
         return None
     catalog = load_weapon_catalog()
     if text in catalog:
         return catalog[text]
+    lower_keys = {str(key).lower(): item for key, item in catalog.items()}
+    if text.lower() in lower_keys:
+        return lower_keys[text.lower()]
     compact = _compact(text)
     for weapon in catalog.values():
-        if _compact(weapon.get("displayName")) == compact:
+        aliases = [weapon.get("displayName"), weapon.get("name"), weapon.get("uuid"),
+                   (weapon.get("raw") or {}).get("assetPath")]
+        if compact in {_compact(alias) for alias in aliases if alias}:
             return weapon
     return None
 
 
 def find_gear(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        for key in ("uuid", "id", "assetPath", "displayName", "name"):
+            found = find_gear(value.get(key)) if value.get(key) else None
+            if found:
+                return found
+        return None
     text = str(value or "").strip()
     if not text:
         return None
     catalog = load_gear_catalog()
     if text in catalog:
         return catalog[text]
+    lower_keys = {str(key).lower(): item for key, item in catalog.items()}
+    if text.lower() in lower_keys:
+        return lower_keys[text.lower()]
     compact = _compact(text)
     for gear in catalog.values():
-        if _compact(gear.get("displayName")) == compact:
+        aliases = [gear.get("displayName"), gear.get("uuid"), (gear.get("raw") or {}).get("assetPath")]
+        if compact in {_compact(alias) for alias in aliases if alias}:
             return gear
     return None
 

@@ -32,13 +32,22 @@ class PurchaseHypothesis:
 
 
 class PurchaseInferenceEngine:
-    def infer(self, state: PlayerInventoryState, *, observed_spent: float | None = None) -> list[dict[str, Any]]:
+    def infer(self, state: PlayerInventoryState, *, observed_spent: float | None = None,
+              context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         weapon = state.weapon_after_buy
         before = state.weapon_before_buy
         cost = _cost(weapon)
         spent = None if observed_spent is None else max(0.0, float(observed_spent))
         hypotheses: list[PurchaseHypothesis] = []
-        if before and before == weapon and state.survived_previous_round:
+        normalized_weapon = str(weapon or "").strip().lower()
+        is_default = normalized_weapon in {"classic", "default", "classic gratis"} and (cost in (None, 0))
+        is_reset = bool((context or {}).get("is_pistol_round"))
+        if is_default and not before and (is_reset or spent in (None, 0)):
+            hypotheses.append(PurchaseHypothesis(
+                "default_spawn_weapon", .96 if is_reset else .86, 0,
+                ["classic_default_loadout", "round_start_default_weapon"],
+            ))
+        elif before and before == weapon and state.survived_previous_round:
             hypotheses.append(PurchaseHypothesis("carried", .94, 0, ["same_weapon_after_survival"]))
         elif state.died_previous_round and weapon:
             if cost is not None and spent is not None and spent + 100 >= cost:
@@ -59,7 +68,8 @@ class PurchaseInferenceEngine:
         else:
             hypotheses.append(PurchaseHypothesis("unknown", .25, None, ["insufficient_inventory_evidence"], warnings=["low_confidence"]))
         for item in hypotheses:
-            if state.armor_before_buy and state.armor_before_buy == state.armor_after_buy:
+            if (state.armor_before_buy and state.armor_before_buy != "Sin escudo"
+                    and state.armor_before_buy == state.armor_after_buy):
                 item.armor_source = "carried"
             elif state.armor_after_buy:
                 item.armor_source = "bought_self"
@@ -74,9 +84,10 @@ class PurchaseInferenceEngine:
             item.warnings = list(dict.fromkeys(item.warnings + ["ability_purchase_not_observable"]))
         return [item.to_dict() for item in sorted(hypotheses, key=lambda h: h.confidence, reverse=True)]
 
-    def infer_team(self, states: list[PlayerInventoryState], observed: dict[str, dict]) -> dict[str, list[dict[str, Any]]]:
+    def infer_team(self, states: list[PlayerInventoryState], observed: dict[str, dict],
+                   context: dict[str, Any] | None = None) -> dict[str, list[dict[str, Any]]]:
         result = {
-            state.puuid: self.infer(state, observed_spent=(observed.get(state.puuid) or {}).get("spent"))
+            state.puuid: self.infer(state, observed_spent=(observed.get(state.puuid) or {}).get("spent"), context=context)
             for state in states
         }
         receivers = [

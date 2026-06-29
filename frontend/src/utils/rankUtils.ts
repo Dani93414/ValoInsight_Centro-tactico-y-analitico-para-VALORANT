@@ -3,6 +3,19 @@ const MAX_RANK_TIER = 27;
 const COMPETITIVE_TIER_ICON_PATH_RE =
   /(\/content\/competitive_tiers\/[^/]+\/tiers\/)([^/]+)(\/[^?#]*)/i;
 
+export const UNRANKED_RANK_ICON_FALLBACK =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4 54 14v16c0 14-9 24-22 30C19 54 10 44 10 30V14L32 4Z' fill='%23343b4a' stroke='%239aa4b5' stroke-width='4'/%3E%3Cpath d='M21 32h22' stroke='%23d6dbe5' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E";
+
+export type CompetitiveTierIconSource = {
+  tier?: number | string | null;
+  tierName?: string | null;
+  divisionName?: string | null;
+  smallIcon?: string | null;
+  largeIcon?: string | null;
+  rankTriangleUpIcon?: string | null;
+  rankTriangleDownIcon?: string | null;
+};
+
 const RANK_NAMES: Record<number, string> = {
   3: "Iron 1",
   4: "Iron 2",
@@ -50,6 +63,43 @@ export function normalizeCompetitiveTierIconPath(
 export function getRankNameFromTier(tier?: number | null): string {
   if (!tier || tier < MIN_RANK_TIER) return "Sin rango";
   return RANK_NAMES[tier] ?? `Tier ${tier}`;
+}
+
+function tierIcon(source?: CompetitiveTierIconSource | null): string | null {
+  return normalizeCompetitiveTierIconPath(
+    source?.smallIcon ?? source?.largeIcon ??
+      source?.rankTriangleUpIcon ?? source?.rankTriangleDownIcon ?? null,
+  );
+}
+
+export function resolveCompetitiveTierIcon(
+  tier: number | null | undefined,
+  observedIcon: string | null | undefined,
+  tiers: CompetitiveTierIconSource[] = [],
+): string {
+  const observed = normalizeCompetitiveTierIconPath(observedIcon);
+  if (observed) return observed;
+
+  const numericTier = Number(tier);
+  if (Number.isFinite(numericTier)) {
+    const exact = tiers.find((item) => Number(item.tier) === numericTier);
+    const exactIcon = tierIcon(exact);
+    if (exactIcon) return exactIcon;
+  }
+
+  const unranked = tiers.find((item) => {
+    const itemTier = Number(item.tier);
+    const label = `${item.tierName ?? ""} ${item.divisionName ?? ""}`.toLowerCase();
+    return (Number.isFinite(itemTier) && itemTier < MIN_RANK_TIER) ||
+      label.includes("unranked") || label.includes("sin rango");
+  });
+  return tierIcon(unranked) ?? UNRANKED_RANK_ICON_FALLBACK;
+}
+
+export function applyUnrankedRankIconFallback(image: HTMLImageElement): void {
+  if (image.src === UNRANKED_RANK_ICON_FALLBACK) return;
+  image.src = UNRANKED_RANK_ICON_FALLBACK;
+  image.alt = "Sin rango";
 }
 
 export function isRankedTier(tier?: number | null): boolean {

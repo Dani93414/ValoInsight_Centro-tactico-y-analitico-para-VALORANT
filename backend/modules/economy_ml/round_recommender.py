@@ -8,6 +8,7 @@ from .ability_catalog import agent_abilities, get_agent_ability_catalog
 from .purchase_inference import PurchaseInferenceEngine
 from .recommendation_explainer import RecommendationExplainer
 from .team_buy_solver import TeamBuySolver
+from .display_normalizer import normalize_observed_economy
 
 
 class RoundEconomyRecommender:
@@ -21,7 +22,7 @@ class RoundEconomyRecommender:
                   inventories: list[PlayerInventoryState], observed: dict[str, dict],
                   player_meta: dict[str, dict] | None = None, context: dict | None = None,
                   score_before: Any = None) -> dict:
-        inferred = self.inference.infer_team(inventories, observed)
+        inferred = self.inference.infer_team(inventories, observed, context=context or {})
         meta = player_meta or {}
         plan = self.solver.solve(
             inventories,
@@ -31,6 +32,7 @@ class RoundEconomyRecommender:
         return self.explainer.explain(
             round_number=round_number, team_id=team_id, side=side, score_before=score_before,
             observed=observed, inferred=inferred, plan=plan, player_meta=meta,
+            context=context or {},
         )
 
 
@@ -44,7 +46,6 @@ def recommend_match_economy(match: dict) -> dict:
 
     rounds = match.get("roundResults") or []
     players = match.get("players") or []
-    player_by_id = {str(p.get("puuid")): p for p in players if p.get("puuid")}
     output = []
     for state in extract_match_round_states(match):
         index = int(state.get("round_number") or 1) - 1
@@ -61,6 +62,8 @@ def recommend_match_economy(match: dict) -> dict:
             economy = (stats.get(puuid) or {}).get("economy") or {}
             previous_stat = next((s for s in (previous or {}).get("playerStats") or [] if str(s.get("puuid")) == puuid), {})
             previous_economy = previous_stat.get("economy") or {}
+            normalized = normalize_observed_economy(economy)
+            previous_normalized = normalize_observed_economy(previous_economy)
             survived = infer_player_survived_round(previous, puuid) if previous else None
             agent = str(player.get("characterName") or player.get("agentName") or player.get("characterId") or "")
             free_abilities = {
@@ -70,17 +73,15 @@ def recommend_match_economy(match: dict) -> dict:
             }
             inventories.append(PlayerInventoryState(
                 puuid=puuid, credits_before_buy=float(credit_map.get(puuid) or 0),
-                weapon_before_buy=previous_economy.get("weapon") if survived else None,
-                weapon_after_buy=economy.get("weapon"),
-                armor_before_buy=previous_economy.get("armor") if survived else None,
-                armor_after_buy=economy.get("armor"),
+                weapon_before_buy=previous_normalized["weapon"] if survived else None,
+                weapon_after_buy=normalized["weapon"],
+                armor_before_buy=previous_normalized["armor"] if survived else None,
+                armor_after_buy=normalized["armor"],
                 survived_previous_round=survived,
                 died_previous_round=None if survived is None else not survived,
                 free_abilities_granted=free_abilities,
             ))
-            observed[puuid] = {"weapon": economy.get("weapon"), "armor": economy.get("armor"),
-                               "loadoutValue": economy.get("loadoutValue"), "spent": economy.get("spent"),
-                               "remaining": economy.get("remaining")}
+            observed[puuid] = normalized
             agent_payload = get_agent_ability_catalog(agent) or {}
             meta[puuid] = {"player_name": player.get("gameName"),
                            "agent": agent,
@@ -93,4 +94,5 @@ def recommend_match_economy(match: dict) -> dict:
         ))
     match_id = str((match.get("matchInfo") or {}).get("matchId") or "UNKNOWN")
     return {"available": True, "engine": "player_first_v10", "match_id": match_id, "rounds": output,
-            "limitations": ["ML is auxiliary; when unavailable the rules scorer remains active."]}
+            "limitations": ["Reglas activas; ML auxiliar no cargado."],
+            "debug_limitations": ["ml_auxiliary_unavailable_rules_only"]}

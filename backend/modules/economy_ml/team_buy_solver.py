@@ -251,6 +251,17 @@ class TeamBuySolver:
         if context.get("is_bonus_candidate") and any(p.get("keep_weapon") for p in players):
             return "BONUS_KEEP_INVENTORY"
         spend = sum(_num(p.get("self_cost")) for p in players)
+        if context.get("is_pistol_round"):
+            names = " ".join(_weapon_text(player) for player in players)
+            utility = sum(_num(player.get("ability_cost")) for player in players)
+            armor = sum(_num(player.get("armor_cost")) for player in players)
+            if any(name in names for name in ("ghost", "sheriff", "frenzy", "shorty")):
+                return "PISTOL_SIDEARM"
+            if utility > 0:
+                return "PISTOL_UTILITY"
+            if armor > 0:
+                return "PISTOL_ARMOR"
+            return "PISTOL_DEFAULT"
         weapons = sum(_weapon_value(p) >= 2700 or p.get("keep_weapon") for p in players)
         if weapons >= 4:
             return "FULL_BUY"

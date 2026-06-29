@@ -149,7 +149,8 @@ def recommend_ability_purchase(
         if ability.get("ability_kind") == "ultimate" or not ability.get("is_purchasable", True):
             continue
         free_charges = int(_number(ability.get("free_charges_at_round_start")))
-        if ability.get("is_free_at_round_start") and free_charges > 0:
+        if (ability.get("is_free_at_round_start") and free_charges > 0
+                and int(_number(ability.get("purchasable_charges"))) <= 0):
             continue
         cost = ability.get("cost_credits")
         if cost is None:

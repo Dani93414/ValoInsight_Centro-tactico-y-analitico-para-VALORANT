@@ -74,6 +74,17 @@ def _compact(value: Any) -> str:
     return "".join(ch for ch in _norm(value) if ch.isalnum())
 
 
+def _canonical_slot(value: Any) -> str:
+    compact = _compact(value)
+    return {
+        "c": "C", "grenade": "C",
+        "q": "Q", "ability1": "Q",
+        "e": "E", "ability2": "E",
+        "x": "X", "ultimate": "X",
+        "passive": "PASSIVE",
+    }.get(compact, str(value or "").strip().upper())
+
+
 def _number_or_none(value: Any) -> float | None:
     try:
         if value is None or value == "":
@@ -170,15 +181,21 @@ def _finalize_ability(
         cost = _ability_cost_from_content(ability)
     slot = ability.get("slot") or ability.get("ability_slot")
     name = ability.get("name") or ability.get("displayName") or ability.get("ability_name")
-    kind = ability.get("ability_kind") or ("ultimate" if str(slot).upper() == "X" else "unknown")
+    canonical_slot = _canonical_slot(slot)
+    kind = ability.get("ability_kind") or (
+        "ultimate" if canonical_slot == "X" else "passive" if canonical_slot == "PASSIVE" else "unknown"
+    )
     if kind == "ultimate":
         cost = None
     payload = {
         "agent_id": agent_id,
         "agent_name": agent_name,
         "role": role,
-        "slot": slot,
+        "slot": canonical_slot,
         "name": name,
+        "display_name": ability.get("display_name") or name,
+        "canonical_name": ability.get("canonical_name") or name,
+        "aliases": list(dict.fromkeys([str(item) for item in (ability.get("aliases") or []) + [name] if item])),
         "description": ability.get("description") or ability.get("ability_description"),
         "ability_kind": kind,
         "tactical_types": tactical_types,
@@ -191,7 +208,7 @@ def _finalize_ability(
         "is_signature": bool(ability.get("is_signature") or kind == "signature"),
         "is_round_start_ability": bool(ability.get("is_round_start_ability")),
         "is_free_at_round_start": bool(ability.get("is_free_at_round_start")),
-        "is_purchasable": bool(ability.get("is_purchasable")) if "is_purchasable" in ability else kind != "ultimate",
+        "is_purchasable": bool(ability.get("is_purchasable")) if "is_purchasable" in ability else kind not in {"ultimate", "passive"},
         "is_rechargeable": bool(ability.get("is_rechargeable")),
         "carries_over": bool(ability.get("carries_over")) if "carries_over" in ability else None,
         "recharge_rule": ability.get("recharge_rule") or "unknown",
@@ -299,10 +316,10 @@ def merge_content_catalog_with_manual_seed() -> dict[str, dict[str, Any]]:
             target["warnings"].append(f"role_conflict: content={target.get('role')} manual={manual.get('role')}")
         if manual.get("round_start_ability"):
             target["round_start_ability"] = target.get("round_start_ability") or manual["round_start_ability"]
-        content_by_slot = {_compact(item.get("slot")): item for item in target.get("abilities") or [] if item.get("slot")}
+        content_by_slot = {_canonical_slot(item.get("slot")): item for item in target.get("abilities") or [] if item.get("slot")}
         content_by_name = {_compact(item.get("name")): item for item in target.get("abilities") or [] if item.get("name")}
         for manual_ability in manual["abilities"]:
-            existing = content_by_slot.get(_compact(manual_ability.get("slot"))) or content_by_name.get(_compact(manual_ability.get("name")))
+            existing = content_by_slot.get(_canonical_slot(manual_ability.get("slot"))) or content_by_name.get(_compact(manual_ability.get("name")))
             if not existing:
                 manual_ability["agent_id"] = agent_id
                 manual_ability["source"] = "manual_seed_fallback"
@@ -311,8 +328,14 @@ def merge_content_catalog_with_manual_seed() -> dict[str, dict[str, Any]]:
                 target["abilities"].append(manual_ability)
                 continue
             if existing.get("name") and manual_ability.get("name") and _compact(existing["name"]) != _compact(manual_ability["name"]):
-                existing["needs_review"] = True
-                existing["warnings"].append(f"name_conflict_with_manual_seed:{manual_ability['name']}")
+                localized_name = existing["name"]
+                existing["canonical_name"] = manual_ability["name"]
+                existing["aliases"] = list(dict.fromkeys(
+                    (existing.get("aliases") or []) + (manual_ability.get("aliases") or []) +
+                    [localized_name, manual_ability["name"]]
+                ))
+                existing["display_name"] = localized_name
+                existing["name"] = manual_ability["name"]
             for field in (
                 "ability_kind", "tactical_types", "max_charges",
                 "free_charges_at_round_start", "purchasable_charges",
@@ -321,6 +344,7 @@ def merge_content_catalog_with_manual_seed() -> dict[str, dict[str, Any]]:
                 "carries_over", "recharge_rule", "resource_name", "notes",
             ):
                 if field in {
+                    "ability_kind", "tactical_types",
                     "max_charges", "free_charges_at_round_start", "purchasable_charges",
                     "ultimate_points", "is_signature", "is_round_start_ability",
                     "is_free_at_round_start", "is_purchasable", "is_rechargeable",
