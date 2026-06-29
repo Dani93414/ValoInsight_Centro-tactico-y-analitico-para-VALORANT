@@ -19,7 +19,7 @@ from modules.economy_ml.dataset_builder import (
 )
 from modules.economy_ml.economy_ledger import build_economy_ledger_report
 from modules.economy_ml.model_registry import status
-from modules.economy_ml.predict import predict_match_economy_recommendations
+from modules.economy_ml.round_recommender import recommend_match_economy
 from modules.economy_ml.train import train_models
 from modules.matches.infrastructure import mongo_match_repo
 
@@ -119,4 +119,4 @@ def match_economy_ml(match_id: str):
     match = mongo_match_repo.find_by_id(match_id)
     if not match:
         raise HTTPException(status_code=404, detail="Partida no encontrada")
-    return predict_match_economy_recommendations(match)
+    return recommend_match_economy(match)

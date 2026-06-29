@@ -342,8 +342,8 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("team_player_credit_estimates", state)
         self.assertNotIn("team_player_credit_estimates", PREBUY_NUMERIC_FEATURES)
 
-    def test_schema_version_9(self):
-        self.assertEqual(SCHEMA_VERSION, 9)
+    def test_schema_version_10(self):
+        self.assertEqual(SCHEMA_VERSION, 10)
 
     def test_content_taxonomy_knows_bandit_and_regen_shield(self):
         self.assertEqual(weapon_role({"displayName": "Bandit"}), "sidearm")
@@ -369,8 +369,8 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("team_drop_reconciliation_status", state)
         self.assertIn("team_possible_drop_credit_gap", state)
         self.assertIn("team_spent_over_prebuy", state)
-        self.assertIn("target_loadout_case", MODEL_FEATURES)
-        self.assertIn("cashflow_case", MODEL_FEATURES)
+        self.assertNotIn("target_loadout_case", MODEL_FEATURES)
+        self.assertNotIn("cashflow_case", MODEL_FEATURES)
         self.assertIn("team_drop_reconciliation_status", MODEL_FEATURES)
         self.assertIn("team_possible_drop_credit_gap", MODEL_FEATURES)
 
