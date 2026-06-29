@@ -193,6 +193,7 @@ def _finalize_ability(
         "is_free_at_round_start": bool(ability.get("is_free_at_round_start")),
         "is_purchasable": bool(ability.get("is_purchasable")) if "is_purchasable" in ability else kind != "ultimate",
         "is_rechargeable": bool(ability.get("is_rechargeable")),
+        "carries_over": bool(ability.get("carries_over")) if "carries_over" in ability else None,
         "recharge_rule": ability.get("recharge_rule") or "unknown",
         "resource_name": ability.get("resource_name"),
         "notes": ability.get("notes"),
@@ -201,6 +202,10 @@ def _finalize_ability(
         "warnings": warnings or [],
     }
     payload["ability_cost_available"] = payload["cost_credits"] is not None
+    payload["missing_cost"] = bool(kind != "ultimate" and payload["is_purchasable"] and payload["cost_credits"] is None)
+    if payload["missing_cost"]:
+        payload["needs_review"] = True
+        payload["warnings"] = list(dict.fromkeys(payload["warnings"] + ["missing_cost"]))
     payload["ability_slot"] = payload["slot"]
     payload["ability_name"] = payload["name"]
     payload["ability_description"] = payload["description"]
@@ -313,9 +318,16 @@ def merge_content_catalog_with_manual_seed() -> dict[str, dict[str, Any]]:
                 "free_charges_at_round_start", "purchasable_charges",
                 "ultimate_points", "is_signature", "is_round_start_ability",
                 "is_free_at_round_start", "is_purchasable", "is_rechargeable",
-                "recharge_rule", "resource_name", "notes",
+                "carries_over", "recharge_rule", "resource_name", "notes",
             ):
-                if existing.get(field) in (None, "", [], ["unknown"], "unknown") and manual_ability.get(field) not in (None, "", []):
+                if field in {
+                    "max_charges", "free_charges_at_round_start", "purchasable_charges",
+                    "ultimate_points", "is_signature", "is_round_start_ability",
+                    "is_free_at_round_start", "is_purchasable", "is_rechargeable",
+                    "carries_over", "recharge_rule",
+                } and field in manual_ability and manual_ability.get(field) is not None:
+                    existing[field] = manual_ability[field]
+                elif existing.get(field) in (None, "", [], ["unknown"], "unknown") and manual_ability.get(field) not in (None, "", []):
                     existing[field] = manual_ability[field]
             if existing.get("cost_credits") is None and manual_ability.get("cost_credits") is not None:
                 existing["cost_credits"] = manual_ability["cost_credits"]

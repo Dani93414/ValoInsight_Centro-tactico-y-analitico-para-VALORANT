@@ -32,5 +32,9 @@ logs/
 
 # Data dumps
 data/
+# The reviewed economy ability catalog is source data, not a generated dump.
+!modules/economy_ml/data/
+modules/economy_ml/data/*
+!modules/economy_ml/data/ability_catalog_seed.json
 *.backup
 *.dump

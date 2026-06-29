@@ -79,6 +79,7 @@ def _metadata_payload(metadata: dict) -> dict:
 
 
 def predict_match_economy_recommendations(match: dict) -> dict:
+    """LEGACY macro-action pipeline; production endpoints use player_first_v10."""
     current_status = status()
     match_id = str((match.get("matchInfo") or {}).get("matchId") or "UNKNOWN")
     if not content_available():

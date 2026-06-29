@@ -9,6 +9,22 @@ de compra real, genera compras legales por jugador, resuelve drops de armas y
 puntua planes completos. `ACTION_TEMPLATES` queda relegado al flujo historico
 legacy y no es la fuente de las recomendaciones expuestas por la API.
 
+Los dos endpoints de lectura de partida usan el mismo contrato:
+
+- `/matches/{match_id}/economy-ml` (consumido por la UI principal).
+- `/economy-ml/matches/{match_id}` (ruta directa del modulo).
+
+Ambos devuelven `engine: player_first_v10`, `rounds`, `limitations`, compras
+observadas/inferidas/recomendadas y proyecciones por jugador. `predict.py`,
+`policy.py`, `action_profiles.py`, `team_plan.py`, `plan_allocator.py` y
+`player_recommendations.py` forman el pipeline macro legacy; ningun endpoint de
+produccion los usa para recomendar.
+
+`confidence` combina calidad de reconciliacion e incertidumbre de inferencia.
+Los `warnings` indican costes ausentes, hipotesis no observables, falta de apoyo
+ML o penalizaciones de composicion. Un warning reduce confianza; no convierte
+un plan ilegal en valido.
+
 ## Contrato De Datos
 
 Cada fila separa tres conceptos:
@@ -85,7 +101,7 @@ venv\Scripts\python.exe scripts\entrenamiento_economia.py
 Tests backend:
 
 ```powershell
-$env:PYTHONPATH='backend'; venv\Scripts\python.exe -m unittest backend.tests.test_economy_ml backend.tests.test_economy_ledger
+$env:PYTHONPATH='backend'; & '.\venv\Scripts\python.exe' -m unittest backend.tests.test_economy_ml backend.tests.test_economy_ledger backend.tests.test_economy_engine_v10 backend.tests.test_economy_routes_v10
 ```
 
 Build frontend:
