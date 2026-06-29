@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from modules.matches.infrastructure import mongo_match_repo
 from modules.content.application.content_services import get_matches_by_player
-from modules.economy_ml.predict import predict_match_economy_recommendations
+from modules.economy_ml.round_recommender import recommend_match_economy
 
 router = APIRouter()
 
@@ -34,4 +34,4 @@ def get_match_economy_ml(match_id: str):
     match_doc = mongo_match_repo.find_by_id(match_id)
     if not match_doc:
         raise HTTPException(status_code=404, detail="Partida no encontrada")
-    return predict_match_economy_recommendations(match_doc)
+    return recommend_match_economy(match_doc)

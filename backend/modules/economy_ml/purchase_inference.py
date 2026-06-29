@@ -20,6 +20,11 @@ class PurchaseHypothesis:
     estimated_self_spend: float | None
     reasons: list[str] = field(default_factory=list)
     armor_source: str = "unknown"
+    estimated_team_spend_impact: float | None = None
+    buys_for_teammate: bool | None = None
+    utility_bought_estimated: list[dict[str, Any]] = field(default_factory=list)
+    free_utility_granted: list[dict[str, Any]] = field(default_factory=list)
+    utility_status: str = "unknown"
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -58,4 +63,43 @@ class PurchaseInferenceEngine:
                 item.armor_source = "carried"
             elif state.armor_after_buy:
                 item.armor_source = "bought_self"
+            item.estimated_team_spend_impact = item.estimated_self_spend
+            item.buys_for_teammate = None
+            item.free_utility_granted = [
+                {"name": name, "charges": charges, "source": "free_round_start"}
+                for name, charges in state.free_abilities_granted.items()
+            ]
+            # Ability purchases are not directly observable in the match payload.
+            item.utility_status = "estimated" if observed_spent is not None else "unknown"
+            item.warnings = list(dict.fromkeys(item.warnings + ["ability_purchase_not_observable"]))
         return [item.to_dict() for item in sorted(hypotheses, key=lambda h: h.confidence, reverse=True)]
+
+    def infer_team(self, states: list[PlayerInventoryState], observed: dict[str, dict]) -> dict[str, list[dict[str, Any]]]:
+        result = {
+            state.puuid: self.infer(state, observed_spent=(observed.get(state.puuid) or {}).get("spent"))
+            for state in states
+        }
+        receivers = [
+            state for state in states
+            if (result.get(state.puuid) or [{}])[0].get("weapon_source") == "bought_by_teammate"
+        ]
+        for receiver in receivers:
+            weapon_cost = _cost(receiver.weapon_after_buy) or 0.0
+            donors = sorted(
+                (state for state in states if state.puuid != receiver.puuid),
+                key=lambda state: float((observed.get(state.puuid) or {}).get("spent") or 0),
+                reverse=True,
+            )
+            donor = next((state for state in donors if float((observed.get(state.puuid) or {}).get("spent") or 0) >= weapon_cost), None)
+            if not donor:
+                continue
+            donor_hypothesis = dict((result.get(donor.puuid) or [{}])[0])
+            donor_hypothesis.update({
+                "buys_for_teammate": True,
+                "estimated_team_spend_impact": (donor_hypothesis.get("estimated_self_spend") or 0) + weapon_cost,
+                "confidence": min(float(donor_hypothesis.get("confidence") or .2), .58),
+                "reasons": list(donor_hypothesis.get("reasons") or []) + [f"possible_weapon_drop_for:{receiver.puuid}"],
+                "warnings": list(dict.fromkeys(list(donor_hypothesis.get("warnings") or []) + ["team_drop_inferred_not_observed"])),
+            })
+            result[donor.puuid].insert(0, donor_hypothesis)
+        return result

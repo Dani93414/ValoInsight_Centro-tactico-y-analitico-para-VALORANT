@@ -24,13 +24,18 @@ class RecommendationExplainer:
                 "warnings": list(dict.fromkeys((purchase.get("warnings") or []) + (best.get("warnings") or []))),
                 "confidence": best.get("confidence"),
             })
-        confidence = min([p["confidence"] for p in players] or [.2])
+        inference_confidence = min([p["confidence"] for p in players] or [.2])
+        projection = plan.get("economy_projection") or {}
+        data_confidence = float(projection.get("data_confidence") or .5)
+        ml_factor = 1.0 if projection.get("ml_support") is not None else .82
+        confidence = round(max(.1, min(1.0, inference_confidence * .65 + data_confidence * .35)) * ml_factor, 4)
         return {
             "round_number": round_number, "team_id": team_id, "side": side, "score_before": score_before,
             "real_team_buy_observed": observed, "inferred_team_buy": inferred,
             "recommended_team_buy": plan.get("plan_kind"), "team_plan_score": plan.get("team_plan_score"),
             "confidence": confidence, "players": players, "alternatives": plan.get("alternatives") or [],
-            "economy_projection": plan.get("economy_projection") or {}, "warnings": plan.get("warnings") or [],
+            "economy_projection": projection,
+            "warnings": list(dict.fromkeys((plan.get("warnings") or []) + (["ml_auxiliary_unavailable_rules_only"] if projection.get("ml_support") is None else []))),
         }
 
     @staticmethod

@@ -4,6 +4,7 @@ from typing import Any
 
 from .inventory import PlayerInventoryState
 from .economy_ledger import infer_player_survived_round
+from .ability_catalog import agent_abilities, get_agent_ability_catalog
 from .purchase_inference import PurchaseInferenceEngine
 from .recommendation_explainer import RecommendationExplainer
 from .team_buy_solver import TeamBuySolver
@@ -20,10 +21,7 @@ class RoundEconomyRecommender:
                   inventories: list[PlayerInventoryState], observed: dict[str, dict],
                   player_meta: dict[str, dict] | None = None, context: dict | None = None,
                   score_before: Any = None) -> dict:
-        inferred = {
-            inv.puuid: self.inference.infer(inv, observed_spent=(observed.get(inv.puuid) or {}).get("spent"))
-            for inv in inventories
-        }
+        inferred = self.inference.infer_team(inventories, observed)
         meta = player_meta or {}
         plan = self.solver.solve(
             inventories,
@@ -64,6 +62,12 @@ def recommend_match_economy(match: dict) -> dict:
             previous_stat = next((s for s in (previous or {}).get("playerStats") or [] if str(s.get("puuid")) == puuid), {})
             previous_economy = previous_stat.get("economy") or {}
             survived = infer_player_survived_round(previous, puuid) if previous else None
+            agent = str(player.get("characterName") or player.get("agentName") or player.get("characterId") or "")
+            free_abilities = {
+                str(ability.get("name")): int(ability.get("free_charges_at_round_start") or 0)
+                for ability in agent_abilities(agent)
+                if int(ability.get("free_charges_at_round_start") or 0) > 0
+            }
             inventories.append(PlayerInventoryState(
                 puuid=puuid, credits_before_buy=float(credit_map.get(puuid) or 0),
                 weapon_before_buy=previous_economy.get("weapon") if survived else None,
@@ -72,12 +76,15 @@ def recommend_match_economy(match: dict) -> dict:
                 armor_after_buy=economy.get("armor"),
                 survived_previous_round=survived,
                 died_previous_round=None if survived is None else not survived,
+                free_abilities_granted=free_abilities,
             ))
             observed[puuid] = {"weapon": economy.get("weapon"), "armor": economy.get("armor"),
                                "loadoutValue": economy.get("loadoutValue"), "spent": economy.get("spent"),
                                "remaining": economy.get("remaining")}
+            agent_payload = get_agent_ability_catalog(agent) or {}
             meta[puuid] = {"player_name": player.get("gameName"),
-                           "agent": player.get("characterName") or player.get("agentName") or player.get("characterId"),
+                           "agent": agent,
+                           "role": agent_payload.get("role"),
                            "credits_before_buy": credit_map.get(puuid)}
         output.append(recommend_round_economy(
             round_number=state["round_number"], team_id=state["team_id"], side=state.get("side") or "unknown",

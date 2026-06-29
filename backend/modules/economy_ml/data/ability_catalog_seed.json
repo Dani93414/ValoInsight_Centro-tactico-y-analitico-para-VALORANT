@@ -1,0 +1,2048 @@
+{
+  "version": 2,
+  "ability_schema": [
+    "name", "slot", "ability_kind", "cost_credits", "cost_per_charge",
+    "max_charges", "free_charges_at_round_start", "purchasable_charges",
+    "is_signature", "is_purchasable", "carries_over", "is_rechargeable",
+    "ultimate_points", "tactical_types", "needs_review"
+  ],
+  "missing_value_policy": "Use null and needs_review=true; never infer a credit cost silently.",
+  "source": "manual_seed_from_model_design_conversation",
+  "source_note": "Datos manuales recolectados para economía ML. Validar contra contenido real del proyecto y parches actuales antes de considerarlos definitivos.",
+  "needs_review": true,
+  "agents": {
+    "Astra": {
+      "role": "Controller",
+      "round_start_ability": "Nebula / Dissipate",
+      "abilities": [
+        {
+          "slot": "E",
+          "name": "Nebula / Dissipate",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "smoke",
+            "vision_denial"
+          ],
+          "max_charges": 2,
+          "free_charges_at_round_start": 1,
+          "purchasable_charges": 1,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "ultimate_points": null,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "resource",
+          "resource_name": "Star",
+          "notes": "Astra tiene 2 humos posibles. Te dan 1 smoke al principio de ronda. Cada habilidad/Star cuesta 150 créditos."
+        },
+        {
+          "slot": "Q",
+          "name": "Nova Pulse",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "concuss",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "ultimate_points": null,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "resource",
+          "resource_name": "Star",
+          "notes": "1 Nova Pulse. Cuesta 150 créditos."
+        },
+        {
+          "slot": "C",
+          "name": "Gravity Well",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "stall",
+            "vulnerable",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "ultimate_points": null,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "resource",
+          "resource_name": "Star",
+          "notes": "1 Gravity Well. Cuesta 150 créditos."
+        },
+        {
+          "slot": "X",
+          "name": "Cosmic Divide",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "wall",
+            "vision_denial",
+            "retake",
+            "postplant"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 0,
+          "cost_credits": null,
+          "cost_per_charge": null,
+          "ultimate_points": 7,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": false,
+          "is_rechargeable": false,
+          "recharge_rule": "none",
+          "resource_name": null
+        }
+      ]
+    },
+    "Brimstone": {
+      "role": "Controller",
+      "round_start_ability": "Sky Smoke",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Stim Beacon",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "buff",
+            "entry"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "ultimate_points": null,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "Q",
+          "name": "Incendiary",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "postplant",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "ultimate_points": null,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "E",
+          "name": "Sky Smoke",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "smoke",
+            "vision_denial"
+          ],
+          "max_charges": 3,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 3,
+          "cost_credits": 100,
+          "cost_per_charge": 100,
+          "ultimate_points": null,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "X",
+          "name": "Orbital Strike",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "damage",
+            "postplant",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 0,
+          "cost_credits": null,
+          "cost_per_charge": null,
+          "ultimate_points": 8,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": false,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        }
+      ]
+    },
+    "Clove": {
+      "role": "Controller",
+      "round_start_ability": "Ruse",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Pick-me-up",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "heal",
+            "buff"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "ultimate_points": null,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "Q",
+          "name": "Meddle",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "decay",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "ultimate_points": null,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "E",
+          "name": "Ruse",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "smoke",
+            "vision_denial"
+          ],
+          "max_charges": 2,
+          "free_charges_at_round_start": 1,
+          "purchasable_charges": 1,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "ultimate_points": null,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "X",
+          "name": "Not Dead Yet",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "revive",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "cost_per_charge": null,
+          "ultimate_points": 8,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": false,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        }
+      ]
+    },
+    "Harbor": {
+      "role": "Controller",
+      "round_start_ability": "Cove",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Storm Surge",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "slow",
+            "nearsight",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "Q",
+          "name": "High Tide",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "wall",
+            "smoke",
+            "slow",
+            "vision_denial"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": true,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "E",
+          "name": "Cove",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "smoke",
+            "shield",
+            "vision_denial"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "purchasable_charges": 0,
+          "cost_credits": 0,
+          "cost_per_charge": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false,
+          "is_rechargeable": false,
+          "recharge_rule": "none"
+        },
+        {
+          "slot": "X",
+          "name": "Reckoning",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "concuss",
+            "retake",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "cost_per_charge": null,
+          "ultimate_points": 7,
+          "is_signature": false,
+          "is_round_start_ability": false,
+          "is_free_at_round_start": false,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Miks": {
+      "role": "Controller",
+      "round_start_ability": "Waveform",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "M-pulse",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "concuss",
+            "heal"
+          ],
+          "max_charges": 2,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 2,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "Q",
+          "name": "Harmonize",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "buff"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "E",
+          "name": "Waveform",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "smoke",
+            "vision_denial"
+          ],
+          "max_charges": 2,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 2,
+          "cost_credits": 100,
+          "cost_per_charge": 100,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "X",
+          "name": "Bassquake",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "slow",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false,
+          "needs_review": true
+        }
+      ]
+    },
+    "Omen": {
+      "role": "Controller",
+      "round_start_ability": "Dark Cover",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Shrouded Step",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "teleport",
+            "mobility",
+            "escape"
+          ],
+          "max_charges": 2,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 2,
+          "cost_credits": 100,
+          "cost_per_charge": 100,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Paranoia",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "nearsight",
+            "vision_denial",
+            "entry"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Dark Cover",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "smoke",
+            "vision_denial"
+          ],
+          "max_charges": 2,
+          "free_charges_at_round_start": 1,
+          "purchasable_charges": 1,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_purchasable": true,
+          "is_rechargeable": true,
+          "recharge_rule": "cooldown"
+        },
+        {
+          "slot": "X",
+          "name": "From the Shadows",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "teleport",
+            "info",
+            "flank_control"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 7,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Viper": {
+      "role": "Controller",
+      "round_start_ability": "Toxic Screen",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Snake Bite",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "vulnerable",
+            "postplant",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Poison Cloud",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "smoke",
+            "decay",
+            "vision_denial"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true,
+          "recharge_rule": "fuel"
+        },
+        {
+          "slot": "E",
+          "name": "Toxic Screen",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "wall",
+            "smoke",
+            "decay",
+            "vision_denial"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "purchasable_charges": 0,
+          "cost_credits": 0,
+          "cost_per_charge": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false,
+          "recharge_rule": "fuel"
+        },
+        {
+          "slot": "X",
+          "name": "Viper's Pit",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "smoke",
+            "decay",
+            "anchor",
+            "postplant"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 9,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Iso": {
+      "role": "Duelist",
+      "round_start_ability": "Double Tap",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Contingency",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "shield",
+            "wall",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Undercut",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "vulnerable",
+            "suppress"
+          ],
+          "max_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Double Tap",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "shield",
+            "buff",
+            "entry"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false
+        },
+        {
+          "slot": "X",
+          "name": "Kill Contract",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "entry",
+            "weapon"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 7,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Jett": {
+      "role": "Duelist",
+      "round_start_ability": "Tailwind",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Cloudburst",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "smoke",
+            "vision_denial",
+            "entry"
+          ],
+          "max_charges": 2,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Updraft",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "mobility",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Tailwind",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "dash",
+            "mobility",
+            "escape",
+            "entry"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "kills",
+          "recharge_amount": 2
+        },
+        {
+          "slot": "X",
+          "name": "Blade Storm",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "weapon",
+            "eco_replacement",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Neon": {
+      "role": "Duelist",
+      "round_start_ability": "High Gear",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Fast Lane",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "wall",
+            "vision_denial",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Relay Bolt",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "concuss",
+            "entry",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "High Gear",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "mobility",
+            "dash",
+            "entry"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "kills",
+          "recharge_amount": 2
+        },
+        {
+          "slot": "X",
+          "name": "Overdrive",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "weapon",
+            "eco_replacement",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Phoenix": {
+      "role": "Duelist",
+      "round_start_ability": "Curveball",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Blaze",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "wall",
+            "damage",
+            "heal",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Hot Hands",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "heal",
+            "postplant",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Curveball",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "flash",
+            "entry"
+          ],
+          "max_charges": 2,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 2,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_purchasable": true,
+          "is_rechargeable": true,
+          "recharge_rule": "kills",
+          "recharge_amount": 2
+        },
+        {
+          "slot": "X",
+          "name": "Run it Back",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "entry",
+            "revive",
+            "info"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 6,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Raze": {
+      "role": "Duelist",
+      "round_start_ability": "Paint Shells",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Boom Bot",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "recon",
+            "damage",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Blast Pack",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "mobility",
+            "damage",
+            "space_creation"
+          ],
+          "max_charges": 2,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Paint Shells",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "damage",
+            "area_damage",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "kills",
+          "recharge_amount": 2
+        },
+        {
+          "slot": "X",
+          "name": "Showstopper",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "weapon",
+            "damage",
+            "eco_replacement",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Reyna": {
+      "role": "Duelist",
+      "round_start_ability": "Devour / Dismiss",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Leer",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "nearsight",
+            "entry"
+          ],
+          "max_charges": 2,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Devour",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "heal",
+            "buff"
+          ],
+          "max_charges": 2,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_purchasable": true,
+          "notes": "Comparte cargas con Dismiss y depende de Soul Orb."
+        },
+        {
+          "slot": "E",
+          "name": "Dismiss",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "mobility",
+            "escape"
+          ],
+          "max_charges": 2,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_purchasable": true,
+          "notes": "Comparte cargas con Devour y depende de Soul Orb."
+        },
+        {
+          "slot": "X",
+          "name": "Empress",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "buff",
+            "heal",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 7,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Waylay": {
+      "role": "Duelist",
+      "round_start_ability": "Refract",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Saturate",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "stall",
+            "slow"
+          ],
+          "max_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "Q",
+          "name": "Lightspeed",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "dash",
+            "mobility",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "E",
+          "name": "Refract",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "mobility",
+            "escape"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "kills",
+          "recharge_amount": 2,
+          "needs_review": true
+        },
+        {
+          "slot": "X",
+          "name": "Convergent Paths",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "stall",
+            "entry",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false,
+          "needs_review": true
+        }
+      ]
+    },
+    "Yoru": {
+      "role": "Duelist",
+      "round_start_ability": "Gatecrash",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Fakeout",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "info",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Blindside",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "flash",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Gatecrash",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "teleport",
+            "mobility",
+            "escape",
+            "entry"
+          ],
+          "max_charges": 2,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_purchasable": true,
+          "is_rechargeable": true,
+          "recharge_rule": "kills",
+          "recharge_amount": 2
+        },
+        {
+          "slot": "X",
+          "name": "Dimensional Drift",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "info",
+            "entry",
+            "escape"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Breach": {
+      "role": "Initiator",
+      "round_start_ability": "Fault Line",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Aftershock",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "stall",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Flashpoint",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "flash",
+            "entry"
+          ],
+          "max_charges": 2,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Fault Line",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "concuss",
+            "entry",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "cooldown"
+        },
+        {
+          "slot": "X",
+          "name": "Rolling Thunder",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "concuss",
+            "retake",
+            "entry",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Fade": {
+      "role": "Initiator",
+      "round_start_ability": "Haunt",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Prowler",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "recon",
+            "nearsight",
+            "space_creation"
+          ],
+          "max_charges": 2,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Seize",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "stall",
+            "decay"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Haunt",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "recon",
+            "reveal",
+            "info"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "cooldown"
+        },
+        {
+          "slot": "X",
+          "name": "Nightfall",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "recon",
+            "decay",
+            "info"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Gekko": {
+      "role": "Initiator",
+      "round_start_ability": "Dizzy",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Mosh Pit",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "postplant",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Wingman",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "recon",
+            "plant",
+            "defuse",
+            "concuss"
+          ],
+          "max_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true,
+          "is_rechargeable": true,
+          "recharge_rule": "pickup"
+        },
+        {
+          "slot": "E",
+          "name": "Dizzy",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "flash",
+            "recon",
+            "info"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "pickup"
+        },
+        {
+          "slot": "X",
+          "name": "Thrash",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "stall",
+            "info",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false,
+          "is_rechargeable": true,
+          "recharge_rule": "pickup"
+        }
+      ]
+    },
+    "KAY/O": {
+      "role": "Initiator",
+      "round_start_ability": "ZERO/point",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "FRAG/ment",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "postplant",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "FLASH/drive",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "flash",
+            "entry"
+          ],
+          "max_charges": 2,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "ZERO/point",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "suppress",
+            "recon",
+            "info"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "cooldown"
+        },
+        {
+          "slot": "X",
+          "name": "NULL/cmd",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "suppress",
+            "buff",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Skye": {
+      "role": "Initiator",
+      "round_start_ability": "Guiding Light",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Regrowth",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "heal"
+          ],
+          "max_charges": 1,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Trailblazer",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "recon",
+            "concuss",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Guiding Light",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "flash",
+            "info",
+            "entry"
+          ],
+          "max_charges": 2,
+          "free_charges_at_round_start": 0,
+          "purchasable_charges": 2,
+          "cost_credits": 250,
+          "cost_per_charge": 250,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_purchasable": true
+        },
+        {
+          "slot": "X",
+          "name": "Seekers",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "recon",
+            "nearsight",
+            "info"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Sova": {
+      "role": "Initiator",
+      "round_start_ability": "Recon Bolt",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Owl Drone",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "recon",
+            "info",
+            "reveal"
+          ],
+          "max_charges": 1,
+          "cost_credits": 400,
+          "cost_per_charge": 400,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Shock Bolt",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "stall"
+          ],
+          "max_charges": 2,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Recon Bolt",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "recon",
+            "reveal",
+            "info"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "cooldown"
+        },
+        {
+          "slot": "X",
+          "name": "Hunter's Fury",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "damage",
+            "reveal",
+            "postplant"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Tejo": {
+      "role": "Initiator",
+      "round_start_ability": "Guided Salvo",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Stealth Drone",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "recon",
+            "suppress",
+            "info"
+          ],
+          "max_charges": 1,
+          "cost_credits": 400,
+          "cost_per_charge": 400,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "Q",
+          "name": "Special Delivery",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "concuss",
+            "damage",
+            "entry"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "E",
+          "name": "Guided Salvo",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "damage",
+            "area_damage",
+            "space_creation"
+          ],
+          "max_charges": 2,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "X",
+          "name": "Armageddon",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "damage",
+            "area_damage",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 9,
+          "is_purchasable": false,
+          "needs_review": true
+        }
+      ]
+    },
+    "Chamber": {
+      "role": "Sentinel",
+      "round_start_ability": "Rendezvous",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Trademark",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "trap",
+            "stall",
+            "info"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Headhunter",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "weapon",
+            "eco_replacement"
+          ],
+          "max_charges": 8,
+          "cost_credits": 100,
+          "cost_per_charge": 100,
+          "is_purchasable": true,
+          "notes": "Coste por bala."
+        },
+        {
+          "slot": "E",
+          "name": "Rendezvous",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "teleport",
+            "escape",
+            "mobility"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false
+        },
+        {
+          "slot": "X",
+          "name": "Tour De Force",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "weapon",
+            "eco_replacement"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Cypher": {
+      "role": "Sentinel",
+      "round_start_ability": "Spycam",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Trapwire",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "trap",
+            "stall",
+            "info",
+            "flank_control"
+          ],
+          "max_charges": 2,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Cyber Cage",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "smoke",
+            "stall",
+            "vision_denial"
+          ],
+          "max_charges": 2,
+          "cost_credits": 100,
+          "cost_per_charge": 100,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Spycam",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "recon",
+            "info",
+            "reveal"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false
+        },
+        {
+          "slot": "X",
+          "name": "Neural Theft",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "recon",
+            "info"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 6,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Deadlock": {
+      "role": "Sentinel",
+      "round_start_ability": "GravNet",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Barrier Mesh",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "wall",
+            "stall",
+            "anchor"
+          ],
+          "max_charges": 1,
+          "cost_credits": 300,
+          "cost_per_charge": 300,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Sonic Sensor",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "trap",
+            "concuss",
+            "anchor"
+          ],
+          "max_charges": 2,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "GravNet",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "slow",
+            "stall"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false
+        },
+        {
+          "slot": "X",
+          "name": "Annihilation",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "stall",
+            "damage"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 7,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Killjoy": {
+      "role": "Sentinel",
+      "round_start_ability": "Turret",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Nanoswarm",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "postplant",
+            "stall",
+            "anchor"
+          ],
+          "max_charges": 2,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Alarmbot",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "trap",
+            "vulnerable",
+            "info"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Turret",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "recon",
+            "info",
+            "anchor"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false
+        },
+        {
+          "slot": "X",
+          "name": "Lockdown",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "stall",
+            "retake",
+            "space_creation"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 9,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Sage": {
+      "role": "Sentinel",
+      "round_start_ability": "Healing Orb",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Barrier Orb",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "wall",
+            "stall",
+            "anchor"
+          ],
+          "max_charges": 1,
+          "cost_credits": 400,
+          "cost_per_charge": 400,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Slow Orb",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "slow",
+            "stall"
+          ],
+          "max_charges": 2,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Healing Orb",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "heal"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_rechargeable": true,
+          "recharge_rule": "cooldown"
+        },
+        {
+          "slot": "X",
+          "name": "Resurrection",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "revive"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    },
+    "Veto": {
+      "role": "Sentinel",
+      "round_start_ability": "Interceptor",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Crosscut",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "teleport",
+            "mobility",
+            "escape"
+          ],
+          "max_charges": 2,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "Q",
+          "name": "Chokehold",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "trap",
+            "stall",
+            "decay"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true,
+          "needs_review": true
+        },
+        {
+          "slot": "E",
+          "name": "Interceptor",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "anti_utility",
+            "anchor"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false,
+          "needs_review": true
+        },
+        {
+          "slot": "X",
+          "name": "Evolution",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "buff",
+            "heal"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 7,
+          "is_purchasable": false,
+          "needs_review": true
+        }
+      ]
+    },
+    "Vyse": {
+      "role": "Sentinel",
+      "round_start_ability": "Arc Rose",
+      "abilities": [
+        {
+          "slot": "C",
+          "name": "Razorvine",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "damage",
+            "slow",
+            "stall"
+          ],
+          "max_charges": 2,
+          "cost_credits": 150,
+          "cost_per_charge": 150,
+          "is_purchasable": true
+        },
+        {
+          "slot": "Q",
+          "name": "Shear",
+          "ability_kind": "basic",
+          "tactical_types": [
+            "trap",
+            "wall",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": 200,
+          "cost_per_charge": 200,
+          "is_purchasable": true
+        },
+        {
+          "slot": "E",
+          "name": "Arc Rose",
+          "ability_kind": "signature",
+          "tactical_types": [
+            "flash",
+            "trap",
+            "info"
+          ],
+          "max_charges": 1,
+          "free_charges_at_round_start": 1,
+          "cost_credits": 0,
+          "is_signature": true,
+          "is_round_start_ability": true,
+          "is_free_at_round_start": true,
+          "is_purchasable": false
+        },
+        {
+          "slot": "X",
+          "name": "Steel Garden",
+          "ability_kind": "ultimate",
+          "tactical_types": [
+            "anti_utility",
+            "stall"
+          ],
+          "max_charges": 1,
+          "cost_credits": null,
+          "ultimate_points": 8,
+          "is_purchasable": false
+        }
+      ]
+    }
+  }
+}
