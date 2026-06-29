@@ -9,6 +9,13 @@ from modules.economy_ml.recommendation_explainer import RecommendationExplainer
 from modules.economy_ml.schemas import FORBIDDEN_FEATURES, MODEL_FEATURES, SCHEMA_VERSION
 from modules.economy_ml.team_buy_solver import TeamBuySolver
 from modules.economy_ml.team_buy_solver import BuyScorer
+from modules.economy_ml.display_normalizer import (
+    normalize_armor_display, normalize_observed_economy,
+    normalize_purchase_for_display, normalize_warning_list, normalize_weapon_display,
+)
+from modules.economy_ml.ability_catalog import agent_abilities, clear_ability_catalog_cache
+from modules.economy_ml.round_recommender import recommend_match_economy
+from backend.tests.test_economy_ml import _match as economy_match
 
 
 WEAPONS = {
@@ -48,6 +55,21 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(current.weapon_before_buy, "Vandal")
         self.assertEqual(current.weapon_source, "carried")
 
+    @patch("modules.economy_ml.display_normalizer.find_weapon")
+    def test_classic_uuid_is_normalized_for_display(self, find):
+        find.return_value = {"uuid": "29a0cfab-485b-f5d5-779a-b59f85e204a8", "displayName": "Classic", "cost": 0}
+        result = normalize_weapon_display("29a0cfab-485b-f5d5-779a-b59f85e204a8")
+        self.assertEqual(result["displayName"], "Classic")
+        self.assertTrue(result["known"])
+
+    def test_placeholder_armor_becomes_no_shield(self):
+        result = normalize_armor_display("string")
+        self.assertEqual(result["displayName"], "Sin escudo")
+        self.assertNotEqual(result["displayName"], "string")
+        observed = normalize_observed_economy({"weapon": None, "armor": "string"})
+        self.assertEqual(observed["armor"], "Sin escudo")
+        self.assertEqual(normalize_weapon_display("string")["displayName"], "Arma no observada")
+
     def test_death_loses_weapon(self):
         previous = PlayerInventoryState("p", 1000, weapon_after_buy="Vandal")
         current = advance_inventory(previous, puuid="p", credits_before_buy=3000,
@@ -62,6 +84,14 @@ class EconomyEngineV10Tests(unittest.TestCase):
         result = PurchaseInferenceEngine().infer(state, observed_spent=100)
         self.assertEqual(result[0]["weapon_source"], "picked_up")
         self.assertLess(result[0]["confidence"], 1)
+
+    @patch("modules.economy_ml.purchase_inference.find_weapon", lambda value: WEAPONS.get(str(value).lower()))
+    def test_pistol_classic_is_default_spawn_not_purchase(self):
+        state = PlayerInventoryState("p", 800, weapon_after_buy="Classic")
+        result = PurchaseInferenceEngine().infer(state, observed_spent=0, context={"is_pistol_round": True})
+        self.assertEqual(result[0]["weapon_source"], "default_spawn_weapon")
+        self.assertEqual(result[0]["estimated_self_spend"], 0)
+        self.assertNotEqual(result[0]["weapon_source"], "bought_self")
 
     @patch("modules.economy_ml.purchase_inference.find_weapon", lambda value: WEAPONS.get(str(value).lower()))
     def test_team_inference_can_mark_probable_drop_buyer(self):
@@ -219,6 +249,44 @@ class EconomyEngineV10Tests(unittest.TestCase):
                    for i in range(5)]
         result = BuyScorer().score(players, {"is_overtime": True})
         self.assertIn("decisive_round_underinvestment", result["warnings"])
+
+    def test_pistol_utility_plan_has_specific_label(self):
+        players = [{"puuid": "p", "weapon": None, "weapon_value": 0, "self_cost": 700,
+                    "ability_cost": 700, "armor_cost": 0, "keep_weapon": False}]
+        label = TeamBuySolver._summarize(players, [inv("p", 800)], {"is_pistol_round": True})
+        self.assertEqual(label, "PISTOL_UTILITY")
+
+    def test_sova_localized_abilities_reuse_seed_costs_by_slot(self):
+        clear_ability_catalog_cache()
+        abilities = {item["slot"]: item for item in agent_abilities("Sova") if item["slot"] in {"C", "Q", "E"}}
+        self.assertEqual(abilities["Q"]["cost_per_charge"], 150)
+        self.assertEqual(abilities["C"]["cost_per_charge"], 400)
+        self.assertFalse(any(item.get("missing_cost") for item in abilities.values()))
+        self.assertIn("Shock Bolt", abilities["Q"]["aliases"])
+
+    def test_warning_codes_are_deduplicated_and_humanized(self):
+        result = normalize_warning_list([
+            "missing_cost:Flecha explosiva", "missing_cost:Flecha explosiva",
+            "missing_cost:Dron", "ability_purchase_not_observable",
+            "ability_purchase_not_observable",
+        ])
+        self.assertEqual(len(result), 2)
+        self.assertTrue(any("costes de habilidad" in item for item in result))
+        self.assertTrue(any("Compra de habilidades estimada" in item for item in result))
+
+    def test_pistol_empty_purchase_has_classic_free_display(self):
+        display = normalize_purchase_for_display({"weapon": None, "armor": None, "abilities": [], "self_cost": 0}, is_pistol_round=True)
+        self.assertEqual(display["loadout_label"], "Classic gratis + Sin escudo")
+        self.assertEqual(display["source_label"], "Arma inicial gratis")
+
+    def test_match_response_exposes_normalized_observed_display_and_global_ml_limitation(self):
+        result = recommend_match_economy(economy_match())
+        self.assertEqual(result["limitations"].count("Reglas activas; ML auxiliar no cargado."), 1)
+        self.assertTrue(result["rounds"])
+        observed = next(iter(result["rounds"][0]["real_team_buy_observed"].values()))
+        self.assertTrue(observed["weapon_display"]["displayName"])
+        self.assertTrue(observed["armor_display"]["displayName"])
+        self.assertNotIn("ml_auxiliary_unavailable_rules_only", result["rounds"][0]["warnings"])
 
     def test_bonus_keeps_real_inventory_instead_of_buying_five_shields(self):
         inventories = [inv(str(i), 2000, "Spectre", True) for i in range(5)]

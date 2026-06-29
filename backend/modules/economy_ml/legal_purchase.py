@@ -138,22 +138,23 @@ class LegalPurchaseGenerator:
             if str(ability.get("ability_kind") or "").lower() == "ultimate":
                 continue
             free_count = int(ability.get("free_charges_at_round_start") or 0)
+            ability_name = ability.get("canonical_name") or ability.get("name")
             if free_count:
-                free.append({"name": ability.get("name"), "charges": free_count, "cost": 0,
+                free.append({"name": ability_name, "charges": free_count, "cost": 0,
                              "cost_per_charge": 0, "source": "free_round_start",
                              "tactical_types": ability.get("tactical_types") or []})
             if not ability.get("is_purchasable"):
                 continue
             cost = ability.get("cost_per_charge") if ability.get("cost_per_charge") is not None else ability.get("cost_credits")
             if cost is None:
-                warnings.append(f"missing_cost:{ability.get('name')}")
+                warnings.append(f"missing_cost:{ability_name}")
                 continue
             max_buy = int(ability.get("purchasable_charges") or max(0, int(ability.get("max_charges") or 0)-free_count))
             axis: list[dict | None] = [None]
             for count in range(1, max_buy + 1):
                 total = float(cost) * count
                 if total <= credits:
-                    axis.append({"name": ability.get("name"), "charges": count, "cost": total,
+                    axis.append({"name": ability_name, "charges": count, "cost": total,
                                  "cost_per_charge": float(cost), "source": "bought",
                                  "tactical_types": ability.get("tactical_types") or []})
             if len(axis) > 1:

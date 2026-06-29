@@ -46,7 +46,8 @@ import {
 } from "../../utils/formatters";
 import {
   getRankNameFromTier,
-  normalizeCompetitiveTierIconPath,
+  applyUnrankedRankIconFallback,
+  resolveCompetitiveTierIcon,
 } from "../../utils/rankUtils";
 import {
   analyzeEconomyEfficiency,
@@ -595,7 +596,11 @@ function getAverageTeamRank(
     .filter((tier) => Number.isFinite(tier) && tier > 0);
 
   if (tiers.length === 0) {
-    return { tier: null, name: "Sin rango", icon: null };
+    return {
+      tier: null,
+      name: "Sin rango",
+      icon: resolveCompetitiveTierIcon(null, null, [...tierByNumber.values()]),
+    };
   }
 
   const tier = Math.round(
@@ -605,8 +610,10 @@ function getAverageTeamRank(
   return {
     tier,
     name: getRankNameFromTier(tier),
-    icon: normalizeCompetitiveTierIconPath(
+    icon: resolveCompetitiveTierIcon(
+      tier,
       tierAsset?.smallIcon ?? tierAsset?.largeIcon ?? null,
+      [...tierByNumber.values()],
     ),
   };
 }
@@ -3773,6 +3780,17 @@ function economyItemLabel(item?: { displayName?: string | null } | null): string
   return item?.displayName || "No comprar";
 }
 
+function economyInferenceLabel(source?: string | null): string {
+  switch (source) {
+    case "default_spawn_weapon": return "Arma inicial gratis";
+    case "carried": return "Arma conservada";
+    case "bought_self": return "Compra propia probable";
+    case "bought_by_teammate": return "Drop recibido probable";
+    case "picked_up": return "Arma recogida probable";
+    default: return "Origen desconocido";
+  }
+}
+
 function PlayerFirstEconomyPanel({
   ml,
   teamAId,
@@ -3846,11 +3864,11 @@ function PlayerFirstEconomyPanel({
                               <tr key={player.puuid}>
                                 <td><strong>{player.player_name || player.puuid}</strong><small>{player.agent || "N/D"} · {player.role || "N/D"}</small></td>
                                 <td>{[player.observed_weapon, player.observed_armor].filter(Boolean).join(" + ") || "N/D"}</td>
-                                <td>{economyCaseLabel(player.inferred_real_purchase.weapon_source)}<small>{formatPercent(player.inferred_real_purchase.confidence * 100, 1)}</small></td>
+                                <td>{economyInferenceLabel(player.inferred_real_purchase.weapon_source)}<small>{formatPercent(player.inferred_real_purchase.confidence * 100, 1)}</small></td>
                                 <td>
-                                  {economyItemLabel(purchase.weapon)} + {economyItemLabel(purchase.armor)}
+                                  {purchase.display?.loadout_label ?? `${economyItemLabel(purchase.weapon)} + ${economyItemLabel(purchase.armor)}`}
                                   <small>
-                                    {purchase.keep_weapon ? "Conservada" : purchase.bought_by ? "Recibida por drop" : "Compra propia"}
+                                    {purchase.display?.source_label ?? (purchase.keep_weapon ? "Conservada" : purchase.bought_by ? "Recibida por drop" : "Compra propia")}
                                     {" · "}Coste arma {formatNumber(purchase.weapon_cost)}
                                     {" · "}Valor {formatNumber(purchase.weapon_value)}
                                   </small>
@@ -3861,9 +3879,9 @@ function PlayerFirstEconomyPanel({
                                   {purchase.buys_for ? <small>Compra para {Array.isArray(purchase.buys_for) ? purchase.buys_for.join(", ") : purchase.buys_for}</small> : null}
                                   {!purchase.bought_by && !purchase.buys_for ? "—" : null}
                                 </td>
-                                <td>{purchase.abilities.length ? purchase.abilities.map((ability) => `${ability.name} ×${ability.charges}`).join(", ") : "Sin compra"}</td>
-                                <td>{formatNumber(player.credits_before_buy ?? 0)} → {formatNumber(purchase.expected_remaining)}<small>Gasto propio {formatNumber(purchase.self_cost)}</small></td>
-                                <td>{[...player.warnings, ...purchase.warnings].join(" · ") || "—"}</td>
+                                <td>{purchase.display?.ability_label ?? (purchase.abilities.length ? purchase.abilities.map((ability) => `${ability.name} ×${ability.charges}`).join(", ") : "Sin compra")}</td>
+                                <td>{formatNumber(player.credits_before_buy ?? 0)} → {formatNumber(purchase.expected_remaining)}<small>{purchase.display?.spend_label ?? `Gasto propio ${formatNumber(purchase.self_cost)}`}</small></td>
+                                <td>{player.warnings.join(" · ") || "—"}</td>
                               </tr>
                             );
                           })}
@@ -4434,11 +4452,10 @@ function buildPlayerScoreboardStats({
   const rankTier =
     typeof player.competitiveTier === "number" ? player.competitiveTier : null;
   const tierAsset = rankTier !== null ? tierByNumber.get(rankTier) : undefined;
-  const rankIcon = normalizeCompetitiveTierIconPath(
-    tierAsset?.smallIcon ??
-      tierAsset?.largeIcon ??
-      player.competitiveTierImage ??
-      null,
+  const rankIcon = resolveCompetitiveTierIcon(
+    rankTier,
+    tierAsset?.smallIcon ?? tierAsset?.largeIcon ?? player.competitiveTierImage ?? null,
+    [...tierByNumber.values()],
   );
 
   let rounds = 0;
@@ -5503,11 +5520,10 @@ export default function MatchDetailModal({
   const tierAsset =
     typeof playerTier === "number" ? tierByNumber.get(playerTier) : undefined;
   const playerRankName = getRankNameFromTier(playerTier ?? null);
-  const playerRankIcon = normalizeCompetitiveTierIconPath(
-    tierAsset?.smallIcon ??
-      tierAsset?.largeIcon ??
-      playerInfo?.competitiveTierImage ??
-      null,
+  const playerRankIcon = resolveCompetitiveTierIcon(
+    playerTier ?? null,
+    tierAsset?.smallIcon ?? tierAsset?.largeIcon ?? playerInfo?.competitiveTierImage ?? null,
+    [...tierByNumber.values()],
   );
 
   const matchAnalysis = useMemo<MatchAnalysis | null>(() => {
@@ -7357,7 +7373,11 @@ export default function MatchDetailModal({
 
               <span className="match-scoreboard-rank" title={row.rankName}>
                 {row.rankIcon ? (
-                  <img src={row.rankIcon} alt={row.rankName} />
+                  <img
+                    src={row.rankIcon}
+                    alt={row.rankName}
+                    onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
+                  />
                 ) : (
                   "-"
                 )}
@@ -7588,6 +7608,7 @@ export default function MatchDetailModal({
                 src={playerRankIcon}
                 alt=""
                 className="match-rank-icon-inline"
+                onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
               />
             )}
             {playerRankName}
@@ -8275,6 +8296,7 @@ export default function MatchDetailModal({
                             <img
                               src={group.averageRank.icon}
                               alt={group.averageRank.name}
+                              onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
                             />
                           ) : null}
                           {group.averageRank.name}
@@ -8293,6 +8315,7 @@ export default function MatchDetailModal({
                             <img
                               src={group.averageRank.icon}
                               alt={group.averageRank.name}
+                              onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
                             />
                           ) : null}
                           {group.averageRank.name}

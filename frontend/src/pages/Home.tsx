@@ -42,7 +42,9 @@ import {
 } from "../api/userApi";
 import {
   getRankNameFromTier,
+  applyUnrankedRankIconFallback,
   normalizeCompetitiveTierIconPath,
+  resolveCompetitiveTierIcon,
 } from "../utils/rankUtils";
 import "./Home.css";
 
@@ -614,15 +616,12 @@ export default function Home() {
             : player.gameName;
           const displayTitle = player.displayName || playerNameTag;
           const competitiveTier = player.lastCompetitiveTier;
-          const hasRank =
-            typeof competitiveTier === "number" && competitiveTier >= 3;
-          const rankIcon = hasRank
-            ? (normalizeCompetitiveTierIconPath(
-                player.lastCompetitiveTierImage,
-              ) ??
-              rankIconByTier.get(competitiveTier) ??
-              null)
-            : null;
+          const rankIcon = resolveCompetitiveTierIcon(
+            competitiveTier,
+            normalizeCompetitiveTierIconPath(player.lastCompetitiveTierImage) ??
+              (typeof competitiveTier === "number" ? rankIconByTier.get(competitiveTier) : null),
+            competitiveTiersQuery.data ?? [],
+          );
           const rankName = getRankNameFromTier(competitiveTier);
           const isFavorite = favoriteIds.has(puuid);
 
@@ -642,13 +641,12 @@ export default function Home() {
                 </span>
 
                 <span className="home-search-result__level-wrap">
-                  {rankIcon && (
-                    <img
-                      className="home-search-result__rank-icon"
-                      src={rankIcon}
-                      alt={rankName}
-                    />
-                  )}
+                  <img
+                    className="home-search-result__rank-icon"
+                    src={rankIcon}
+                    alt={rankName}
+                    onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
+                  />
                   {options.showSharedMatches && "sharedMatches" in player ? (
                     <span className="home-search-result__meta-pill">
                       {player.sharedMatches ?? 0} partidas juntos
@@ -819,17 +817,12 @@ export default function Home() {
                       : result.gameName;
                     const displayTitle = result.displayName || playerNameTag;
                     const competitiveTier = result.lastCompetitiveTier;
-                    const hasRank =
-                      typeof competitiveTier === "number" &&
-                      competitiveTier >= 3;
-                    const rankIcon =
-                      hasRank
-                        ? (normalizeCompetitiveTierIconPath(
-                            result.lastCompetitiveTierImage,
-                          ) ??
-                          rankIconByTier.get(competitiveTier) ??
-                          null)
-                        : null;
+                    const rankIcon = resolveCompetitiveTierIcon(
+                      competitiveTier,
+                      normalizeCompetitiveTierIconPath(result.lastCompetitiveTierImage) ??
+                        (typeof competitiveTier === "number" ? rankIconByTier.get(competitiveTier) : null),
+                      competitiveTiersQuery.data ?? [],
+                    );
                     const rankName = getRankNameFromTier(
                       competitiveTier,
                     );
@@ -853,13 +846,12 @@ export default function Home() {
                           </span>
 
                           <span className="home-search-result__level-wrap">
-                            {rankIcon && (
-                              <img
-                                className="home-search-result__rank-icon"
-                                src={rankIcon}
-                                alt={rankName}
-                              />
-                            )}
+                            <img
+                              className="home-search-result__rank-icon"
+                              src={rankIcon}
+                              alt={rankName}
+                              onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
+                            />
                             <span className="home-search-result__level">
                               {typeof result.accountLevel === "number"
                                 ? `Nivel ${result.accountLevel}`

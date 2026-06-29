@@ -52,7 +52,11 @@ import {
   RECHARTS_TOOLTIP_CLAMP_VIEWBOX,
   RECHARTS_TOOLTIP_WRAPPER_STYLE,
 } from "../../utils/tooltipPositioning";
-import { normalizeCompetitiveTierIconPath } from "../../utils/rankUtils";
+import {
+  applyUnrankedRankIconFallback,
+  normalizeCompetitiveTierIconPath,
+  UNRANKED_RANK_ICON_FALLBACK,
+} from "../../utils/rankUtils";
 import {
   ACT_FILTER_CURRENT,
   AGENT_FILTER_ALL,
@@ -1167,10 +1171,10 @@ export default function Estadisticas() {
   const currentRank = dashboard.currentRank;
   const rankVisual = normalizeCompetitiveTierIconPath(
     displayedRankVisual ?? currentRank.image ?? currentRank.smallIcon ?? null,
-  );
+  ) ?? UNRANKED_RANK_ICON_FALLBACK;
   const highestRankVisualAsset = normalizeCompetitiveTierIconPath(
     highestRankVisual ?? null,
-  );
+  ) ?? UNRANKED_RANK_ICON_FALLBACK;
 
   const totalMatches = derivedSummary.matches;
 
@@ -1264,20 +1268,12 @@ export default function Estadisticas() {
 
               <div className="player-rank-row">
                 <div className="player-rank-block">
-                  {rankVisual ? (
-                    <img
-                      src={rankVisual}
-                      alt={displayedRankName}
-                      className="player-rank-image"
-                    />
-                  ) : (
-                    <div
-                      className="player-rank-image player-rank-image-fallback"
-                      aria-label="Icono de rango no disponible"
-                    >
-                      N/A
-                    </div>
-                  )}
+                  <img
+                    src={rankVisual}
+                    alt={displayedRankName || "Sin rango"}
+                    className="player-rank-image"
+                    onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
+                  />
 
                   <div className="player-rank-text">
                     <span className="player-rank-label">
@@ -1288,20 +1284,12 @@ export default function Estadisticas() {
                 </div>
 
                 <div className="player-rank-block">
-                  {highestRankVisualAsset ? (
-                    <img
-                      src={highestRankVisualAsset}
-                      alt={highestRankName}
-                      className="player-rank-image"
-                    />
-                  ) : (
-                    <div
-                      className="player-rank-image player-rank-image-fallback"
-                      aria-label="Icono de rango mas alto no disponible"
-                    >
-                      N/A
-                    </div>
-                  )}
+                  <img
+                    src={highestRankVisualAsset}
+                    alt={highestRankName || "Sin rango"}
+                    className="player-rank-image"
+                    onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
+                  />
 
                   <div className="player-rank-text">
                     <span className="player-rank-label">Rango mas alto</span>

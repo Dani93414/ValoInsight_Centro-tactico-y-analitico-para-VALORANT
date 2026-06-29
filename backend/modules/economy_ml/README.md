@@ -40,6 +40,24 @@ Una Vandal conservada tiene `weapon_cost = 0` y `weapon_value = 2900`. Una
 Vandal recibida por drop tambien cuesta 0 al receptor, conserva valor 2900 y
 carga los 2900 creditos al comprador.
 
+## Normalizacion Y Mensajes
+
+`display_normalizer.py` convierte UUID, nombres localizados y placeholders en
+objetos estables antes de construir inventario o responder a la UI. La API
+conserva `weapon_raw` y `armor_raw` para auditoria, pero expone
+`weapon_display`, `armor_display` y etiquetas legibles. `string`, valores vacios
+y escudos ausentes nunca se muestran literalmente.
+
+Las habilidades se reconcilian por agente y slot (`C/Q/E/X`) antes que por
+nombre. Asi, nombres localizados como `Flecha explosiva` reutilizan el coste y
+las cargas del alias canonico `Shock Bolt` sin falsos `missing_cost`.
+
+`warnings` contiene mensajes para usuario, `debug_warnings` conserva codigos
+tecnicos y `limitations` agrupa limitaciones globales como la ausencia del ML
+auxiliar. En pistol, la Classic inicial se explica como arma gratuita y los
+planes usan etiquetas `PISTOL_DEFAULT`, `PISTOL_UTILITY`, `PISTOL_ARMOR` o
+`PISTOL_SIDEARM`.
+
 ## Contrato De Datos
 
 Cada fila separa tres conceptos:

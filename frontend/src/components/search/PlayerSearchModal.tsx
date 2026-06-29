@@ -15,7 +15,8 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import {
   getRankNameFromTier,
-  normalizeCompetitiveTierIconPath,
+  applyUnrankedRankIconFallback,
+  resolveCompetitiveTierIcon,
 } from "../../utils/rankUtils";
 import "./PlayerSearchModal.css";
 
@@ -266,10 +267,10 @@ export function PlayerSearchModal({ isOpen, onClose }: Props) {
             (competitiveTiersQuery.data ?? []).find(
               (item) => Number(item.tier) === Number(competitiveTier),
             ) ?? null;
-          const rankIcon = normalizeCompetitiveTierIconPath(
-            player.lastCompetitiveTierImage ??
-              tierFromContent?.smallIcon ??
-              tierFromContent?.largeIcon,
+          const rankIcon = resolveCompetitiveTierIcon(
+            competitiveTier,
+            player.lastCompetitiveTierImage ?? tierFromContent?.smallIcon ?? tierFromContent?.largeIcon,
+            competitiveTiersQuery.data ?? [],
           );
 
           return (
@@ -283,13 +284,12 @@ export function PlayerSearchModal({ isOpen, onClose }: Props) {
                   {formatLastSeen(player.lastMatchStartMillis, player.lastMatchDurationMillis)}
                 </span>
                 <span className="home-search-result__level-wrap">
-                  {rankIcon && (
-                    <img
-                      className="home-search-result__rank-icon"
-                      src={rankIcon}
-                      alt={rankName}
-                    />
-                  )}
+                  <img
+                    className="home-search-result__rank-icon"
+                    src={rankIcon}
+                    alt={rankName}
+                    onError={(event) => applyUnrankedRankIconFallback(event.currentTarget)}
+                  />
                   {options.showSharedMatches && "sharedMatches" in player ? (
                     <span className="home-search-result__meta-pill">
                       {player.sharedMatches ?? 0} partidas juntos

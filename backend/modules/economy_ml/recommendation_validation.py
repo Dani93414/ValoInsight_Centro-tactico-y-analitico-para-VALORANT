@@ -95,7 +95,7 @@ def validate_macro_composition(action: str, allocation: dict) -> dict:
         if rifle_count < 4:
             violations.append("FULL_RIFLES debe asignar al menos 4 rifles.")
         if "light" in armor_levels:
-            violations.append("FULL_RIFLES no acepta escudo ligero como armadura principal.")
+            warnings.append("Escudo ligero usado como downgrade para conservar utilidad clave.")
     elif action == "FULL_OPERATOR":
         operator_count = sum(name == "operator" for name in names)
         rifle_count = sum(role == "rifle" for role in roles)
