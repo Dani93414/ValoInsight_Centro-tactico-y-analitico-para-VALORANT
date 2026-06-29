@@ -16,7 +16,23 @@ def _num(value: Any) -> float:
 
 
 def _weapon_value(plan: dict) -> float:
+    explicit = plan.get("weapon_value")
+    if explicit is not None:
+        return _num(explicit)
+    nested = (plan.get("weapon") or {}).get("weapon_value")
+    if nested is not None:
+        return _num(nested)
     return _num((plan.get("weapon") or {}).get("cost"))
+
+
+def _weapon_purchase_cost(plan: dict) -> float:
+    explicit = plan.get("weapon_purchase_cost")
+    if explicit is not None:
+        return _num(explicit)
+    nested = (plan.get("weapon") or {}).get("purchase_cost")
+    if nested is not None:
+        return _num(nested)
+    return _num(plan.get("weapon_cost")) or _weapon_value(plan)
 
 
 def _weapon_text(plan: dict) -> str:
@@ -122,6 +138,8 @@ class BuyScorer:
             "players_can_full_buy_if_loss": sum(value >= 3900 for value in future_loss_values),
             "players_desynchronized_if_loss": sum(value < 3900 for value in future_loss_values),
             "economic_risk": round(risk, 4), "team_spend": spend,
+            "weapon_value": weapon_value, "armor_value": armor_value,
+            "utility_value": utility_value,
             "rule_penalty": round(penalty, 4), "warnings": warnings + penalties,
             "data_confidence": round(max(.2, min(1.0, _num(context.get("team_economy_reconciliation_quality_score", .6)))), 4),
         }
@@ -185,11 +203,13 @@ class TeamBuySolver:
         needy = [p for p in players if p.get("requires_weapon_drop") and not p.get("keep_weapon")]
         donors = sorted(players, key=lambda p: _num(p.get("expected_remaining")), reverse=True)
         for receiver in needy:
-            cost = _weapon_value(receiver)
+            cost = _weapon_purchase_cost(receiver)
             donor = next((p for p in donors if p["puuid"] != receiver["puuid"] and _num(p.get("expected_remaining")) >= cost), None)
             if not donor:
                 continue
             receiver["weapon_cost"] = 0
+            receiver["weapon_source"] = "dropped"
+            receiver["weapon"] = {**(receiver.get("weapon") or {}), "source": "dropped"}
             receiver["bought_by"] = donor["puuid"]
             receiver["requires_weapon_drop"] = False
             donor["self_cost"] += cost
@@ -203,6 +223,11 @@ class TeamBuySolver:
         warnings: list[str] = []
         for player in players:
             puuid = player.get("puuid")
+            source = player.get("weapon_source") or (player.get("weapon") or {}).get("source") or "none"
+            if bool(player.get("keep_weapon")) != (source == "carried"):
+                return {"valid": False, "warnings": [f"invalid_keep_weapon_source:{puuid}"]}
+            if source == "carried" and (_num(player.get("weapon_cost")) or _num(player.get("weapon_purchase_cost"))):
+                return {"valid": False, "warnings": [f"carried_weapon_has_purchase_cost:{puuid}"]}
             if _num(player.get("self_cost")) > credits.get(puuid, 0) + 1e-6 or _num(player.get("expected_remaining")) < -1e-6:
                 return {"valid": False, "warnings": [f"over_budget:{puuid}"]}
             if player.get("requires_weapon_drop"):
@@ -217,7 +242,8 @@ class TeamBuySolver:
     @staticmethod
     def _zero_plan(inv: PlayerInventoryState) -> dict:
         return {"puuid": inv.puuid, "weapon": None, "armor": None, "abilities": [], "keep_weapon": False,
-                "self_cost": 0, "weapon_cost": 0, "armor_cost": 0, "ability_cost": 0,
+                "self_cost": 0, "weapon_cost": 0, "weapon_purchase_cost": 0,
+                "weapon_value": 0, "weapon_source": "none", "armor_cost": 0, "ability_cost": 0,
                 "expected_remaining": inv.credits_before_buy, "bought_by": None, "buys_for": None, "warnings": []}
 
     @staticmethod

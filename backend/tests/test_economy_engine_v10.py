@@ -81,6 +81,27 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertTrue({"Light Shield", "Regen Shield", "Heavy Shield"}.issubset(armor_names))
         self.assertTrue(all(p["self_cost"] <= 1000 for p in plans if not p.get("requires_weapon_drop")))
 
+    def test_carried_vandal_costs_zero_but_keeps_tactical_value(self):
+        plans = LegalPurchaseGenerator().generate(inv("p", 2000, "Vandal", True), limit=200)
+        kept = next(p for p in plans if p["keep_weapon"] and (p["weapon"] or {}).get("displayName") == "Vandal"
+                    and p["armor"] is None and p["ability_cost"] == 0)
+        self.assertEqual(kept["weapon_source"], "carried")
+        self.assertEqual(kept["weapon_cost"], 0)
+        self.assertEqual(kept["weapon_purchase_cost"], 0)
+        self.assertEqual(kept["weapon_value"], 2900)
+        self.assertEqual(kept["self_cost"], 0)
+        self.assertEqual(kept["expected_remaining"], 2000)
+
+    def test_only_actual_spectre_is_marked_as_carried(self):
+        plans = LegalPurchaseGenerator().generate(inv("p", 2000, "Spectre", True), limit=200)
+        kept = [p for p in plans if p["keep_weapon"]]
+        self.assertTrue(kept)
+        self.assertEqual({(p["weapon"] or {}).get("displayName") for p in kept}, {"Spectre"})
+        classic = next(p for p in plans if (p["weapon"] or {}).get("displayName") == "Classic"
+                       and not p["keep_weapon"])
+        self.assertEqual(classic["weapon_cost"], 0)
+        self.assertEqual(classic["weapon_source"], "bought_self")
+
     @patch("modules.economy_ml.legal_purchase.agent_abilities")
     def test_omen_has_one_free_and_one_purchasable_smoke(self, abilities):
         abilities.return_value = [{"name": "Dark Cover", "free_charges_at_round_start": 1,
@@ -133,6 +154,23 @@ class EconomyEngineV10Tests(unittest.TestCase):
                 self.assertEqual(player["weapon_cost"], 0)
                 self.assertEqual(player["self_cost"], player["armor_cost"] + player["ability_cost"])
 
+    def test_vandal_drop_charges_donor_and_preserves_receiver_weapon_value(self):
+        generator = LegalPurchaseGenerator()
+        rich_plans = generator.generate(inv("rich", 9000), limit=200)
+        poor_plans = generator.generate(inv("poor", 400), limit=200)
+        donor = next(p for p in rich_plans if p["weapon"] is None and p["armor"] is None and p["ability_cost"] == 0)
+        receiver = next(p for p in poor_plans if (p["weapon"] or {}).get("displayName") == "Vandal"
+                        and p["armor"] is None and p["ability_cost"] == 0 and p["requires_weapon_drop"])
+        TeamBuySolver._resolve_weapon_drops([donor, receiver], [inv("rich", 9000), inv("poor", 400)])
+        self.assertEqual(receiver["weapon_cost"], 0)
+        self.assertEqual(receiver["weapon_purchase_cost"], 2900)
+        self.assertEqual(receiver["weapon_value"], 2900)
+        self.assertEqual(receiver["self_cost"], 0)
+        self.assertEqual(receiver["bought_by"], "rich")
+        self.assertEqual(receiver["weapon_source"], "dropped")
+        self.assertEqual(donor["self_cost"], 2900)
+        self.assertEqual(donor["expected_remaining"], 6100)
+
     def test_non_weapon_drop_is_rejected(self):
         players = [{"puuid": "poor", "self_cost": 0, "expected_remaining": 400, "bought_by": "rich",
                     "weapon_cost": 0, "armor_cost": 400, "ability_cost": 0, "requires_weapon_drop": False}]
@@ -161,6 +199,20 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(by_id["a"]["credits_if_loss"], 9000)
         self.assertEqual(by_id["b"]["credits_if_loss"], 2100)
 
+    def test_carried_weapon_value_improves_score_without_increasing_spend(self):
+        carried = {"puuid": "p", "weapon": {"displayName": "Vandal", "cost": 0, "weapon_value": 2900, "source": "carried"},
+                   "weapon_value": 2900, "weapon_cost": 0, "weapon_purchase_cost": 0,
+                   "armor": None, "abilities": [], "ability_cost": 0, "self_cost": 0,
+                   "expected_remaining": 2000, "keep_weapon": True}
+        empty = {**carried, "weapon": None, "weapon_value": 0, "keep_weapon": False}
+        carried_score = BuyScorer().score([carried], {})
+        empty_score = BuyScorer().score([empty], {})
+        self.assertGreater(carried_score["round_win_probability"], empty_score["round_win_probability"])
+        self.assertGreater(carried_score["score"], empty_score["score"])
+        self.assertEqual(carried_score["weapon_value"], 2900)
+        self.assertEqual(empty_score["weapon_value"], 0)
+        self.assertEqual(carried_score["team_spend"], 0)
+
     def test_overtime_underinvestment_is_penalized(self):
         players = [{"puuid": str(i), "weapon": None, "armor": None, "abilities": [],
                     "ability_cost": 0, "self_cost": 0, "expected_remaining": 5000, "keep_weapon": False}
@@ -172,7 +224,11 @@ class EconomyEngineV10Tests(unittest.TestCase):
         inventories = [inv(str(i), 2000, "Spectre", True) for i in range(5)]
         plan = TeamBuySolver().solve(inventories, context={"is_bonus_candidate": True})
         self.assertEqual(plan["plan_kind"], "BONUS_KEEP_INVENTORY")
-        self.assertTrue(any(p["keep_weapon"] for p in plan["players"]))
+        kept = [p for p in plan["players"] if p["keep_weapon"]]
+        self.assertGreaterEqual(len(kept), 3)
+        self.assertTrue(all((p["weapon"] or {}).get("displayName") == "Spectre" for p in kept))
+        self.assertTrue(all(p["weapon_cost"] == 0 and p["weapon_value"] == 1600 for p in kept))
+        self.assertTrue(all(p["self_cost"] == p["armor_cost"] + p["ability_cost"] for p in kept))
 
     def test_pistol_plan_never_exceeds_800_per_player(self):
         inventories = [inv(str(i), 800) for i in range(5)]
