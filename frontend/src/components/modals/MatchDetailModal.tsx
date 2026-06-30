@@ -3891,6 +3891,30 @@ function PlayerFirstEconomyPanel({
                       </table>
                     </div>
                     {round.warnings.length ? <ul className="match-economy-ml-warnings">{round.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
+                    <details className="match-economy-ml-detail">
+                      <summary>Contexto avanzado</summary>
+                      {(() => {
+                        const advanced = round.advanced_context;
+                        const map = advanced?.map_context;
+                        const enemy = advanced?.enemy_economy;
+                        const readyUlts = Object.values(advanced?.ultimates ?? {}).filter((item) => item.ultimate_ready);
+                        const profiles = Object.entries(advanced?.player_profiles ?? {}).filter(([, item]) => item.available);
+                        const durability = Object.entries(advanced?.armor_durability ?? {}).filter(([, item]) => item.available);
+                        const mlPrediction = advanced?.ml_prediction;
+                        if (!advanced) return <p>No disponible.</p>;
+                        return <div className="match-economy-ml-players">
+                          <small>Mapa: {map?.available ? map.map_name ?? "Conocido" : "No disponible"}</small>
+                          <small>Compra enemiga probable: {enemy?.available ? economyCaseLabel(enemy.enemy_buy_recommendation) : "No disponible"}</small>
+                          <small>Site probable: {advanced.site_tendencies?.available ? advanced.site_tendencies.likely_attack_site ?? "N/D" : "No disponible"}</small>
+                          <small>Ultimates listas: {readyUlts.length ? readyUlts.map((item) => item.agent).join(", ") : "Ninguna confirmada"}</small>
+                          <small>Perfiles con muestra: {profiles.length || "No disponibles"}</small>
+                          <small>Armaduras con durabilidad: {durability.length || "No disponible"}</small>
+                          <small>ML ronda: {mlPrediction?.available && mlPrediction.round_win_probability != null ? formatPercent(mlPrediction.round_win_probability * 100, 1) : "No disponible"}</small>
+                          {Object.values(advanced).flatMap((item) => item && "warnings" in item && Array.isArray(item.warnings) ? item.warnings : []).length
+                            ? <small>Avisos contextuales disponibles en modo detalle/debug.</small> : null}
+                        </div>;
+                      })()}
+                    </details>
                     <small>{round.alternatives.length} alternativas legales disponibles.</small>
                   </details>
                 </td>

@@ -6,6 +6,8 @@ from typing import Any, Callable
 
 from .legal_purchase import LegalPurchaseGenerator
 from .inventory import PlayerInventoryState
+from .contextual_scorer import apply_contextual_adjustments
+from .round_win_model import RoundWinLoadoutModel
 
 
 def _num(value: Any) -> float:
@@ -208,6 +210,7 @@ class TeamBuySolver:
               context: dict | None = None, alternatives: int = 5,
               ml_estimator: Callable[[dict], float] | None = None) -> dict:
         agents, context = agents or {}, context or {}
+        round_win_model = RoundWinLoadoutModel() if context.get("advanced_context") else None
         choices = [self._reduced_choices(self.generator.generate(
             inv, agent=agents.get(inv.puuid, ""), context=context,
         )) for inv in inventories]
@@ -220,6 +223,8 @@ class TeamBuySolver:
             if not validation["valid"]:
                 continue
             score = self.scorer.score(players, context, ml_estimator)
+            if context.get("advanced_context"):
+                score = apply_contextual_adjustments(score, players, context, round_win_model)
             candidates.append({"players": players, "team_plan_score": score["team_plan_score"],
                                "team_plan_value": score["team_plan_value"], "economy_projection": score,
                                "valid": True, "warnings": validation["warnings"] + score["warnings"]})

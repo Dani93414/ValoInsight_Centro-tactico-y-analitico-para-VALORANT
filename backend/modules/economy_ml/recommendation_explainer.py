@@ -64,6 +64,9 @@ class RecommendationExplainer:
         round_warnings = normalize_warning_list(plan.get("warnings") or [])
         if placeholder_normalized:
             round_warnings.append("Algunos datos observados estaban incompletos y fueron normalizados.")
+        advanced_context = dict((context or {}).get("advanced_context") or {})
+        if projection.get("ml_prediction"):
+            advanced_context["ml_prediction"] = projection["ml_prediction"]
         return {
             "round_number": round_number, "team_id": team_id, "side": side, "score_before": score_before,
             "real_team_buy_observed": observed, "inferred_team_buy": public_inferred,
@@ -71,6 +74,7 @@ class RecommendationExplainer:
             "team_plan_value": plan.get("team_plan_value"),
             "confidence": confidence, "players": players, "alternatives": alternatives,
             "economy_projection": projection,
+            "advanced_context": advanced_context,
             "warnings": list(dict.fromkeys(round_warnings)),
             "debug_warnings": list(dict.fromkeys((plan.get("warnings") or []) +
                 [warning for item in observed.values() for warning in item.get("debug_warnings") or []])),

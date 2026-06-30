@@ -4,6 +4,49 @@ Motor player-first de recomendacion economica para VALORANT. La legalidad,
 inventario individual, drops y economia futura gobiernan la decision. El ML es
 un estimador auxiliar y nunca puede convertir un plan ilegal en viable.
 
+La respuesta conserva `engine: player_first_v10` por compatibilidad y declara
+`advanced_engine: player_first_v11_contextual`. V11 no sustituye las reglas:
+anade ajustes pequenos despues de que el plan haya superado generacion y
+validacion legal. Si una fuente avanzada falta, devuelve `available: false`,
+`confidence: 0`, `source: unavailable` y warnings tecnicos sin bloquear el
+endpoint.
+
+## Contexto Avanzado V11
+
+Cada ronda puede exponer un `advanced_context` opcional con:
+
+- `map_context`: mapa del `matchInfo`, catalogo y perfil heuristico versionado.
+- `site_tendencies`: plantas y resultados exclusivamente de rondas anteriores.
+- `player_profiles`: uso y rendimiento estimado por arma en rondas anteriores.
+- `enemy_economy`: creditos del ledger rival y clase de compra probable.
+- `ultimates`: estado directo de la ronda anterior cuando el payload lo trae.
+- `armor_durability`: valor directo o estimacion conservadora identificada.
+- `ability_usage`: casts previos; las compras exactas siguen siendo estimadas.
+- `ml_prediction`: probabilidad opcional del artefacto de round-win.
+
+Las senales incluyen siempre `source`, `confidence` y `warnings`. Los perfiles
+de mapa son heuristicas de baja magnitud, no estadisticas aprendidas. El perfil
+de jugador de la partida atribuye kills al arma equipada solo como fallback y
+lo marca con `weapon_kills_estimated_from_round_loadout`. La durabilidad usa el
+valor directo si existe; de lo contrario puede inferirse con dano previo o
+degradar a desconocida. No se consulta Mongo historico adicional en la ruta
+sincrona actual.
+
+`RoundWinLoadoutModel` busca opcionalmente
+`artifacts/round_win_loadout.joblib`. Sin artefacto, las reglas siguen activas
+y se devuelve `round_win_model_unavailable`. El score contextual publica el
+score de reglas, ajustes de mapa, enemigo, player-fit, utilidad, ultimate y
+armadura, junto con confianza y warnings. Los ajustes estan acotados y nunca
+se ejecutan antes de validar legalidad.
+
+## Anti-Leakage V11
+
+Para recomendar la ronda N solo se leen estados y eventos de rondas anteriores
+a N. Kills, dano, plantas, defuses, casts, resultado y score post-round de la
+ronda actual no entran en features pre-round. El predictor rechaza claves
+prohibidas como `current_round_kills`, `current_round_damage`,
+`current_round_result`, `post_round_score` o loadout enemigo post-buy actual.
+
 El endpoint de partida usa `RoundEconomyRecommender`: infiere varias hipotesis
 de compra real, genera compras legales por jugador, resuelve drops de armas y
 puntua planes completos. `ACTION_TEMPLATES` queda relegado al flujo historico
