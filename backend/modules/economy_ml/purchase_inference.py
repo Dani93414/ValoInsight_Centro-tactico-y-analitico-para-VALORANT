@@ -41,7 +41,9 @@ class PurchaseInferenceEngine:
         hypotheses: list[PurchaseHypothesis] = []
         normalized_weapon = str(weapon or "").strip().lower()
         is_default = normalized_weapon in {"classic", "default", "classic gratis"} and (cost in (None, 0))
-        is_reset = bool((context or {}).get("is_pistol_round"))
+        round_number = int((context or {}).get("round_number") or 0)
+        is_reset = bool((context or {}).get("is_pistol_round") or (context or {}).get("is_overtime")
+                        or (context or {}).get("is_half_reset") or round_number in {1, 13})
         if is_default and not before and (is_reset or spent in (None, 0)):
             hypotheses.append(PurchaseHypothesis(
                 "default_spawn_weapon", .96 if is_reset else .86, 0,
@@ -86,13 +88,18 @@ class PurchaseInferenceEngine:
 
     def infer_team(self, states: list[PlayerInventoryState], observed: dict[str, dict],
                    context: dict[str, Any] | None = None) -> dict[str, list[dict[str, Any]]]:
+        context = context or {}
         result = {
             state.puuid: self.infer(state, observed_spent=(observed.get(state.puuid) or {}).get("spent"), context=context)
             for state in states
         }
+        round_number = int(context.get("round_number") or 0)
+        if context.get("is_pistol_round") or context.get("is_overtime") or context.get("is_half_reset") or round_number in {1, 13}:
+            return result
         receivers = [
             state for state in states
             if (result.get(state.puuid) or [{}])[0].get("weapon_source") == "bought_by_teammate"
+            and float((result.get(state.puuid) or [{}])[0].get("confidence") or 0) >= .5
         ]
         for receiver in receivers:
             weapon_cost = _cost(receiver.weapon_after_buy) or 0.0
@@ -103,6 +110,10 @@ class PurchaseInferenceEngine:
             )
             donor = next((state for state in donors if float((observed.get(state.puuid) or {}).get("spent") or 0) >= weapon_cost), None)
             if not donor:
+                top = result[receiver.puuid][0]
+                top["weapon_source"] = "unknown_or_pickup"
+                top["confidence"] = min(float(top.get("confidence") or .2), .4)
+                top["reasons"] = list(top.get("reasons") or []) + ["no_compatible_drop_donor"]
                 continue
             donor_hypothesis = dict((result.get(donor.puuid) or [{}])[0])
             donor_hypothesis.update({

@@ -80,6 +80,8 @@ def normalize_purchase_for_display(purchase: dict[str, Any], *, is_pistol_round:
     armor = purchase.get("armor") or {}
     weapon_name = str(weapon.get("displayName") or ("Classic" if is_pistol_round else "No comprar arma"))
     armor_name = str(armor.get("displayName") or "Sin escudo")
+    if purchase.get("keep_armor") and armor:
+        armor_name = f"{armor_name} conservada"
     source = purchase.get("weapon_source") or weapon.get("source") or "none"
     if is_pistol_round and not purchase.get("weapon"):
         weapon_label, source_label = "Classic gratis", "Arma inicial gratis"
@@ -106,8 +108,6 @@ def normalize_warning_list(warnings: list[str] | None) -> list[str]:
         human.append("Algunos costes de habilidad requieren revision de catalogo.")
     if "ability_purchase_not_observable" in raw:
         human.append("Compra de habilidades estimada; Riot no expone la compra exacta de utilidad.")
-    if any(item.startswith("invalid_placeholder_value:") for item in raw):
-        human.append("Un dato observado invalido se sustituyo por su valor por defecto.")
     translations = {
         "low_confidence": "Inferencia con confianza baja.",
         "team_drop_inferred_not_observed": "El drop de arma es una inferencia, no una observacion directa.",
