@@ -265,6 +265,12 @@ export type EconomyProjection = {
   ultimate_adjustment?: number;
   armor_adjustment?: number;
   ml_adjustment?: number;
+  macro_model_available?: boolean;
+  macro_model_action?: string | null;
+  macro_model_candidate_action?: string | null;
+  macro_model_scope?: string | null;
+  macro_model_confidence?: number | null;
+  macro_model_adjustment?: number;
   contextual_adjustment?: number;
   players?: EconomyPlayerProjection[];
   players_can_full_buy_if_win?: number;
@@ -325,6 +331,22 @@ export type EconomyAdvancedContext = {
     model_scope?: string;
     feature_version?: string;
     warnings: string[];
+  };
+  macro_model?: EconomyContextSignal & {
+    recommended_action?: string | null;
+    model_scope?: string | null;
+    recommendation_strength?: string | null;
+    recommendation_margin?: number | null;
+    support_count_best_action?: number | null;
+    num_viable_alternatives?: number | null;
+    reason?: string | null;
+    alternatives?: Array<{
+      action?: string;
+      is_available?: boolean;
+      team_plan_value?: number | null;
+      reason_if_unavailable?: string | null;
+      historical_support?: number | null;
+    }>;
   };
 };
 

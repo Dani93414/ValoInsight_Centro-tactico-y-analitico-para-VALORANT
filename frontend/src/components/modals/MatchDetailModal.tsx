@@ -3773,6 +3773,15 @@ function economyCreditQualityLabel(quality?: string | null): string {
 
 function economyCaseLabel(value?: string | null): string {
   if (!value) return "N/D";
+  const labels: Record<string, string> = {
+    LAST_HALF_ROUND_BUY: "last half round buy",
+    ELIMINATION_BUY: "elimination buy",
+    CLOSING_BUY: "closing buy",
+    OVERTIME_BUY: "overtime buy",
+    ENEMY_PISTOL: "pistol",
+    UNDERINVESTED_BUY: "underinvested buy",
+  };
+  if (labels[value]) return labels[value];
   return value.replaceAll("_", " ").toLowerCase();
 }
 
@@ -3902,6 +3911,7 @@ function PlayerFirstEconomyPanel({
                         const profiles = Object.entries(advanced?.player_profiles ?? {}).filter(([, item]) => item.available);
                         const durability = Object.entries(advanced?.armor_durability ?? {}).filter(([, item]) => item.available);
                         const mlPrediction = advanced?.ml_prediction;
+                        const macroModel = advanced?.macro_model;
                         if (!advanced) return <p>No disponible.</p>;
                         return <div className="match-economy-ml-players">
                           <small>Mapa: {map?.available ? map.map_name ?? "Conocido" : "No disponible"}</small>
@@ -3911,6 +3921,9 @@ function PlayerFirstEconomyPanel({
                           <small>Perfiles con muestra: {profiles.length || "No disponibles"}</small>
                           <small>Armaduras con durabilidad: {durability.length || "No disponible"}</small>
                           <small>ML ronda: {mlPrediction?.available && mlPrediction.round_win_probability != null ? formatPercent(mlPrediction.round_win_probability * 100, 1) : "No disponible"}</small>
+                          <small>Modelo económico: {macroModel?.available ? `${economyCaseLabel(macroModel.recommended_action)} · ${macroModel.model_scope ?? "scope desconocido"}` : `Fallback a reglas${macroModel?.reason ? ` · ${macroModel.reason}` : ""}`}</small>
+                          <small>Confianza macro: {macroModel?.available && macroModel.confidence != null ? formatPercent(macroModel.confidence * 100, 1) : "No disponible"}</small>
+                          <small>Ajuste modelo macro: {formatNumber(round.economy_projection.macro_model_adjustment ?? 0, 3)}</small>
                           <small>Ajuste mapa: {formatNumber(round.economy_projection.map_adjustment ?? 0, 3)}</small>
                           <small>Ajuste site: {formatNumber(round.economy_projection.site_adjustment ?? 0, 3)}</small>
                           <small>Ajuste enemigo: {formatNumber(round.economy_projection.enemy_adjustment ?? 0, 3)}</small>

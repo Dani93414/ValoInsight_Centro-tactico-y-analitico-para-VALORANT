@@ -8,6 +8,7 @@ from .legal_purchase import LegalPurchaseGenerator
 from .inventory import PlayerInventoryState
 from .contextual_scorer import apply_contextual_adjustments
 from .round_win_model import RoundWinLoadoutModel
+from .buy_classifier import classify_team_buy_action
 
 
 def _num(value: Any) -> float:
@@ -79,6 +80,31 @@ def _strong_armor(plan: dict) -> bool:
     return "heavy" in text or "regen" in text
 
 
+def _action_family(action: str | None) -> str:
+    value = str(action or "").upper()
+    if value.startswith("ECO_"):
+        return "eco"
+    if value.startswith("FULL_"):
+        return "full"
+    if value.startswith("FORCE_"):
+        return "force"
+    if value.startswith("SEMI_") or value == "MIXED_LOW_BUY":
+        return "semi"
+    if value.startswith("BONUS_"):
+        return "bonus"
+    return "unknown"
+
+
+def _candidate_action(players: list[dict], context: dict) -> str:
+    economies = [{
+        "weapon": (player.get("weapon") or {}).get("displayName"),
+        "armor": (player.get("armor") or {}).get("displayName"),
+        "loadoutValue": _weapon_value(player) + _armor_value(player) + _num(player.get("ability_cost")),
+        "spent": _num(player.get("self_cost")),
+    } for player in players]
+    return classify_team_buy_action(economies, {"won": bool(context.get("previous_round_won"))})
+
+
 class BuyScorer:
     """Rules govern validity; an optional ML estimate only adjusts plan utility."""
     def score(self, players: list[dict], context: dict, ml_estimator: Callable[[dict], float] | None = None) -> dict:
@@ -87,7 +113,11 @@ class BuyScorer:
         weapon_value = sum(_weapon_value(p) for p in players)
         armor_value = sum(_armor_value(p) for p in players)
         utility_value = sum(_num(p.get("ability_cost")) for p in players)
-        decisive_round = bool(context.get("is_match_point") or context.get("is_last_round_before_switch") or context.get("is_overtime"))
+        team_score = int(_num(context.get("team_score_before")))
+        enemy_score = int(_num(context.get("enemy_score_before")))
+        elimination = enemy_score >= 12 and team_score < 12
+        closing = team_score >= 12 and enemy_score < 12
+        decisive_round = bool(elimination or context.get("is_last_round_before_switch") or context.get("is_overtime"))
         reserve_target = 0.0 if decisive_round else _num(context.get("next_round_reserve", 3900))
         future_win_values = [min(9000, value + 3000) for value in remaining]
         loss_income = _num(context.get("loss_income", 1900))
@@ -118,10 +148,31 @@ class BuyScorer:
                 warnings.append("ml_estimator_unavailable")
         penalties: list[str] = []
         penalty = 0.0
+        macro_guidance = context.get("macro_model_guidance") or {}
+        candidate_action = _candidate_action(players, context)
+        recommended_action = str(macro_guidance.get("recommended_action") or "")
+        macro_confidence = max(0.0, min(1.0, _num(macro_guidance.get("confidence"))))
+        macro_adjustment = 0.0
+        if macro_guidance.get("available") and recommended_action:
+            if candidate_action == recommended_action:
+                macro_adjustment = .12 * macro_confidence
+            elif _action_family(candidate_action) == _action_family(recommended_action):
+                macro_adjustment = .06 * macro_confidence
+            elif _action_family(candidate_action) != "unknown":
+                macro_adjustment = -.06 * macro_confidence
         operator_count = sum(_is_operator(p) for p in players)
         sniper_count = sum(_is_sniper(p) for p in players)
         useful_weapons = sum(_is_useful_weapon(p) for p in players)
         strong_armor = sum(_strong_armor(p) for p in players)
+        can_full_buy = sum(_num(inv_credit) >= 3900 for inv_credit in (
+            context.get("team_player_credit_estimates") or {}
+        ).values())
+        if not can_full_buy:
+            can_full_buy = int(_num(context.get("team_can_full_buy_count")))
+        bonus_candidate = bool(context.get("is_bonus_candidate"))
+        pistol = bool(context.get("is_pistol_round"))
+        enemy_buy = ((context.get("advanced_context") or {}).get("enemy_economy") or {}).get("enemy_buy_recommendation")
+        average_remaining = sum(remaining) / max(1, len(remaining))
         full_buy = weapon_value >= 10500 or useful_weapons >= 4
         post_pistol = bool(context.get("is_post_pistol_conversion") or context.get("is_second_round") or _num(context.get("round_number")) in {2, 14})
         anti_eco = bool(context.get("is_anti_eco"))
@@ -163,6 +214,21 @@ class BuyScorer:
             upgrades = sum(not p.get("keep_weapon") and _weapon_value(p) >= 2400 for p in players)
             if upgrades > 2:
                 penalty += .18 * (upgrades - 2); penalties.append("bonus_upgrade_penalty")
+        if not pistol and not bonus_candidate and can_full_buy >= 4:
+            if useful_weapons < 4:
+                penalty += .20 + .08 * (4 - useful_weapons); penalties.append("team_full_buy_available_but_half_buy_penalty")
+            if strong_armor < 3:
+                penalty += .12; penalties.append("high_credit_weak_armor_penalty")
+        if not pistol and not bonus_candidate and enemy_buy == "ENEMY_FULL_BUY" and useful_weapons < 4:
+            penalty += .16; penalties.append("enemy_full_buy_underinvestment_penalty")
+        if not pistol and not bonus_candidate and average_remaining > 5000 and useful_weapons < 4:
+            penalty += .18; penalties.append("excessive_saving_penalty")
+        heavy = [p for p in players if _weapon_name(p) in {"odin", "operator"}]
+        early_non_decisive = int(_num(context.get("round_number"))) <= 4 and not (decisive_round or closing)
+        if heavy and early_non_decisive:
+            penalty += .20 * len(heavy); penalties.append("early_heavy_weapon_context_penalty")
+        if heavy and enemy_buy in {"ENEMY_ECO", "ENEMY_HALF_BUY", "ENEMY_PISTOL"}:
+            penalty += .18 * len(heavy); penalties.append("heavy_weapon_enemy_low_buy_penalty")
         if not last_round:
             stranded = sum(0 < value < 400 for value in remaining)
             if stranded:
@@ -175,7 +241,7 @@ class BuyScorer:
         round_power = round_win
         future_economy = sum(min(1.0, value / max(1.0, reserve_target or 3900)) for value in remaining) / max(1, len(remaining))
         armor_quality = min(1.0, armor_value / max(1, len(players) * 1000))
-        raw_value = round_power * .48 + future_economy * .14 + synchronized * .12 + min(1, utility_value/1500) * .08 + armor_quality * .08 + composition_value - risk * .06 - penalty
+        raw_value = round_power * .48 + future_economy * .14 + synchronized * .12 + min(1, utility_value/1500) * .08 + armor_quality * .08 + composition_value + macro_adjustment - risk * .06 - penalty
         if context.get("is_bonus_candidate"):
             # A bonus is inventory preservation, not a fixed shield template.
             raw_value += keep_ratio * .32 - min(1.0, spend / 6000.0) * .20
@@ -201,6 +267,12 @@ class BuyScorer:
             "economic_risk": round(risk, 4), "team_spend": spend,
             "weapon_value": weapon_value, "armor_value": armor_value,
             "utility_value": utility_value,
+            "macro_model_available": bool(macro_guidance.get("available")),
+            "macro_model_action": recommended_action or None,
+            "macro_model_candidate_action": candidate_action,
+            "macro_model_scope": macro_guidance.get("model_scope"),
+            "macro_model_confidence": round(macro_confidence, 4) if macro_guidance.get("available") else None,
+            "macro_model_adjustment": round(macro_adjustment, 5),
             "rule_penalty": round(penalty, 4), "warnings": warnings + penalties,
             "debug_warnings": warnings + penalties,
             "data_confidence": round(max(.2, min(1.0, _num(context.get("team_economy_reconciliation_quality_score", .6)))), 4),
@@ -224,7 +296,7 @@ class TeamBuySolver:
         # Keep the search bounded while still constructing plans player-first.
         for combination in product(*choices):
             players = [dict(item) for item in combination]
-            self._resolve_weapon_drops(players, inventories)
+            self._resolve_weapon_drops(players, inventories, context)
             validation = self.validate(players, inventories)
             if not validation["valid"]:
                 continue
@@ -271,13 +343,24 @@ class TeamBuySolver:
         return result[:3]
 
     @staticmethod
-    def _resolve_weapon_drops(players: list[dict], inventories: list[PlayerInventoryState]) -> None:
+    def _resolve_weapon_drops(players: list[dict], inventories: list[PlayerInventoryState],
+                              context: dict | None = None) -> None:
         by_id = {inv.puuid: inv for inv in inventories}
+        enemy_buy = ((((context or {}).get("advanced_context") or {}).get("enemy_economy") or {})
+                     .get("enemy_buy_recommendation"))
         needy = [p for p in players if p.get("requires_weapon_drop") and not p.get("keep_weapon")]
         donors = sorted(players, key=lambda p: _num(p.get("expected_remaining")), reverse=True)
         for receiver in needy:
             cost = _weapon_purchase_cost(receiver)
-            donor = next((p for p in donors if p["puuid"] != receiver["puuid"] and _num(p.get("expected_remaining")) >= cost), None)
+            receiver_state = by_id.get(str(receiver.get("puuid")))
+            if cost < 1600 or (receiver_state and receiver_state.credits_before_buy >= cost):
+                continue
+            donor = next((p for p in donors
+                          if p["puuid"] != receiver["puuid"]
+                          and not p.get("buys_for")
+                          and _num(p.get("expected_remaining")) - cost >= 400
+                          and _is_useful_weapon(p)
+                          and (enemy_buy != "ENEMY_FULL_BUY" or _armor_value(p) >= 400)), None)
             if not donor:
                 continue
             receiver["weapon_cost"] = 0
@@ -293,9 +376,15 @@ class TeamBuySolver:
     @staticmethod
     def validate(players: list[dict], inventories: list[PlayerInventoryState]) -> dict:
         credits = {inv.puuid: inv.credits_before_buy for inv in inventories}
+        inventory_by_id = {inv.puuid: inv for inv in inventories}
         warnings: list[str] = []
         for player in players:
             puuid = player.get("puuid")
+            inventory = inventory_by_id.get(puuid)
+            if inventory and inventory.weapon_before_buy and not player.get("weapon"):
+                return {"valid": False, "warnings": [f"invalid_no_buy_discards_weapon:{puuid}"]}
+            if inventory and inventory.armor_before_buy and inventory.armor_before_buy != "Sin escudo" and not player.get("armor"):
+                return {"valid": False, "warnings": [f"invalid_no_buy_discards_armor:{puuid}"]}
             source = player.get("weapon_source") or (player.get("weapon") or {}).get("source") or "none"
             if bool(player.get("keep_weapon")) != (source == "carried"):
                 return {"valid": False, "warnings": [f"invalid_keep_weapon_source:{puuid}"]}
@@ -319,6 +408,10 @@ class TeamBuySolver:
 
     @staticmethod
     def _zero_plan(inv: PlayerInventoryState) -> dict:
+        if inv.weapon_before_buy or (inv.armor_before_buy and inv.armor_before_buy != "Sin escudo"):
+            generated = LegalPurchaseGenerator().generate(inv, limit=1)
+            if generated:
+                return generated[0]
         return {"puuid": inv.puuid, "weapon": None, "armor": None, "abilities": [], "keep_weapon": False,
                 "self_cost": 0, "weapon_cost": 0, "weapon_purchase_cost": 0,
                 "weapon_value": 0, "weapon_source": "none", "armor_cost": 0,
@@ -333,8 +426,14 @@ class TeamBuySolver:
         round_number = int(_num(context.get("round_number")))
         if context.get("is_overtime") or round_number >= 25:
             return "OVERTIME_BUY"
-        if context.get("is_last_round_before_switch") or context.get("is_match_point"):
-            return "LAST_ROUND_BUY"
+        if context.get("is_last_round_before_switch") or round_number in {12, 24}:
+            return "LAST_HALF_ROUND_BUY"
+        team_score = int(_num(context.get("team_score_before")))
+        enemy_score = int(_num(context.get("enemy_score_before")))
+        if enemy_score >= 12 and team_score < 12:
+            return "ELIMINATION_BUY"
+        if team_score >= 12 and enemy_score < 12:
+            return "CLOSING_BUY"
         if context.get("is_pistol_round"):
             names = " ".join(_weapon_text(player) for player in players)
             utility = sum(_num(player.get("ability_cost")) for player in players)
@@ -357,10 +456,13 @@ class TeamBuySolver:
         armored = sum(_armor_value(p) >= 400 for p in players)
         if weapons >= 4 and armored >= 3:
             return "FULL_BUY"
-        if spend <= 1500:
-            return "ECO"
         total_credits = sum(inv.credits_before_buy for inv in inventories)
         remaining = sum(_num(p.get("expected_remaining")) for p in players)
+        full_buy_capable = sum(inv.credits_before_buy >= 3900 or bool(inv.weapon_before_buy) for inv in inventories)
+        if full_buy_capable >= 4 and (weapons < 4 or armored < 3):
+            return "UNDERINVESTED_BUY" if weapons >= 3 else "BROKEN_BUY"
+        if spend <= 1500:
+            return "ECO"
         if spend <= max(4000, total_credits * .45) and remaining >= 7000:
             return "HALF_BUY"
         synchronized = max([_num(p.get("expected_remaining")) for p in players] or [0]) - min([_num(p.get("expected_remaining")) for p in players] or [0])

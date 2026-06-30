@@ -1,6 +1,7 @@
 import os
 import requests
 import time
+from threading import Lock
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -19,6 +20,28 @@ VAL_BASE = f"https://{VAL_REGION}.api.riotgames.com"
 HENRIK_BASE = "https://api.henrikdev.xyz"
 LEADERBOARD_SIZE = 15000
 RIOT_LEADERBOARD_PAGE_SIZE = 200
+HENRIK_REQUESTS_PER_MINUTE = int(os.getenv("HENRIK_REQUESTS_PER_MINUTE", "60"))
+HENRIK_RATE_LIMIT_SAFETY_FACTOR = float(os.getenv("HENRIK_RATE_LIMIT_SAFETY_FACTOR", "1.10"))
+
+if HENRIK_REQUESTS_PER_MINUTE <= 0:
+    raise ValueError("HENRIK_REQUESTS_PER_MINUTE debe ser mayor que 0")
+if HENRIK_RATE_LIMIT_SAFETY_FACTOR < 1.0:
+    raise ValueError("HENRIK_RATE_LIMIT_SAFETY_FACTOR debe ser mayor o igual que 1.0")
+
+_henrik_rate_lock = Lock()
+_henrik_last_request_at = 0.0
+
+
+def _wait_for_henrik_rate_limit() -> None:
+    """Apply one process-wide HenrikDev limit across concurrent callers."""
+    global _henrik_last_request_at
+
+    min_interval = (60.0 / HENRIK_REQUESTS_PER_MINUTE) * HENRIK_RATE_LIMIT_SAFETY_FACTOR
+    with _henrik_rate_lock:
+        remaining = min_interval - (time.monotonic() - _henrik_last_request_at)
+        if remaining > 0:
+            time.sleep(remaining)
+        _henrik_last_request_at = time.monotonic()
 
 
 def _get_headers() -> dict:
@@ -198,6 +221,7 @@ def get_henrik_leaderboard(
 
     retries = 5
     for i in range(retries):
+        _wait_for_henrik_rate_limit()
         response = requests.get(url, headers=_get_henrik_headers(), params=params, timeout=45)
 
         if response.status_code == 200:

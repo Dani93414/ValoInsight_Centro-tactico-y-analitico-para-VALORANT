@@ -281,8 +281,10 @@ def recommend_economy_action(
     state: dict,
     available_actions: list[str] | None = None,
     match: dict[str, Any] | None = None,
+    model_candidates: list[tuple[dict, str]] | None = None,
 ) -> dict[str, Any]:
-    candidates = load_model_candidates(state.get("rank_name"), state.get("rank_group"))
+    candidates = (model_candidates if model_candidates is not None else
+                  load_model_candidates(state.get("rank_name"), state.get("rank_group")))
     if not candidates:
         return {"available": False, "reason": "No hay modelo compatible entrenado todavía"}
     actions = available_actions or [action for action in BUY_ACTIONS if action != "UNKNOWN"]

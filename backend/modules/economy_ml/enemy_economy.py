@@ -37,7 +37,9 @@ class EnemyEconomyContext:
         return asdict(self)
 
 
-def build_enemy_economy_context(enemy_state: dict | None, *, previous_round: dict | None = None) -> EnemyEconomyContext:
+def build_enemy_economy_context(enemy_state: dict | None, *, previous_round: dict | None = None,
+                                round_number: int | None = None,
+                                is_pistol_round: bool = False) -> EnemyEconomyContext:
     if not enemy_state:
         return EnemyEconomyContext(False, warnings=["enemy_economy_unavailable"])
     credits = {str(key): float(value or 0) for key, value in
@@ -77,7 +79,9 @@ def build_enemy_economy_context(enemy_state: dict | None, *, previous_round: dic
         if stat and infer_player_survived_round(previous_round, puuid) and normalized["weapon"] not in {"Classic", "Arma no observada"}:
             saved_count += 1
     bonus = saved_count >= 3
-    if bonus:
+    if is_pistol_round or round_number in {1, 13}:
+        label = "ENEMY_PISTOL"
+    elif bonus:
         label = "ENEMY_BONUS"
     elif full_count >= 4 or rifle_count >= 4:
         label = "ENEMY_FULL_BUY"

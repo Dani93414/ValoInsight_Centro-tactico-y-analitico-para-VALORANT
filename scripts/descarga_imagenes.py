@@ -3,7 +3,9 @@ import argparse
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlparse
 
 import requests
@@ -13,6 +15,7 @@ from pymongo import MongoClient
 
 TIMEOUT = 10
 OVERWRITE = False
+DEFAULT_DOWNLOAD_WORKERS = int(os.getenv("IMAGE_DOWNLOAD_WORKERS", "8"))
 CONTENT_COLLECTION_NAME = "content"
 DEFAULT_CHANGES_FILE = Path(__file__).resolve().parent / "last_incremental_content_changes.json"
 
@@ -50,6 +53,12 @@ queued_targets = set()
 ONLY_CHANGED_IDS_BY_COLLECTION = {}
 CHANGED_SKINS_BY_WEAPON = {}
 OVERWRITE_RUNTIME = OVERWRITE
+STATS_LOCK = Lock()
+
+
+def increment_stat(name, amount=1):
+    with STATS_LOCK:
+        stats[name] += amount
 
 
 def is_plain_object(value):
@@ -254,7 +263,7 @@ def walk_node(node, current_dir, field_name=None, index_in_array=None):
 def download_image(url, file_base_path):
     try:
         if not OVERWRITE_RUNTIME and already_downloaded(file_base_path):
-            stats["skipped_existing"] += 1
+            increment_stat("skipped_existing")
             return
 
         response = requests.get(url, allow_redirects=True, timeout=TIMEOUT, stream=True)
@@ -262,7 +271,7 @@ def download_image(url, file_base_path):
 
         content_type = response.headers.get("Content-Type", "")
         if content_type and not content_type.lower().startswith("image/"):
-            stats["skipped_non_image"] += 1
+            increment_stat("skipped_non_image")
             response.close()
             return
 
@@ -275,7 +284,7 @@ def download_image(url, file_base_path):
         output_path = f"{file_base_path}{final_ext}"
 
         if not OVERWRITE_RUNTIME and already_downloaded(file_base_path):
-            stats["skipped_existing"] += 1
+            increment_stat("skipped_existing")
             response.close()
             return
 
@@ -288,16 +297,16 @@ def download_image(url, file_base_path):
 
         response.close()
 
-        stats["downloaded"] += 1
+        increment_stat("downloaded")
         print(f"✅ {os.path.relpath(output_path)}")
 
     except requests.RequestException as e:
-        stats["errors"] += 1
+        increment_stat("errors")
         print(f"❌ Error descargando {url}")
         print(f"   {e}")
 
     except Exception as e:
-        stats["errors"] += 1
+        increment_stat("errors")
         print(f"❌ Error inesperado con {url}")
         print(f"   {e}")
 
@@ -358,7 +367,16 @@ def main():
         action="store_true",
         help="Sobrescribe imágenes ya existentes.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=DEFAULT_DOWNLOAD_WORKERS,
+        help=f"Descargas de imágenes simultáneas (default: {DEFAULT_DOWNLOAD_WORKERS}).",
+    )
     args = parser.parse_args()
+
+    if args.workers <= 0:
+        parser.error("--workers debe ser mayor que 0")
 
     OVERWRITE_RUNTIME = bool(args.overwrite)
     if args.only_changed:
@@ -440,21 +458,26 @@ def main():
                 walk_node(collection_value, str(collection_dir))
 
         print(f"\nURLs encontradas: {stats['found_urls']}")
-        print("Iniciando descargas...\n")
+        print(f"Iniciando descargas con {args.workers} workers...\n")
 
         total_jobs = len(jobs)
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            futures = [
+                executor.submit(download_image, url, file_base_path)
+                for url, file_base_path in jobs
+            ]
 
-        for i, (url, file_base_path) in enumerate(jobs, start=1):
-            download_image(url, file_base_path)
+            for i, future in enumerate(as_completed(futures), start=1):
+                future.result()
 
-            if i % 100 == 0 or i == total_jobs:
-                print(
-                    f"[{i}/{total_jobs}] "
-                    f"descargadas={stats['downloaded']} "
-                    f"existentes={stats['skipped_existing']} "
-                    f"no_imagen={stats['skipped_non_image']} "
-                    f"errores={stats['errors']}"
-                )
+                if i % 100 == 0 or i == total_jobs:
+                    print(
+                        f"[{i}/{total_jobs}] "
+                        f"descargadas={stats['downloaded']} "
+                        f"existentes={stats['skipped_existing']} "
+                        f"no_imagen={stats['skipped_non_image']} "
+                        f"errores={stats['errors']}"
+                    )
 
         print("\n----- RESUMEN -----")
         print(f"Documentos revisados:    {stats['documents_scanned']}")

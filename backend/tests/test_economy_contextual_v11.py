@@ -181,6 +181,12 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         leakage = model.predict_round_win({"current_round_kills": 5})
         self.assertIn("round_win_feature_leakage_blocked", leakage["warnings"])
 
+        pistol = build_enemy_economy_context(
+            {"team_id": "B", "team_player_credit_estimates": {"x": 800, "y": 800}},
+            round_number=13,
+        )
+        self.assertEqual(pistol.enemy_buy_recommendation, "ENEMY_PISTOL")
+
         class FakeModel:
             def predict_proba(self, rows):
                 return [[.2, .8]]
@@ -233,12 +239,34 @@ class ContextualEconomyV11Tests(unittest.TestCase):
     def test_endpoint_exposes_optional_context_without_breaking_v10(self):
         result = recommend_match_economy(_match())
         self.assertEqual(result["engine"], "player_first_v10")
-        self.assertEqual(result["advanced_engine"], "player_first_v11_contextual")
+        self.assertEqual(result["advanced_engine"], "player_first_v11_contextual_stable")
         self.assertTrue(result["rounds"])
         advanced = result["rounds"][0]["advanced_context"]
         self.assertIn("map_context", advanced)
         self.assertIn("enemy_economy", advanced)
         self.assertIn("ml_prediction", advanced)
+
+    def test_site_reason_requires_sample_confidence_and_adjustment(self):
+        purchase = {"puuid": "p", "weapon": None, "armor": None, "abilities": [],
+                    "keep_weapon": False, "keep_armor": False, "weapon_source": "none",
+                    "self_cost": 0, "expected_remaining": 1000, "warnings": []}
+        plan = {"players": [purchase], "plan_kind": "ECO", "team_plan_score": .5,
+                "economy_projection": {"site_adjustment": .02}, "alternatives": []}
+        def reasons(rounds, confidence=.8, adjustment=.02):
+            plan["economy_projection"]["site_adjustment"] = adjustment
+            result = RecommendationExplainer().explain(
+                round_number=4, team_id="A", side="attack", score_before=None,
+                observed={"p": {}}, inferred={"p": []}, plan=plan,
+                context={"advanced_context": {"site_tendencies": {
+                    "available": True, "rounds_observed": rounds, "confidence": confidence,
+                    "likely_attack_site": "B",
+                }}},
+            )
+            return result["players"][0]["context_reasons"]
+        self.assertFalse(any("site" in item for item in reasons(2)))
+        self.assertFalse(any("site" in item for item in reasons(3, confidence=.4)))
+        self.assertFalse(any("site" in item for item in reasons(3, adjustment=.01)))
+        self.assertTrue(any("site B" in item for item in reasons(3)))
 
 
 if __name__ == "__main__":

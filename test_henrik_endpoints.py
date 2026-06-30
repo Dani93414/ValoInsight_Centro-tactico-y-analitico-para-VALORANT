@@ -38,9 +38,10 @@ RESULTS_FILE = "henrik_endpoints_results.json"
 
 TIMEOUT_SECONDS = 25
 
-# 30 requests/minuto = 1 request cada 2 segundos.
-# 2.2 añade margen para no rozar el límite.
-REQUEST_SLEEP_SECONDS = 2.2
+# 60 requests/minuto con un 10 % de margen para no rozar el límite.
+REQUESTS_PER_MINUTE = 60
+RATE_LIMIT_SAFETY_FACTOR = 1.10
+REQUEST_SLEEP_SECONDS = (60.0 / REQUESTS_PER_MINUTE) * RATE_LIMIT_SAFETY_FACTOR
 
 # Reintentos automáticos si la API devuelve 429.
 MAX_RETRIES_429 = 3
@@ -673,7 +674,10 @@ def generate_report(
     lines.append("")
     lines.append(f"PUUID obtenido previamente: {'sí' if puuid_available else 'no'}")
     lines.append(f"db_id de website obtenido previamente: {'sí' if db_id_available else 'no'}")
-    lines.append(f"Límite configurado: 30 requests/minuto aproximadamente, con {REQUEST_SLEEP_SECONDS}s entre peticiones.")
+    lines.append(
+        f"Límite configurado: {REQUESTS_PER_MINUTE} requests/minuto, "
+        f"con {REQUEST_SLEEP_SECONDS:.2f}s entre peticiones."
+    )
     lines.append(f"Reintentos ante 429: {MAX_RETRIES_429}")
     lines.append("")
 
@@ -767,7 +771,7 @@ def generate_results_json(
         "puuid_available": puuid_available,
         "db_id_available": db_id_available,
         "rate_limit": {
-            "configured_requests_per_minute": 30,
+            "configured_requests_per_minute": REQUESTS_PER_MINUTE,
             "sleep_between_requests_seconds": REQUEST_SLEEP_SECONDS,
             "max_retries_429": MAX_RETRIES_429,
             "default_429_wait_seconds": DEFAULT_RATE_LIMIT_WAIT_SECONDS,

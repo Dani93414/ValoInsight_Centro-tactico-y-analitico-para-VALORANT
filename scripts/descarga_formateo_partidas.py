@@ -27,7 +27,7 @@ from backend.ingestion.format_matches import build_output, load_template
 
 DEFAULT_CONVERT_WORKERS = int(os.getenv("MATCH_CONVERT_WORKERS", "4"))
 DEFAULT_DOWNLOAD_WORKERS = int(os.getenv("HENRIK_DOWNLOAD_WORKERS", "4"))
-DEFAULT_REQUESTS_PER_MINUTE = int(os.getenv("HENRIK_REQUESTS_PER_MINUTE", "30"))
+DEFAULT_REQUESTS_PER_MINUTE = int(os.getenv("HENRIK_REQUESTS_PER_MINUTE", "60"))
 DEFAULT_RATE_LIMIT_SAFETY_FACTOR = float(os.getenv("HENRIK_RATE_LIMIT_SAFETY_FACTOR", "1.10"))
 
 

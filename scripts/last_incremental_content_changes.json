@@ -6,38 +6,38 @@
     "pc:AP": {
       "checked": 39,
       "inserted": 1,
-      "unchanged": 32,
-      "errors": 6
+      "unchanged": 33,
+      "errors": 5
     },
     "pc:EU": {
       "checked": 39,
       "inserted": 1,
-      "unchanged": 32,
-      "errors": 6
+      "unchanged": 33,
+      "errors": 5
     },
     "pc:LATAM": {
       "checked": 39,
       "inserted": 1,
-      "unchanged": 32,
-      "errors": 6
+      "unchanged": 33,
+      "errors": 5
     },
     "pc:NA": {
       "checked": 39,
       "inserted": 1,
-      "unchanged": 32,
-      "errors": 6
+      "unchanged": 33,
+      "errors": 5
     },
     "pc:BR": {
       "checked": 39,
       "inserted": 1,
-      "unchanged": 32,
-      "errors": 6
+      "unchanged": 33,
+      "errors": 5
     },
     "pc:KR": {
       "checked": 39,
       "inserted": 1,
-      "unchanged": 32,
-      "errors": 6
+      "unchanged": 33,
+      "errors": 5
     }
   }
 }

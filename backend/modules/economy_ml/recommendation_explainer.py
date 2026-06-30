@@ -96,19 +96,24 @@ class RecommendationExplainer:
         if purchase.get("bought_by"):
             return "Recibe un drop de arma; conserva sus creditos para escudo, utilidad y economia futura."
         if purchase.get("buys_for"):
-            return "Compra un arma para un companero sin transferir escudo ni habilidades."
+            return "Compra arma para un companero manteniendo carga propia suficiente."
         if purchase.get("keep_weapon"):
+            weapon = str((purchase.get("weapon") or {}).get("displayName") or "el arma")
             if kind.startswith("BONUS"):
-                return "Mantiene el arma para jugar el bonus y ahorrar para la siguiente compra completa."
-            return "Conserva el arma y compra solo la proteccion o utilidad necesaria."
+                return f"Conserva {weapon} para jugar el bonus y ahorrar para la siguiente compra completa."
+            return f"Conserva {weapon} y compra solo la proteccion o utilidad necesaria."
         if kind in {"POST_PISTOL_CONVERSION", "ANTI_ECO"}:
             return "Convierte la ventaja post-pistol con arma, escudo y utilidad controlada, sin sobreinvertir."
         if kind in {"ECO", "HALF_BUY"}:
             return "Limita el gasto para sincronizar una compra completa en la siguiente ronda."
+        if kind in {"UNDERINVESTED_BUY", "BROKEN_BUY"}:
+            return "La compra queda por debajo de la potencia disponible y debe revisarse."
         if kind == "FULL_BUY":
             return "Completa una compra coordinada con arma, proteccion y utilidad clave."
-        if kind in {"LAST_ROUND_BUY", "OVERTIME_BUY"}:
+        if kind in {"LAST_HALF_ROUND_BUY", "ELIMINATION_BUY", "OVERTIME_BUY"}:
             return "Prioriza potencia inmediata porque no aporta valor reservar creditos."
+        if kind == "CLOSING_BUY":
+            return "Prioriza cerrar la partida sin ignorar por completo una ronda posterior."
         return f"Compra coherente con el plan {kind.lower().replace('_', ' ') or 'de equipo'}."
 
     @staticmethod
@@ -117,7 +122,9 @@ class RecommendationExplainer:
         advanced = context.get("advanced_context") or {}
         reasons: list[str] = []
         enemy = (advanced.get("enemy_economy") or {}).get("enemy_buy_recommendation")
-        if enemy == "ENEMY_ECO":
+        if enemy == "ENEMY_PISTOL":
+            reasons.append("Ronda pistol: se prioriza una compra inicial eficiente.")
+        elif enemy == "ENEMY_ECO":
             reasons.append("La economia enemiga probable es eco; se evita sobreinvertir.")
         elif enemy == "ENEMY_FULL_BUY":
             reasons.append("La compra enemiga probable es completa; se prioriza potencia coordinada.")
@@ -132,8 +139,11 @@ class RecommendationExplainer:
         remaining = durability.get("armor_value_remaining")
         if maximum and remaining is not None and float(remaining) / maximum < .5:
             reasons.append("La armadura conservada esta danada y conviene refrescarla si el presupuesto lo permite.")
-        if projection.get("site_adjustment", 0) > 0:
-            site = (advanced.get("site_tendencies") or {}).get("likely_attack_site")
+        site_context = advanced.get("site_tendencies") or {}
+        if (site_context.get("available") and int(site_context.get("rounds_observed") or 0) >= 3
+                and float(site_context.get("confidence") or 0) >= .5
+                and float(projection.get("site_adjustment") or 0) > .01):
+            site = site_context.get("likely_attack_site")
             reasons.append(f"La utilidad encaja con la tendencia observada del site {site or 'probable'}.")
         if projection.get("player_fit_adjustment", 0) > 0:
             reasons.append("El arma tiene buen ajuste con el historial previo del jugador.")
