@@ -29,6 +29,8 @@ class PlayerInventoryState:
     free_abilities_granted: dict[str, int] = field(default_factory=dict)
     abilities_bought: dict[str, int] = field(default_factory=dict)
     abilities_used: dict[str, int] = field(default_factory=dict)
+    ability_charges_before_buy: dict[str, int] = field(default_factory=dict)
+    ability_charges_confidence: float = 0.0
     survived_previous_round: bool | None = None
     died_previous_round: bool | None = None
     ultimate_points: int | None = None

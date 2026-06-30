@@ -12,6 +12,13 @@ FORBIDDEN_ROUND_WIN_FEATURES = {
 }
 
 
+def validate_round_win_features(features: dict[str, Any], *, raise_on_error: bool = False) -> list[str]:
+    leaked = sorted(FORBIDDEN_ROUND_WIN_FEATURES.intersection(features))
+    if leaked and raise_on_error:
+        raise ValueError(f"Forbidden round-win features: {leaked}")
+    return leaked
+
+
 class RoundWinLoadoutModel:
     def __init__(self, artifact_path: str | Path | None = None) -> None:
         self.artifact_path = Path(artifact_path) if artifact_path else Path(__file__).with_name("artifacts") / "round_win_loadout.joblib"
@@ -28,7 +35,7 @@ class RoundWinLoadoutModel:
 
     @staticmethod
     def validate_features(features: dict[str, Any]) -> list[str]:
-        return sorted(FORBIDDEN_ROUND_WIN_FEATURES.intersection(features))
+        return validate_round_win_features(features)
 
     def predict_round_win(self, features: dict[str, Any]) -> dict[str, Any]:
         leaked = self.validate_features(features)
@@ -41,12 +48,23 @@ class RoundWinLoadoutModel:
                     "model_scope": "none", "feature_version": FEATURE_VERSION,
                     "warnings": ["round_win_model_unavailable"]}
         try:
-            if hasattr(self.model, "predict_proba"):
-                probability = float(self.model.predict_proba([features])[0][-1])
+            bundle = self.model if isinstance(self.model, dict) else {}
+            estimator = bundle.get("pipeline") or self.model
+            feature_names = bundle.get("features") or list(features)
+            row = {name: features.get(name) for name in feature_names}
+            try:
+                import pandas as pd
+                values: Any = pd.DataFrame([row], columns=feature_names)
+            except Exception:
+                values = [row]
+            if hasattr(estimator, "predict_proba"):
+                probability = float(estimator.predict_proba(values)[0][-1])
             else:
-                probability = float(self.model.predict([features])[0])
+                probability = float(estimator.predict(values)[0])
             return {"available": True, "round_win_probability": max(0.0, min(1.0, probability)),
-                    "confidence": .7, "model_scope": "global", "feature_version": FEATURE_VERSION,
+                    "confidence": float(bundle.get("confidence") or .7),
+                    "model_scope": str(bundle.get("model_scope") or "global"),
+                    "feature_version": str(bundle.get("feature_version") or FEATURE_VERSION),
                     "warnings": []}
         except Exception:
             return {"available": False, "round_win_probability": None, "confidence": 0.0,

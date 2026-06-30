@@ -47,6 +47,12 @@ def _weapon_name(plan: dict) -> str:
 
 
 def _armor_value(plan: dict) -> float:
+    effective = plan.get("armor_effective_value")
+    if effective is not None:
+        return _num(effective)
+    nested_effective = (plan.get("armor") or {}).get("armor_effective_value")
+    if nested_effective is not None:
+        return _num(nested_effective)
     explicit = plan.get("armor_value")
     if explicit is not None:
         return _num(explicit)
@@ -212,7 +218,7 @@ class TeamBuySolver:
         agents, context = agents or {}, context or {}
         round_win_model = RoundWinLoadoutModel() if context.get("advanced_context") else None
         choices = [self._reduced_choices(self.generator.generate(
-            inv, agent=agents.get(inv.puuid, ""), context=context,
+            inv, agent=agents.get(inv.puuid, ""), context=context, ability_combination_limit=12,
         )) for inv in inventories]
         candidates: list[dict] = []
         # Keep the search bounded while still constructing plans player-first.
@@ -245,15 +251,8 @@ class TeamBuySolver:
         if not plans:
             return []
         ordered = sorted(plans, key=lambda p: _num(p.get("self_cost")))
-        picks = [ordered[0], ordered[len(ordered)//2], ordered[-1]]
+        picks = [ordered[0]]
         max_utility = max(plans, key=lambda p: (_num(p.get("ability_cost")), _num(p.get("self_cost"))))
-        picks.append(max_utility)
-        non_operator = max((p for p in plans if not _is_operator(p)), key=lambda p: _weapon_value(p), default=None)
-        if non_operator:
-            picks.append(non_operator)
-        carried = next((p for p in ordered if p.get("keep_weapon")), None)
-        if carried:
-            picks.append(carried)
         carried_loadout = max((p for p in plans if p.get("keep_weapon") or p.get("keep_armor")),
                               key=lambda p: (_weapon_value(p) + _armor_value(p), -_num(p.get("self_cost"))), default=None)
         if carried_loadout:
@@ -262,11 +261,14 @@ class TeamBuySolver:
                                key=lambda p: (_weapon_value(p) + _armor_value(p), -_num(p.get("self_cost"))), default=None)
         if protected_weapon:
             picks.append(protected_weapon)
+        picks.extend([max_utility, ordered[len(ordered)//2], ordered[-1]])
         result: list[dict] = []
         for item in picks:
             if item not in result:
                 result.append(item)
-        return result
+        # At most 3^5 team combinations. Preserve meaningful economic anchors
+        # instead of sampling thousands of near-duplicate item permutations.
+        return result[:3]
 
     @staticmethod
     def _resolve_weapon_drops(players: list[dict], inventories: list[PlayerInventoryState]) -> None:
@@ -321,6 +323,7 @@ class TeamBuySolver:
                 "self_cost": 0, "weapon_cost": 0, "weapon_purchase_cost": 0,
                 "weapon_value": 0, "weapon_source": "none", "armor_cost": 0,
                 "armor_purchase_cost": 0, "armor_value": 0, "armor_source": "none", "keep_armor": False,
+                "armor_effective_value": 0, "armor_full_value": 0, "armor_durability_ratio": None,
                 "ability_cost": 0,
                 "expected_remaining": inv.credits_before_buy, "bought_by": None, "buys_for": None, "warnings": []}
 

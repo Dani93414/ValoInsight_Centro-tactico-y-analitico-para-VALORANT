@@ -22,6 +22,8 @@ from modules.economy_ml.dataset_builder import (  # noqa: E402
 from modules.economy_ml.content_catalog import build_content_report  # noqa: E402
 from modules.economy_ml.model_registry import status  # noqa: E402
 from modules.economy_ml.train import train_models  # noqa: E402
+from modules.economy_ml.round_win_dataset import build_round_win_dataset  # noqa: E402
+from modules.economy_ml.train_round_win_model import train_round_win_model  # noqa: E402
 from modules.matches.infrastructure import mongo_match_repo  # noqa: E402
 
 
@@ -133,6 +135,13 @@ def main() -> int:
         return 1
 
     _print_training_summary(metadata)
+    print("Entrenando modelo opcional de victoria por loadout...")
+    round_win_result = train_round_win_model(build_round_win_dataset(dataset))
+    if round_win_result.get("available"):
+        print(f"  artifact: {round_win_result.get('artifact_path')}")
+        print(f"  samples: {round_win_result.get('samples')}")
+    else:
+        print(f"  no disponible: {round_win_result.get('reason')}")
     _print_status()
     return 0
 

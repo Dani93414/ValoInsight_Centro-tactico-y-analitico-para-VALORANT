@@ -1,0 +1,65 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+import pandas as pd
+
+from modules.economy_ml.round_win_dataset import (ROUND_WIN_FEATURES, build_round_win_dataset,
+                                                   validate_round_win_dataset)
+from modules.economy_ml.round_win_model import RoundWinLoadoutModel, validate_round_win_features
+from modules.economy_ml.train_round_win_model import train_round_win_model
+
+
+class RoundWinModelTests(unittest.TestCase):
+    def _source(self, rows=80):
+        return pd.DataFrame({
+            "match_id": [f"m{i // 10}" for i in range(rows)],
+            "game_start_millis": list(range(1, rows + 1)),
+            "round_won": [i % 2 for i in range(rows)],
+            "action_total_loadout": [8000 + (i % 2) * 8000 for i in range(rows)],
+            "action_heavy_armor_count": [i % 2 * 5 for i in range(rows)],
+            "action_regen_armor_count": [0] * rows,
+            "action_light_armor_count": [5 - (i % 2) * 5 for i in range(rows)],
+            "action_rifle_count": [i % 2 * 4 for i in range(rows)],
+            "action_operator_count": [0] * rows,
+            "action_smg_count": [5 - (i % 2) * 5 for i in range(rows)],
+            "action_sheriff_count": [0] * rows,
+            "round_number": [(i % 24) + 1 for i in range(rows)],
+            "score_diff": [0] * rows, "loss_streak": [0] * rows,
+            "team_estimated_credits_before_buy": [20000] * rows,
+            "enemy_estimated_credits_before_buy": [18000] * rows,
+            "map_name": ["Ascent"] * rows, "side": ["attack"] * rows,
+        })
+
+    def test_dataset_contract_excludes_forbidden_features(self):
+        dataset = build_round_win_dataset(self._source())
+        validation = validate_round_win_dataset(dataset)
+        self.assertTrue(validation["valid"])
+        self.assertTrue(set(ROUND_WIN_FEATURES).issubset(dataset.columns))
+        self.assertEqual(validate_round_win_features({"current_round_damage": 1}), ["current_round_damage"])
+        self.assertNotIn("current_round_damage", dataset.columns)
+
+    def test_training_writes_loadable_artifact_and_predicts(self):
+        dataset = build_round_win_dataset(self._source())
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "round_win.joblib"
+            result = train_round_win_model(dataset, artifact_path=artifact, min_samples=20)
+            self.assertTrue(result["available"])
+            model = RoundWinLoadoutModel(artifact)
+            features = dataset.iloc[0][ROUND_WIN_FEATURES].to_dict()
+            prediction = model.predict_round_win(features)
+            self.assertTrue(prediction["available"])
+            self.assertGreaterEqual(prediction["round_win_probability"], 0)
+            self.assertLessEqual(prediction["round_win_probability"], 1)
+
+    def test_insufficient_dataset_does_not_publish(self):
+        dataset = build_round_win_dataset(self._source(4))
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "round_win.joblib"
+            result = train_round_win_model(dataset, artifact_path=artifact, min_samples=20)
+            self.assertFalse(result["available"])
+            self.assertFalse(artifact.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -20,7 +20,7 @@ def _name(player: dict) -> str:
 def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
                                  model: RoundWinLoadoutModel | None = None) -> dict:
     advanced = context.get("advanced_context") or {}
-    map_adjustment = player_fit = enemy_adjustment = utility_adjustment = ultimate_adjustment = armor_adjustment = 0.0
+    map_adjustment = site_adjustment = player_fit = enemy_adjustment = utility_adjustment = ultimate_adjustment = armor_adjustment = 0.0
     warnings: list[str] = []
 
     map_context = advanced.get("map_context") or {}
@@ -33,6 +33,25 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
             map_adjustment += _num(profile.get("rifle_affinity")) * .10
         elif role == "shotgun":
             map_adjustment += _num(profile.get("shotgun_affinity")) * .10
+    map_adjustment = max(-.04, min(.04, map_adjustment))
+
+    utility_types = {
+        tactical for player in players for ability in player.get("abilities") or []
+        for tactical in ability.get("tactical_types") or []
+    }
+    site = advanced.get("site_tendencies") or {}
+    likely_site = site.get("likely_attack_site")
+    if site.get("available") and likely_site:
+        plant_success = _num((site.get("plant_success_by_site") or {}).get(likely_site))
+        retake_success = _num((site.get("retake_success_by_site") or {}).get(likely_site))
+        weakness = _num((site.get("defense_site_weakness") or {}).get(likely_site))
+        if plant_success >= .55 and ({"postplant", "area_damage", "flank_control"} & utility_types):
+            site_adjustment += .025 + min(.015, (plant_success - .55) * .05)
+        if retake_success >= .45 and ({"flash", "recon", "smoke", "vision_denial"} & utility_types):
+            site_adjustment += .02 + min(.015, (retake_success - .45) * .04)
+        if weakness >= .55 and ({"stall", "anchor", "trap"} & utility_types):
+            site_adjustment += .02
+    site_adjustment = max(-.04, min(.06, site_adjustment))
 
     profiles = advanced.get("player_profiles") or {}
     for player in players:
@@ -46,6 +65,7 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
             rates = profile.get("weapon_kill_rate") or {}
             sniper_rate = max((_num(value) for key, value in rates.items() if weapon_role(key) == "sniper"), default=0)
             player_fit += (.015 if sniper_rate >= .7 else -.015) * _num(profile.get("confidence"))
+    player_fit = max(-.06, min(.06, player_fit))
 
     enemy = advanced.get("enemy_economy") or {}
     enemy_buy = enemy.get("enemy_buy_recommendation")
@@ -57,6 +77,12 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
     if enemy_buy == "ENEMY_FULL_BUY" and weak:
         enemy_adjustment -= .055 * weak
         warnings.append("context_enemy_full_buy_underpowered")
+    if _num(enemy.get("enemy_can_operator_count")) > 0 and ({"smoke", "vision_denial", "flash", "recon"} & utility_types):
+        enemy_adjustment += .025
+    if enemy_buy == "ENEMY_BONUS":
+        useful = sum(_num(player.get("weapon_value")) >= 1600 and _num(player.get("armor_value")) >= 400 for player in players)
+        enemy_adjustment += .015 if useful >= 4 else -.04
+    enemy_adjustment = max(-.16, min(.08, enemy_adjustment))
 
     ultimates = advanced.get("ultimates") or {}
     for player in players:
@@ -69,6 +95,7 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
             warnings.append(f"context_{agent}_ultimate_reduces_weapon_need")
         if _num(player.get("armor_value")) >= 400:
             ultimate_adjustment += .01
+    ultimate_adjustment = max(-.08, min(.04, ultimate_adjustment))
 
     durability = advanced.get("armor_durability") or {}
     for player in players:
@@ -81,6 +108,9 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
                 warnings.append("context_damaged_armor_should_refresh")
             elif player.get("keep_armor") and ratio >= .8:
                 armor_adjustment += .015
+            elif not player.get("keep_armor") and ratio < .5 and _num(player.get("armor_value")) >= maximum * 10:
+                armor_adjustment += .025
+    armor_adjustment = max(-.08, min(.04, armor_adjustment))
 
     usage = advanced.get("ability_usage") or {}
     for player in players:
@@ -88,26 +118,29 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
         used = sum(int(value or 0) for value in (state.get("used_abilities_by_slot") or {}).values())
         if state.get("available") and used == 0 and _num(player.get("ability_cost")) >= 500:
             utility_adjustment -= .025
+    utility_adjustment = max(-.05, min(.04, utility_adjustment))
 
     features = {
         "team_weapon_value": _num(base.get("weapon_value")), "team_armor_value": _num(base.get("armor_value")),
-        "team_utility_value": _num(base.get("utility_value")), "enemy_weapon_value": 0,
-        "enemy_armor_value": 0, "enemy_utility_value": 0,
+        "team_utility_value": _num(base.get("utility_value")), "enemy_projected_weapon_value": 0,
+        "enemy_projected_armor_value": 0, "enemy_projected_utility_value": 0,
         "rifle_count": sum(weapon_role(_name(p)) == "rifle" for p in players),
-        "op_count": sum(_name(p) == "operator" for p in players),
+        "operator_count": sum(_name(p) == "operator" for p in players),
         "smg_count": sum(weapon_role(_name(p)) == "smg" for p in players),
         "sidearm_count": sum(weapon_role(_name(p)) == "sidearm" for p in players),
         "heavy_weapon_count": sum(weapon_role(_name(p)) == "heavy" for p in players),
         "map": map_context.get("map_name"), "side": context.get("side"),
         "round_number": context.get("round_number"), "score_diff": context.get("score_diff"),
-        "loss_streak": context.get("loss_streak"), "team_credits": context.get("team_estimated_credits_before_buy"),
-        "enemy_credits": context.get("enemy_estimated_credits_before_buy"), "enemy_buy_class": enemy_buy,
+        "loss_streak": context.get("loss_streak"), "team_credits_total": context.get("team_estimated_credits_before_buy"),
+        "team_credits_median": context.get("team_player_credits_median"),
+        "enemy_credits_total": context.get("enemy_estimated_credits_before_buy"),
+        "enemy_credits_median": enemy.get("enemy_median_credits"), "enemy_buy_class": enemy_buy,
     }
     prediction = (model or RoundWinLoadoutModel()).predict_round_win(features)
     ml_adjustment = 0.0
     if prediction.get("available") and prediction.get("round_win_probability") is not None:
-        ml_adjustment = (_num(prediction["round_win_probability"]) - _num(base.get("round_win_probability"))) * .18
-    adjustment = max(-.35, min(.25, map_adjustment + player_fit + enemy_adjustment + utility_adjustment + ultimate_adjustment + armor_adjustment + ml_adjustment))
+        ml_adjustment = max(-.10, min(.10, (_num(prediction["round_win_probability"]) - _num(base.get("round_win_probability"))) * .18))
+    adjustment = max(-.35, min(.25, map_adjustment + site_adjustment + player_fit + enemy_adjustment + utility_adjustment + ultimate_adjustment + armor_adjustment + ml_adjustment))
     raw = _num(base.get("team_plan_value")) + adjustment
     result = dict(base)
     result.update({
@@ -115,9 +148,11 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
         "score": round(max(0.0, min(1.0, raw)), 5), "rule_score": base.get("team_plan_score"),
         "ml_round_win_probability": prediction.get("round_win_probability"),
         "future_economy_score": base.get("synchronization"), "enemy_adjustment": round(enemy_adjustment, 5),
-        "map_adjustment": round(map_adjustment, 5), "player_fit_adjustment": round(player_fit, 5),
+        "map_adjustment": round(map_adjustment, 5), "site_adjustment": round(site_adjustment, 5),
+        "player_fit_adjustment": round(player_fit, 5),
         "utility_adjustment": round(utility_adjustment, 5), "ultimate_adjustment": round(ultimate_adjustment, 5),
-        "armor_adjustment": round(armor_adjustment, 5), "risk_penalty": base.get("rule_penalty"),
+        "armor_adjustment": round(armor_adjustment, 5), "ml_adjustment": round(ml_adjustment, 5),
+        "risk_penalty": base.get("rule_penalty"),
         "contextual_adjustment": round(adjustment, 5), "ml_prediction": prediction,
         "warnings": list(dict.fromkeys((base.get("warnings") or []) + warnings)),
         "debug_warnings": list(dict.fromkeys((base.get("debug_warnings") or []) + warnings + prediction.get("warnings", []))),

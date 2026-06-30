@@ -5,7 +5,8 @@ inventario individual, drops y economia futura gobiernan la decision. El ML es
 un estimador auxiliar y nunca puede convertir un plan ilegal en viable.
 
 La respuesta conserva `engine: player_first_v10` por compatibilidad y declara
-`advanced_engine: player_first_v11_contextual`. V11 no sustituye las reglas:
+`advanced_engine: player_first_v11_contextual`. Esta fase se considera
+`player_first_v11_contextual_stable`. V11 no sustituye las reglas:
 anade ajustes pequenos despues de que el plan haya superado generacion y
 validacion legal. Si una fuente avanzada falta, devuelve `available: false`,
 `confidence: 0`, `source: unavailable` y warnings tecnicos sin bloquear el
@@ -18,10 +19,13 @@ Cada ronda puede exponer un `advanced_context` opcional con:
 - `map_context`: mapa del `matchInfo`, catalogo y perfil heuristico versionado.
 - `site_tendencies`: plantas y resultados exclusivamente de rondas anteriores.
 - `player_profiles`: uso y rendimiento estimado por arma en rondas anteriores.
-- `enemy_economy`: creditos del ledger rival y clase de compra probable.
+- `enemy_economy`: creditos por jugador, capacidades de compra, mediana,
+  dispersion, inventario previo y clase de compra probable.
 - `ultimates`: estado directo de la ronda anterior cuando el payload lo trae.
-- `armor_durability`: valor directo o estimacion conservadora identificada.
-- `ability_usage`: casts previos; las compras exactas siguen siendo estimadas.
+- `armor_durability`: valor directo o estimacion conservadora identificada;
+  el valor efectivo de armadura carried condiciona generacion y scoring.
+- `ability_usage`: casts e inventario previo si el payload lo trae; las cargas
+  carried no se cobran otra vez y las compras exactas siguen siendo estimadas.
 - `ml_prediction`: probabilidad opcional del artefacto de round-win.
 
 Las senales incluyen siempre `source`, `confidence` y `warnings`. Los perfiles
@@ -32,12 +36,20 @@ valor directo si existe; de lo contrario puede inferirse con dano previo o
 degradar a desconocida. No se consulta Mongo historico adicional en la ruta
 sincrona actual.
 
-`RoundWinLoadoutModel` busca opcionalmente
-`artifacts/round_win_loadout.joblib`. Sin artefacto, las reglas siguen activas
-y se devuelve `round_win_model_unavailable`. El score contextual publica el
-score de reglas, ajustes de mapa, enemigo, player-fit, utilidad, ultimate y
-armadura, junto con confianza y warnings. Los ajustes estan acotados y nunca
-se ejecutan antes de validar legalidad.
+`round_win_dataset.py` construye un dataset aislado con acciones/loadouts
+historicos como tratamiento y labels `round_won`. `train_round_win_model.py`
+aplica validacion anti-leakage, split temporal, preprocesado numerico/categorico
+y regresion logistica balanceada. Publica opcionalmente
+`artifacts/round_win_loadout.joblib` con `feature_version`, features y metricas.
+El script `scripts/entrenamiento_economia.py` ejecuta este entrenamiento despues
+del pipeline principal; si faltan muestras o clases informa `available=false`
+sin borrar ni bloquear el motor de reglas.
+
+El score contextual publica score de reglas, ML round-win y ajustes de mapa,
+site, enemigo, player-fit, utilidad, ultimate y armadura. Cada componente tiene
+limites propios y el total queda acotado a `-0.35..+0.25`; nunca se ejecuta antes
+de validar legalidad. La confianza final combina inferencia de compra, ledger,
+contexto, ML opcional y disponibilidad de mapa/site/enemigo.
 
 ## Anti-Leakage V11
 
@@ -178,6 +190,8 @@ legales y conserva los creditos restantes de cada jugador para las proyecciones.
 
 - Modelo observacional, no causal.
 - La compra real de habilidades puede no ser observable.
+- Solo se conservan cargas de habilidad cuando existe inventario previo
+  explícito; casts sin inventario no bastan para inventar cargas restantes.
 - Las pickups y drops observados pueden ser hipotesis con confianza reducida.
 - AFK compensation se marca como inferida si no esta confirmada.
 - Datos incompletos o corruptos de la API pueden degradar la confianza.
@@ -192,6 +206,14 @@ Reentrenamiento local:
 
 ```powershell
 venv\Scripts\python.exe scripts\entrenamiento_economia.py
+```
+
+Ese comando entrena tanto los modelos historicos principales como el modelo
+opcional round-win. Para entrenar solo este ultimo sobre un parquet existente:
+
+```powershell
+$env:PYTHONPATH='backend'
+venv\Scripts\python.exe -m modules.economy_ml.train_round_win_model backend\modules\economy_ml\artifacts\economy_round_dataset.parquet
 ```
 
 Tests backend:

@@ -3875,6 +3875,7 @@ function PlayerFirstEconomyPanel({
                                     {purchase.keep_armor ? ` · Armadura conservada (valor ${formatNumber(purchase.armor_value)})` : ""}
                                   </small>
                                   <small>{player.reason}</small>
+                                  {player.context_reasons?.map((reason) => <small key={reason}>{reason}</small>)}
                                 </td>
                                 <td>
                                   {purchase.bought_by ? <small>Recibe de {purchase.bought_by}</small> : null}
@@ -3910,6 +3911,15 @@ function PlayerFirstEconomyPanel({
                           <small>Perfiles con muestra: {profiles.length || "No disponibles"}</small>
                           <small>Armaduras con durabilidad: {durability.length || "No disponible"}</small>
                           <small>ML ronda: {mlPrediction?.available && mlPrediction.round_win_probability != null ? formatPercent(mlPrediction.round_win_probability * 100, 1) : "No disponible"}</small>
+                          <small>Ajuste mapa: {formatNumber(round.economy_projection.map_adjustment ?? 0, 3)}</small>
+                          <small>Ajuste site: {formatNumber(round.economy_projection.site_adjustment ?? 0, 3)}</small>
+                          <small>Ajuste enemigo: {formatNumber(round.economy_projection.enemy_adjustment ?? 0, 3)}</small>
+                          <small>Ajuste player-fit: {formatNumber(round.economy_projection.player_fit_adjustment ?? 0, 3)}</small>
+                          <small>Ajuste ultimate: {formatNumber(round.economy_projection.ultimate_adjustment ?? 0, 3)}</small>
+                          <small>Ajuste armadura: {formatNumber(round.economy_projection.armor_adjustment ?? 0, 3)}</small>
+                          <small>Ajuste utilidad: {formatNumber(round.economy_projection.utility_adjustment ?? 0, 3)}</small>
+                          <small>Ajuste ML: {formatNumber(round.economy_projection.ml_adjustment ?? 0, 3)}</small>
+                          <small>Ajuste contextual total: {formatNumber(round.economy_projection.contextual_adjustment ?? 0, 3)}</small>
                           {Object.values(advanced).flatMap((item) => item && "warnings" in item && Array.isArray(item.warnings) ? item.warnings : []).length
                             ? <small>Avisos contextuales disponibles en modo detalle/debug.</small> : null}
                         </div>;
