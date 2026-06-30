@@ -68,7 +68,7 @@ class LegalPurchaseGenerator:
     def generate(self, state: PlayerInventoryState, *, agent: str = "", limit: int = 48,
                  ability_combination_limit: int = 64, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         credits = state.credits_before_buy
-        weapons = [None]
+        weapons = [] if state.weapon_before_buy else [None]
         if state.weapon_before_buy:
             catalog_weapon = find_weapon(state.weapon_before_buy)
             catalog_value = _price(catalog_weapon)
@@ -93,7 +93,7 @@ class LegalPurchaseGenerator:
             "weapon_value": _price(weapon),
             "source": "bought_self",
         } for weapon in purchasable)
-        armors = [None]
+        armors = [] if state.armor_before_buy and state.armor_before_buy != "Sin escudo" else [None]
         durability = (((context or {}).get("advanced_context") or {}).get("armor_durability") or {}).get(state.puuid) or {}
         if state.armor_before_buy and state.armor_before_buy != "Sin escudo":
             catalog_armor = find_gear(state.armor_before_buy)

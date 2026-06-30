@@ -45,7 +45,7 @@ COMPETITIVE_QUEUE_ID = "competitive"
 # Guardamos los RAW junto al script para que el pipeline pueda renombrar/convertir/borrar en un solo flujo.
 OUT_DIR = Path(__file__).resolve().parent
 
-DEFAULT_REQUESTS_PER_MINUTE = int(os.getenv("HENRIK_REQUESTS_PER_MINUTE", "30"))
+DEFAULT_REQUESTS_PER_MINUTE = int(os.getenv("HENRIK_REQUESTS_PER_MINUTE", "60"))
 DEFAULT_SAFETY_FACTOR = float(os.getenv("HENRIK_RATE_LIMIT_SAFETY_FACTOR", "1.10"))
 DEFAULT_DOWNLOAD_WORKERS = int(os.getenv("HENRIK_DOWNLOAD_WORKERS", "4"))
 

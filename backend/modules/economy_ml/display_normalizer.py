@@ -83,7 +83,11 @@ def normalize_purchase_for_display(purchase: dict[str, Any], *, is_pistol_round:
     if purchase.get("keep_armor") and armor:
         armor_name = f"{armor_name} conservada"
     source = purchase.get("weapon_source") or weapon.get("source") or "none"
-    if is_pistol_round and not purchase.get("weapon"):
+    is_free_classic = weapon_name.strip().lower() == "classic" and float(
+        purchase.get("weapon_purchase_cost") if purchase.get("weapon_purchase_cost") is not None
+        else weapon.get("purchase_cost") or weapon.get("cost") or 0
+    ) == 0
+    if (is_pistol_round and not purchase.get("weapon")) or is_free_classic:
         weapon_label, source_label = "Classic gratis", "Arma inicial gratis"
     elif source == "carried":
         weapon_label, source_label = weapon_name, "Arma conservada"

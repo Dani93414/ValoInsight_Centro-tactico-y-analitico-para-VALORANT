@@ -17,6 +17,8 @@ from .map_context import build_map_context
 from .player_profile import build_player_profile
 from .site_tendencies import build_site_tendencies
 from .ultimate_state import build_ultimate_state
+from .policy import recommend_economy_action
+from .model_registry import load_model_candidates
 
 
 class RoundEconomyRecommender:
@@ -72,6 +74,7 @@ def recommend_match_economy(match: dict) -> dict:
     players = match.get("players") or []
     output = []
     all_states = list(extract_match_round_states(match))
+    macro_candidate_cache: dict[tuple[str, str], list[tuple[dict, str]]] = {}
     for state in all_states:
         index = int(state.get("round_number") or 1) - 1
         round_obj = rounds[index] if 0 <= index < len(rounds) else {}
@@ -88,9 +91,41 @@ def recommend_match_economy(match: dict) -> dict:
                                              side=state.get("side")).to_dict(),
             "site_tendencies": build_site_tendencies(match, round_number=int(state.get("round_number") or 1),
                                                      team_id=str(state.get("team_id") or "")).to_dict(),
-            "enemy_economy": build_enemy_economy_context(enemy_state, previous_round=previous).to_dict(),
+            "enemy_economy": build_enemy_economy_context(
+                enemy_state, previous_round=previous,
+                round_number=int(state.get("round_number") or 1),
+                is_pistol_round=bool(state.get("is_pistol_round")),
+            ).to_dict(),
             "player_profiles": {}, "ultimates": {}, "armor_durability": {}, "ability_usage": {},
         }
+        model_key = (str(state.get("rank_name") or ""), str(state.get("rank_group") or ""))
+        if model_key not in macro_candidate_cache:
+            macro_candidate_cache[model_key] = load_model_candidates(*model_key)
+        macro_result = recommend_economy_action(state, model_candidates=macro_candidate_cache[model_key])
+        macro_guidance = {
+            "available": bool(macro_result.get("available")),
+            "source": macro_result.get("model_scope") or "rules_fallback",
+            "warnings": [] if macro_result.get("available") else [str(macro_result.get("reason") or "macro_model_unavailable")],
+            "recommended_action": macro_result.get("recommended_action"),
+            "model_scope": macro_result.get("model_scope"),
+            "confidence": float(macro_result.get("confidence") or 0),
+            "recommendation_strength": macro_result.get("recommendation_strength"),
+            "recommendation_margin": macro_result.get("recommendation_margin"),
+            "support_count_best_action": macro_result.get("support_count_best_action"),
+            "num_viable_alternatives": macro_result.get("num_viable_alternatives"),
+            "reason": macro_result.get("reason"),
+            "alternatives": [
+                {
+                    "action": item.get("action"),
+                    "is_available": item.get("is_available"),
+                    "team_plan_value": (item.get("team_plan") or {}).get("team_plan_value"),
+                    "reason_if_unavailable": item.get("reason_if_unavailable"),
+                    "historical_support": item.get("historical_support"),
+                }
+                for item in (macro_result.get("alternatives") or [])
+            ],
+        }
+        advanced_context["macro_model"] = macro_guidance
         inventories: list[PlayerInventoryState] = []
         observed: dict[str, dict] = {}
         meta: dict[str, dict] = {}
@@ -147,10 +182,25 @@ def recommend_match_economy(match: dict) -> dict:
             round_number=state["round_number"], team_id=state["team_id"], side=state.get("side") or "unknown",
             score_before={"team": state.get("team_score_before"), "enemy": state.get("enemy_score_before")},
             inventories=inventories, observed=observed, player_meta=meta,
-            context={**state, "side": state.get("side"), "advanced_context": advanced_context},
+            context={**state, "side": state.get("side"), "advanced_context": advanced_context,
+                     "macro_model_guidance": macro_guidance},
         ))
     match_id = str((match.get("matchInfo") or {}).get("matchId") or "UNKNOWN")
-    return {"available": True, "engine": "player_first_v10", "advanced_engine": "player_first_v11_contextual",
+    macro_active = any(((item.get("advanced_context") or {}).get("macro_model") or {}).get("available")
+                       for item in output)
+    loadout_active = any((((item.get("economy_projection") or {}).get("ml_prediction") or {}).get("available"))
+                         for item in output)
+    active = ["reglas y solver player-first"]
+    debug_limitations: list[str] = []
+    if macro_active:
+        active.append("modelo economico principal")
+    else:
+        debug_limitations.append("macro_economy_model_unavailable_rules_fallback")
+    if loadout_active:
+        active.append("ML auxiliar de victoria por loadout")
+    else:
+        debug_limitations.append("round_win_loadout_model_unavailable")
+    return {"available": True, "engine": "player_first_v10", "advanced_engine": "player_first_v11_contextual_stable",
             "match_id": match_id, "rounds": output,
-            "limitations": ["Reglas activas; ML auxiliar no cargado."],
-            "debug_limitations": ["ml_auxiliary_unavailable_rules_only"]}
+            "limitations": ["Motor activo: " + " + ".join(active) + "."],
+            "debug_limitations": debug_limitations}
