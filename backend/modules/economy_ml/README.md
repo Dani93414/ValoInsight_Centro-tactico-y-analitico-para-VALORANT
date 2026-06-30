@@ -40,6 +40,13 @@ Una Vandal conservada tiene `weapon_cost = 0` y `weapon_value = 2900`. Una
 Vandal recibida por drop tambien cuesta 0 al receptor, conserva valor 2900 y
 carga los 2900 creditos al comprador.
 
+La armadura usa el mismo contrato: `armor_cost` es el pago propio de esta
+ronda, `armor_purchase_cost` el precio de compra, `armor_value` su valor
+equipado, `armor_source` distingue `bought_self`, `carried`, `none` y
+`unknown`, y `keep_armor` solo es verdadero para `carried`. En rondas 1, 13,
+overtime y resets de mitad se elimina todo carryover antes de generar planes;
+la Classic es equipamiento inicial, no un arma conservada.
+
 ## Normalizacion Y Mensajes
 
 `display_normalizer.py` convierte UUID, nombres localizados y placeholders en
@@ -57,6 +64,15 @@ tecnicos y `limitations` agrupa limitaciones globales como la ausencia del ML
 auxiliar. En pistol, la Classic inicial se explica como arma gratuita y los
 planes usan etiquetas `PISTOL_DEFAULT`, `PISTOL_UTILITY`, `PISTOL_ARMOR` o
 `PISTOL_SIDEARM`.
+
+Fuera de pistol, la clasificacion distingue `POST_PISTOL_CONVERSION`,
+`ANTI_ECO`, `BONUS_KEEP_INVENTORY`, `BONUS_UPGRADE`, `ECO`, `HALF_BUY`,
+`FORCE_BUY`, `BROKEN_BUY`, `FULL_BUY`, `LAST_ROUND_BUY` y `OVERTIME_BUY`.
+La politica post-pistol penaliza Odin/Operator, armas caras sin escudo y saldo
+residual extremo; una bonus premia conservar inventario y limita upgrades.
+
+`team_plan_value` es el valor interno sin cap usado para ordenar candidatos.
+`team_plan_score` es su representacion normalizada entre 0 y 1 para la UI.
 
 ## Contrato De Datos
 
@@ -122,6 +138,10 @@ legales y conserva los creditos restantes de cada jugador para las proyecciones.
 - Las pickups y drops observados pueden ser hipotesis con confianza reducida.
 - AFK compensation se marca como inferida si no esta confirmada.
 - Datos incompletos o corruptos de la API pueden degradar la confianza.
+- Sin contexto fiable de mapa, posicion y estrategia, Odin temprano se
+  penaliza por defecto aunque siga siendo legal.
+- La durabilidad exacta de armadura conservada no siempre esta disponible;
+  se conserva su clase y valor de catalogo.
 
 ## Comandos
 

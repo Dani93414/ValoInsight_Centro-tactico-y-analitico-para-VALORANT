@@ -14,7 +14,7 @@ from modules.economy_ml.display_normalizer import (
     normalize_purchase_for_display, normalize_warning_list, normalize_weapon_display,
 )
 from modules.economy_ml.ability_catalog import agent_abilities, clear_ability_catalog_cache
-from modules.economy_ml.round_recommender import recommend_match_economy
+from modules.economy_ml.round_recommender import RoundEconomyRecommender, recommend_match_economy
 from backend.tests.test_economy_ml import _match as economy_match
 
 
@@ -41,6 +41,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
             load_weapon_catalog=lambda: WEAPONS,
             load_gear_catalog=lambda: GEAR,
             find_weapon=lambda value: next((w for w in WEAPONS.values() if w["displayName"] == value), None),
+            find_gear=lambda value: next((g for g in GEAR.values() if g["displayName"] == value), None),
             agent_abilities=lambda agent: [],
         )
         self.catalogs.start()
@@ -121,6 +122,29 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(kept["weapon_value"], 2900)
         self.assertEqual(kept["self_cost"], 0)
         self.assertEqual(kept["expected_remaining"], 2000)
+
+    def test_carried_heavy_armor_has_zero_cost_and_full_value(self):
+        state = PlayerInventoryState("p", 2000, weapon_before_buy="Vandal",
+                                     armor_before_buy="Heavy Shield", survived_previous_round=True)
+        plans = LegalPurchaseGenerator().generate(state, limit=300)
+        kept = next(p for p in plans if p["keep_weapon"] and p["keep_armor"])
+        self.assertEqual(kept["armor_source"], "carried")
+        self.assertEqual(kept["armor_cost"], 0)
+        self.assertEqual(kept["armor_value"], 1000)
+        self.assertIn("Heavy Shield conservada", normalize_purchase_for_display(kept)["armor_label"])
+
+    def test_reset_round_discards_carried_weapon_and_armor(self):
+        state = PlayerInventoryState("p", 800, weapon_before_buy="Vandal", armor_before_buy="Heavy Shield",
+                                     survived_previous_round=True, weapon_after_buy="Classic")
+        result = RoundEconomyRecommender().recommend(
+            round_number=13, team_id="A", side="defense", inventories=[state],
+            observed={"p": {"weapon": "Classic", "armor": "Sin escudo", "spent": 0}},
+            context={"is_pistol_round": True},
+        )
+        purchase = result["players"][0]["recommended_purchase"]
+        self.assertFalse(purchase["keep_weapon"])
+        self.assertFalse(purchase["keep_armor"])
+        self.assertNotEqual(purchase["weapon_source"], "carried")
 
     def test_only_actual_spectre_is_marked_as_carried(self):
         plans = LegalPurchaseGenerator().generate(inv("p", 2000, "Spectre", True), limit=200)
@@ -217,6 +241,27 @@ class EconomyEngineV10Tests(unittest.TestCase):
         scorer = BuyScorer()
         self.assertGreater(scorer.score(stacked, {})["rule_penalty"], scorer.score(balanced, {})["rule_penalty"])
 
+    def test_post_pistol_odin_without_armor_loses_to_protected_spectre(self):
+        odin = {"puuid": "p", "weapon": {"displayName": "Odin", "cost": 3200}, "weapon_value": 3200,
+                "armor": None, "armor_value": 0, "ability_cost": 0, "self_cost": 3200,
+                "expected_remaining": 100, "keep_weapon": False}
+        spectre = {**odin, "weapon": {"displayName": "Spectre", "cost": 1600}, "weapon_value": 1600,
+                   "armor": GEAR["heavy"], "armor_value": 1000, "self_cost": 2600, "expected_remaining": 700}
+        context = {"round_number": 2, "is_second_round": True, "previous_round_won": True}
+        scorer = BuyScorer()
+        self.assertGreater(scorer.score([spectre], context)["team_plan_value"],
+                           scorer.score([odin], context)["team_plan_value"])
+        self.assertIn("heavy_weapon_early_penalty", scorer.score([odin], context)["debug_warnings"])
+
+    def test_team_plan_score_is_capped_but_internal_value_is_preserved(self):
+        loaded = [{"puuid": str(i), "weapon": {"displayName": "Vandal", "cost": 2900},
+                   "weapon_value": 2900, "armor": GEAR["heavy"], "armor_value": 1000,
+                   "abilities": [], "ability_cost": 500, "self_cost": 0,
+                   "expected_remaining": 9000, "keep_weapon": True} for i in range(5)]
+        result = BuyScorer().score(loaded, {"is_bonus_candidate": True})
+        self.assertLessEqual(result["team_plan_score"], 1)
+        self.assertIn("team_plan_value", result)
+
     def test_future_economy_preserves_each_player_distribution(self):
         players = [
             {"puuid": "a", "weapon": None, "armor": None, "abilities": [], "ability_cost": 0,
@@ -273,6 +318,9 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertTrue(any("costes de habilidad" in item for item in result))
         self.assertTrue(any("Compra de habilidades estimada" in item for item in result))
+
+    def test_placeholder_warning_is_debug_only(self):
+        self.assertEqual(normalize_warning_list(["invalid_placeholder_value:string"]), [])
 
     def test_pistol_empty_purchase_has_classic_free_display(self):
         display = normalize_purchase_for_display({"weapon": None, "armor": None, "abilities": [], "self_cost": 0}, is_pistol_round=True)

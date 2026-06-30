@@ -3831,7 +3831,7 @@ function PlayerFirstEconomyPanel({
         <table className="match-economy-optimal-table">
           <thead><tr>
             <th>Ronda</th><th>Equipo</th><th>Lado</th><th>Marcador</th><th>Plan</th>
-            <th>Score</th><th>Confianza</th><th>Economía futura</th><th>Jugadores</th>
+            <th>Score (0–1)</th><th>Confianza</th><th>Economía futura</th><th>Jugadores</th>
           </tr></thead>
           <tbody>
             {ml.rounds.map((round) => (
@@ -3852,6 +3852,7 @@ function PlayerFirstEconomyPanel({
                   <details className="match-economy-ml-detail">
                     <summary>Ver plan de {round.players.length} jugadores</summary>
                     <div className="match-economy-ml-players">
+                      {round.team_plan_value != null ? <small>Valor interno del plan: {formatNumber(round.team_plan_value, 3)}</small> : null}
                       <table className="match-economy-player-table">
                         <thead><tr>
                           <th>Jugador</th><th>Observado</th><th>Inferido</th><th>Recomendado</th>
@@ -3871,6 +3872,7 @@ function PlayerFirstEconomyPanel({
                                     {purchase.display?.source_label ?? (purchase.keep_weapon ? "Conservada" : purchase.bought_by ? "Recibida por drop" : "Compra propia")}
                                     {" · "}Coste arma {formatNumber(purchase.weapon_cost)}
                                     {" · "}Valor {formatNumber(purchase.weapon_value)}
+                                    {purchase.keep_armor ? ` · Armadura conservada (valor ${formatNumber(purchase.armor_value)})` : ""}
                                   </small>
                                   <small>{player.reason}</small>
                                 </td>

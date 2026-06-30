@@ -24,6 +24,11 @@ def _weapon_value(item: dict | None) -> float:
     return float(value if value is not None else _price(item))
 
 
+def _armor_value(item: dict | None) -> float:
+    value = (item or {}).get("armor_value")
+    return float(value if value is not None else _price(item))
+
+
 @dataclass
 class LegalPlayerPurchase:
     puuid: str
@@ -37,6 +42,10 @@ class LegalPlayerPurchase:
     weapon_value: float
     weapon_source: str
     armor_cost: float
+    armor_purchase_cost: float
+    armor_value: float
+    armor_source: str
+    keep_armor: bool
     ability_cost: float
     expected_remaining: float
     bought_by: str | None = None
@@ -50,7 +59,7 @@ class LegalPlayerPurchase:
 class LegalPurchaseGenerator:
     """Enumerates player-level legal choices. Team drops are solved later."""
     def generate(self, state: PlayerInventoryState, *, agent: str = "", limit: int = 48,
-                 ability_combination_limit: int = 64) -> list[dict[str, Any]]:
+                 ability_combination_limit: int = 64, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         credits = state.credits_before_buy
         weapons = [None]
         if state.weapon_before_buy:
@@ -78,8 +87,31 @@ class LegalPurchaseGenerator:
             "source": "bought_self",
         } for weapon in purchasable)
         armors = [None]
-        armors.extend(g for g in load_gear_catalog().values() if g.get("cost") is not None and _price(g) <= credits)
+        if state.armor_before_buy and state.armor_before_buy != "Sin escudo":
+            catalog_armor = find_gear(state.armor_before_buy)
+            catalog_value = _price(catalog_armor)
+            carried_armor = {
+                **(catalog_armor or {}),
+                "displayName": (catalog_armor or {}).get("displayName") or state.armor_before_buy,
+                "cost": 0,
+                "purchase_cost": 0,
+                "armor_value": catalog_value,
+                "source": "carried",
+            }
+            if not catalog_armor:
+                carried_armor["warnings"] = ["carried_armor_missing_catalog"]
+            armors.append(carried_armor)
+        armors.extend({
+            **gear,
+            "purchase_cost": _price(gear),
+            "armor_value": _price(gear),
+            "source": "bought_self",
+        } for gear in load_gear_catalog().values() if gear.get("cost") is not None and _price(gear) <= credits)
         ability_options = self._ability_options(agent, credits, max_combinations=ability_combination_limit)
+        if (context or {}).get("is_pistol_round"):
+            # A pistol plan buys a key piece of utility, not an automatic full kit.
+            pistol_cap = float((context or {}).get("pistol_utility_cap_per_player") or 500)
+            ability_options = [option for option in ability_options if option[1] <= pistol_cap]
         plans: list[dict[str, Any]] = []
         seen: set[tuple] = set()
         for weapon in weapons:
@@ -89,22 +121,27 @@ class LegalPurchaseGenerator:
             equipped_value = _weapon_value(weapon)
             wc = 0 if keep else purchase_cost
             for armor in armors:
-                ac = 0 if state.armor_before_buy and armor and str(armor.get("displayName")) == state.armor_before_buy else _price(armor)
+                armor_source = str((armor or {}).get("source") or "none")
+                keep_armor = armor_source == "carried"
+                armor_purchase_cost = float((armor or {}).get("purchase_cost") if (armor or {}).get("purchase_cost") is not None else _price(armor))
+                armor_value = _armor_value(armor)
+                ac = 0 if keep_armor else armor_purchase_cost
                 for abilities, ability_cost, warnings in ability_options:
                     total = wc + ac + ability_cost
                     requires_drop = bool(wc and total > credits and ac + ability_cost <= credits)
                     if total > credits + 1e-6 and not requires_drop:
                         continue
-                    key = ((weapon or {}).get("displayName"), source, (armor or {}).get("displayName"), tuple((a["name"], a["charges"]) for a in abilities))
+                    key = ((weapon or {}).get("displayName"), source, (armor or {}).get("displayName"), armor_source, tuple((a["name"], a["charges"]) for a in abilities))
                     if key in seen:
                         continue
                     seen.add(key)
                     self_cost = ac + ability_cost if requires_drop else total
-                    weapon_warnings = list((weapon or {}).get("warnings") or [])
+                    item_warnings = list((weapon or {}).get("warnings") or []) + list((armor or {}).get("warnings") or [])
                     payload = LegalPlayerPurchase(
                         state.puuid, weapon, armor, abilities, keep, self_cost, wc,
-                        purchase_cost, equipped_value, source, ac, ability_cost,
-                        credits-self_cost, warnings=list(dict.fromkeys(warnings + weapon_warnings)),
+                        purchase_cost, equipped_value, source, ac, armor_purchase_cost,
+                        armor_value, armor_source, keep_armor, ability_cost,
+                        credits-self_cost, warnings=list(dict.fromkeys(warnings + item_warnings)),
                     )
                     item = payload.to_dict()
                     item["requires_weapon_drop"] = requires_drop
@@ -122,6 +159,9 @@ class LegalPurchaseGenerator:
         carried = next((p for p in plans if p.get("keep_weapon")), None)
         if carried:
             must_keep.append(carried)
+        carried_armor = next((p for p in plans if p.get("keep_armor")), None)
+        if carried_armor:
+            must_keep.append(carried_armor)
         required = []
         for item in must_keep:
             if item not in required:

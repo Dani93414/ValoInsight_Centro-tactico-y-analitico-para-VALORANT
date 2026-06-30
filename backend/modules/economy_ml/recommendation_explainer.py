@@ -57,22 +57,42 @@ class RecommendationExplainer:
                 purchase["display"] = normalize_purchase_for_display(
                     purchase, is_pistol_round=bool((context or {}).get("is_pistol_round")),
                 )
+        placeholder_normalized = any(
+            warning.startswith("invalid_placeholder_value:")
+            for item in observed.values() for warning in item.get("debug_warnings") or []
+        )
+        round_warnings = normalize_warning_list(plan.get("warnings") or [])
+        if placeholder_normalized:
+            round_warnings.append("Algunos datos observados estaban incompletos y fueron normalizados.")
         return {
             "round_number": round_number, "team_id": team_id, "side": side, "score_before": score_before,
             "real_team_buy_observed": observed, "inferred_team_buy": public_inferred,
             "recommended_team_buy": plan.get("plan_kind"), "team_plan_score": plan.get("team_plan_score"),
+            "team_plan_value": plan.get("team_plan_value"),
             "confidence": confidence, "players": players, "alternatives": alternatives,
             "economy_projection": projection,
-            "warnings": normalize_warning_list(plan.get("warnings") or []),
-            "debug_warnings": list(dict.fromkeys(plan.get("warnings") or [])),
+            "warnings": list(dict.fromkeys(round_warnings)),
+            "debug_warnings": list(dict.fromkeys((plan.get("warnings") or []) +
+                [warning for item in observed.values() for warning in item.get("debug_warnings") or []])),
         }
 
     @staticmethod
     def _reason(purchase: dict, plan: dict) -> str:
+        kind = str(plan.get("plan_kind") or "")
         if purchase.get("bought_by"):
             return "Recibe un drop de arma; conserva sus creditos para escudo, utilidad y economia futura."
         if purchase.get("buys_for"):
             return "Compra un arma para un companero sin transferir escudo ni habilidades."
         if purchase.get("keep_weapon"):
-            return "Conserva el arma existente y limita la inversion."
-        return f"Compra legal dentro del plan {plan.get('plan_kind') or 'de equipo'}."
+            if kind.startswith("BONUS"):
+                return "Mantiene el arma para jugar el bonus y ahorrar para la siguiente compra completa."
+            return "Conserva el arma y compra solo la proteccion o utilidad necesaria."
+        if kind in {"POST_PISTOL_CONVERSION", "ANTI_ECO"}:
+            return "Convierte la ventaja post-pistol con arma, escudo y utilidad controlada, sin sobreinvertir."
+        if kind in {"ECO", "HALF_BUY"}:
+            return "Limita el gasto para sincronizar una compra completa en la siguiente ronda."
+        if kind == "FULL_BUY":
+            return "Completa una compra coordinada con arma, proteccion y utilidad clave."
+        if kind in {"LAST_ROUND_BUY", "OVERTIME_BUY"}:
+            return "Prioriza potencia inmediata porque no aporta valor reservar creditos."
+        return f"Compra coherente con el plan {kind.lower().replace('_', ' ') or 'de equipo'}."

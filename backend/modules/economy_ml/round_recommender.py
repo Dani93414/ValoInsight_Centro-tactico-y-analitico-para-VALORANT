@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from .inventory import PlayerInventoryState
@@ -22,18 +23,34 @@ class RoundEconomyRecommender:
                   inventories: list[PlayerInventoryState], observed: dict[str, dict],
                   player_meta: dict[str, dict] | None = None, context: dict | None = None,
                   score_before: Any = None) -> dict:
-        inferred = self.inference.infer_team(inventories, observed, context=context or {})
+        context = {**(context or {}), "round_number": round_number}
+        if is_inventory_reset_round(context, round_number):
+            inventories = [replace(
+                item, weapon_before_buy=None, armor_before_buy=None,
+                survived_previous_round=None, died_previous_round=None,
+                weapon_source="unknown", armor_source="unknown",
+            ) for item in inventories]
+        inferred = self.inference.infer_team(inventories, observed, context=context)
         meta = player_meta or {}
         plan = self.solver.solve(
             inventories,
             agents={puuid: str(data.get("agent") or "") for puuid, data in meta.items()},
-            context=context or {},
+            context=context,
         )
         return self.explainer.explain(
             round_number=round_number, team_id=team_id, side=side, score_before=score_before,
             observed=observed, inferred=inferred, plan=plan, player_meta=meta,
-            context=context or {},
+            context=context,
         )
+
+
+def is_inventory_reset_round(context: dict, round_number: int) -> bool:
+    return (
+        bool(context.get("is_pistol_round"))
+        or round_number in {1, 13}
+        or bool(context.get("is_overtime"))
+        or bool(context.get("is_half_reset"))
+    )
 
 
 def recommend_round_economy(**kwargs: Any) -> dict:
@@ -52,6 +69,7 @@ def recommend_match_economy(match: dict) -> dict:
         round_obj = rounds[index] if 0 <= index < len(rounds) else {}
         stats = {str(s.get("puuid")): s for s in round_obj.get("playerStats") or [] if s.get("puuid")}
         previous = rounds[index-1] if index > 0 else None
+        reset_inventory = is_inventory_reset_round(state, int(state.get("round_number") or 1))
         credit_map = state.get("team_player_credit_estimates") or {}
         team_players = [p for p in players if p.get("teamId") == state.get("team_id") and p.get("puuid")]
         inventories: list[PlayerInventoryState] = []
@@ -65,6 +83,8 @@ def recommend_match_economy(match: dict) -> dict:
             normalized = normalize_observed_economy(economy)
             previous_normalized = normalize_observed_economy(previous_economy)
             survived = infer_player_survived_round(previous, puuid) if previous else None
+            if reset_inventory:
+                survived = None
             agent = str(player.get("characterName") or player.get("agentName") or player.get("characterId") or "")
             free_abilities = {
                 str(ability.get("name")): int(ability.get("free_charges_at_round_start") or 0)
@@ -73,9 +93,9 @@ def recommend_match_economy(match: dict) -> dict:
             }
             inventories.append(PlayerInventoryState(
                 puuid=puuid, credits_before_buy=float(credit_map.get(puuid) or 0),
-                weapon_before_buy=previous_normalized["weapon"] if survived else None,
+                weapon_before_buy=None if reset_inventory else previous_normalized["weapon"] if survived else None,
                 weapon_after_buy=normalized["weapon"],
-                armor_before_buy=previous_normalized["armor"] if survived else None,
+                armor_before_buy=None if reset_inventory else previous_normalized["armor"] if survived else None,
                 armor_after_buy=normalized["armor"],
                 survived_previous_round=survived,
                 died_previous_round=None if survived is None else not survived,

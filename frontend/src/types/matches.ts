@@ -209,6 +209,10 @@ export type LegalPlayerPurchase = {
   weapon_value: number;
   weapon_source: "bought_self" | "carried" | "dropped" | "none" | "unknown" | string;
   armor_cost: number;
+  armor_purchase_cost: number;
+  armor_value: number;
+  armor_source: "bought_self" | "carried" | "none" | "unknown" | string;
+  keep_armor: boolean;
   ability_cost: number;
   expected_remaining: number;
   bought_by?: string | null;
@@ -231,6 +235,8 @@ export type EconomyPlayerProjection = {
 
 export type EconomyProjection = {
   score?: number;
+  team_plan_score?: number;
+  team_plan_value?: number;
   round_win_probability?: number;
   match_win_probability?: number;
   ml_support?: number | null;
@@ -255,6 +261,7 @@ export type TeamPlanAlternative = {
   [key: string]: any;
   plan_kind: string;
   team_plan_score: number;
+  team_plan_value?: number;
   players: LegalPlayerPurchase[];
   economy_projection: EconomyProjection;
   valid: boolean;
@@ -288,6 +295,7 @@ export type EconomyMlRoundRecommendation = {
   inferred_team_buy: Record<string, EconomyPurchaseHypothesis[]>;
   recommended_team_buy: string;
   team_plan_score: number;
+  team_plan_value?: number;
   confidence: number;
   players: EconomyMlPlayerRecommendation[];
   alternatives: TeamPlanAlternative[];
