@@ -110,6 +110,9 @@ def recommend_match_economy(match: dict) -> dict:
                 for ability in agent_abilities(agent)
                 if int(ability.get("free_charges_at_round_start") or 0) > 0
             }
+            ability_usage = build_ability_usage_state(
+                previous, puuid=puuid, agent=agent, round_number=int(state.get("round_number") or 1),
+            )
             inventories.append(PlayerInventoryState(
                 puuid=puuid, credits_before_buy=float(credit_map.get(puuid) or 0),
                 weapon_before_buy=None if reset_inventory else previous_normalized["weapon"] if survived else None,
@@ -119,6 +122,8 @@ def recommend_match_economy(match: dict) -> dict:
                 survived_previous_round=survived,
                 died_previous_round=None if survived is None else not survived,
                 free_abilities_granted=free_abilities,
+                ability_charges_before_buy={} if reset_inventory else ability_usage.charges_carried_after_round,
+                ability_charges_confidence=0.0 if reset_inventory else ability_usage.confidence,
             ))
             advanced_context["player_profiles"][puuid] = build_player_profile(
                 match, puuid, round_number=int(state.get("round_number") or 1),
@@ -126,9 +131,7 @@ def recommend_match_economy(match: dict) -> dict:
             advanced_context["ultimates"][puuid] = build_ultimate_state(
                 previous, puuid=puuid, agent=agent, round_number=int(state.get("round_number") or 1),
             ).to_dict()
-            advanced_context["ability_usage"][puuid] = build_ability_usage_state(
-                previous, puuid=puuid, agent=agent, round_number=int(state.get("round_number") or 1),
-            ).to_dict()
+            advanced_context["ability_usage"][puuid] = ability_usage.to_dict()
             advanced_context["armor_durability"][puuid] = build_armor_durability_state(
                 previous, puuid=puuid, round_number=int(state.get("round_number") or 1),
                 armor_name=None if reset_inventory else previous_normalized["armor"] if survived else None,

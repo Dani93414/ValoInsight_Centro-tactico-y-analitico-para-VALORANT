@@ -42,6 +42,7 @@ class RecommendationExplainer:
                 "observed_armor_display": obs.get("armor_display"),
                 "inferred_real_purchase": best, "recommended_purchase": purchase,
                 "reason": self._reason(purchase, plan),
+                "context_reasons": self._context_reasons(purchase, plan, context or {}),
                 "warnings": normalize_warning_list(raw_warnings),
                 "debug_warnings": raw_warnings,
                 "confidence": best.get("confidence"),
@@ -49,8 +50,17 @@ class RecommendationExplainer:
         inference_confidence = min([p["confidence"] for p in players] or [.2])
         projection = plan.get("economy_projection") or {}
         data_confidence = float(projection.get("data_confidence") or .5)
-        ml_factor = 1.0 if projection.get("ml_support") is not None else .82
-        confidence = round(max(.1, min(1.0, inference_confidence * .65 + data_confidence * .35)) * ml_factor, 4)
+        contextual_confidence = float(projection.get("confidence") if projection.get("confidence") is not None else data_confidence)
+        ml_prediction = projection.get("ml_prediction") or {}
+        ml_confidence = float(ml_prediction.get("confidence") or .2)
+        advanced = (context or {}).get("advanced_context") or {}
+        important = [advanced.get(key) or {} for key in ("map_context", "enemy_economy", "site_tendencies")]
+        unavailable = sum(not item.get("available") for item in important)
+        availability_factor = max(.78, 1.0 - unavailable * .07)
+        ml_factor = 1.0 if ml_prediction.get("available") else .90
+        combined = (inference_confidence * .45 + data_confidence * .25 +
+                    contextual_confidence * .20 + ml_confidence * .10)
+        confidence = round(max(.1, min(1.0, combined * ml_factor * availability_factor)), 4)
         alternatives = plan.get("alternatives") or []
         for alternative in alternatives:
             for purchase in alternative.get("players") or []:
@@ -100,3 +110,31 @@ class RecommendationExplainer:
         if kind in {"LAST_ROUND_BUY", "OVERTIME_BUY"}:
             return "Prioriza potencia inmediata porque no aporta valor reservar creditos."
         return f"Compra coherente con el plan {kind.lower().replace('_', ' ') or 'de equipo'}."
+
+    @staticmethod
+    def _context_reasons(purchase: dict, plan: dict, context: dict) -> list[str]:
+        projection = plan.get("economy_projection") or {}
+        advanced = context.get("advanced_context") or {}
+        reasons: list[str] = []
+        enemy = (advanced.get("enemy_economy") or {}).get("enemy_buy_recommendation")
+        if enemy == "ENEMY_ECO":
+            reasons.append("La economia enemiga probable es eco; se evita sobreinvertir.")
+        elif enemy == "ENEMY_FULL_BUY":
+            reasons.append("La compra enemiga probable es completa; se prioriza potencia coordinada.")
+        if purchase.get("keep_weapon") and str(plan.get("plan_kind") or "").startswith("BONUS"):
+            reasons.append("Se conserva el arma para mantener el valor del bonus.")
+        puuid = str(purchase.get("puuid") or "")
+        ultimate = ((advanced.get("ultimates") or {}).get(puuid) or {})
+        if ultimate.get("ultimate_ready") and str(ultimate.get("agent") or "").lower() in {"jett", "chamber"}:
+            reasons.append("La ultimate lista reduce la necesidad de comprar un arma cara.")
+        durability = ((advanced.get("armor_durability") or {}).get(puuid) or {})
+        maximum = float(durability.get("armor_max_value") or 0)
+        remaining = durability.get("armor_value_remaining")
+        if maximum and remaining is not None and float(remaining) / maximum < .5:
+            reasons.append("La armadura conservada esta danada y conviene refrescarla si el presupuesto lo permite.")
+        if projection.get("site_adjustment", 0) > 0:
+            site = (advanced.get("site_tendencies") or {}).get("likely_attack_site")
+            reasons.append(f"La utilidad encaja con la tendencia observada del site {site or 'probable'}.")
+        if projection.get("player_fit_adjustment", 0) > 0:
+            reasons.append("El arma tiene buen ajuste con el historial previo del jugador.")
+        return reasons

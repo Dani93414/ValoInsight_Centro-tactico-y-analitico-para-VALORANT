@@ -33,6 +33,7 @@ def build_ability_usage_state(previous_round: dict | None, *, puuid: str, agent:
     stat = next((item for item in (previous_round or {}).get("playerStats") or []
                  if str(item.get("puuid")) == str(puuid)), None)
     raw = (stat or {}).get("ability") or (stat or {}).get("abilityCasts") or {}
+    inventory = (stat or {}).get("abilityInventory") or (stat or {}).get("abilityCharges") or {}
     if not isinstance(raw, dict) or not raw:
         return AbilityUsageState(str(puuid), agent, round_number, False, free_charges_granted=free,
                                  warnings=["ability_usage_unavailable"])
@@ -41,8 +42,11 @@ def build_ability_usage_state(previous_round: dict | None, *, puuid: str, agent:
     by_name = {str(key): int(value or 0) for key, value in raw.items()
                if isinstance(value, (int, float)) and str(key).upper() not in {"C", "Q", "E", "X"}}
     used = {**by_name, **by_slot}
-    return AbilityUsageState(str(puuid), agent, round_number, True, by_slot, by_name, used, {}, {}, free,
-                             .75, "previous_round_player_stats", ["ability_charges_estimated"])
+    carried = {str(key): max(0, int(value or 0)) for key, value in inventory.items()
+               if isinstance(value, (int, float))} if isinstance(inventory, dict) else {}
+    warnings = [] if carried else ["ability_inventory_unavailable"]
+    return AbilityUsageState(str(puuid), agent, round_number, True, by_slot, by_name, used, carried, {}, free,
+                             .82 if carried else .6, "previous_round_player_stats", warnings)
 
 
 def carried_charges(previous_charges: dict[str, int], used: dict[str, int], *, carries_over: bool = True) -> dict[str, int]:

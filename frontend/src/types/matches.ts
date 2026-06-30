@@ -211,6 +211,9 @@ export type LegalPlayerPurchase = {
   armor_cost: number;
   armor_purchase_cost: number;
   armor_value: number;
+  armor_effective_value?: number;
+  armor_full_value?: number;
+  armor_durability_ratio?: number | null;
   armor_source: "bought_self" | "carried" | "none" | "unknown" | string;
   keep_armor: boolean;
   ability_cost: number;
@@ -250,6 +253,19 @@ export type EconomyProjection = {
   utility_value?: number;
   rule_penalty?: number;
   data_confidence?: number;
+  confidence?: number;
+  rule_score?: number;
+  ml_round_win_probability?: number | null;
+  future_economy_score?: number;
+  enemy_adjustment?: number;
+  map_adjustment?: number;
+  site_adjustment?: number;
+  player_fit_adjustment?: number;
+  utility_adjustment?: number;
+  ultimate_adjustment?: number;
+  armor_adjustment?: number;
+  ml_adjustment?: number;
+  contextual_adjustment?: number;
   players?: EconomyPlayerProjection[];
   players_can_full_buy_if_win?: number;
   players_can_full_buy_if_loss?: number;
@@ -280,6 +296,7 @@ export type EconomyMlPlayerRecommendation = {
   inferred_real_purchase: EconomyPurchaseHypothesis;
   recommended_purchase: LegalPlayerPurchase;
   reason: string;
+  context_reasons?: string[];
   warnings: string[];
   debug_warnings?: string[];
   confidence: number;

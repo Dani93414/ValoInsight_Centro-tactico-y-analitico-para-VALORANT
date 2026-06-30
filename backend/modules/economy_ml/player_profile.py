@@ -8,6 +8,27 @@ from .content_catalog import weapon_role
 from .display_normalizer import normalize_weapon_display
 
 
+def _event_count(value: Any) -> int:
+    if isinstance(value, list):
+        return len(value)
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _damage_total(value: Any) -> float:
+    if isinstance(value, list):
+        return sum(float(item.get("damage") or item.get("damageDealt") or 0)
+                   for item in value if isinstance(item, dict))
+    if isinstance(value, dict):
+        return float(value.get("damage") or value.get("damageDealt") or 0)
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 @dataclass
 class PlayerStyleProfile:
     puuid: str
@@ -50,10 +71,11 @@ def build_player_profile(match: dict, puuid: str, *, round_number: int, minimum_
         weapon = normalize_weapon_display(economy.get("weapon"))["displayName"]
         if weapon not in {"Arma no observada", "Classic"}:
             usage[weapon] += 1
-            kills[weapon] += int(stat.get("kills") or 0)  # estimated attribution when kill events lack weapon.
-            damage[weapon] += float(stat.get("damage") or stat.get("damageDealt") or 0)
-            headshots[weapon] += int(stat.get("headshots") or 0)
-            shots[weapon] += int(stat.get("headshots") or 0) + int(stat.get("bodyshots") or 0) + int(stat.get("legshots") or 0)
+            kills[weapon] += _event_count(stat.get("kills"))  # estimated attribution when kill events lack weapon.
+            damage[weapon] += _damage_total(stat.get("damage") or stat.get("damageDealt"))
+            headshots[weapon] += _event_count(stat.get("headshots"))
+            shots[weapon] += (_event_count(stat.get("headshots")) + _event_count(stat.get("bodyshots"))
+                              + _event_count(stat.get("legshots")))
         ability = stat.get("ability") or stat.get("abilityCasts") or {}
         if isinstance(ability, dict):
             utility_casts += sum(int(value or 0) for value in ability.values() if isinstance(value, (int, float)))
