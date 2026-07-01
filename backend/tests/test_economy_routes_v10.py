@@ -1,8 +1,11 @@
 import inspect
+import os
 import unittest
 from unittest.mock import patch
 
-from modules.economy_ml.interfaces.routes import match_economy_ml
+import pandas as pd
+
+from modules.economy_ml.interfaces.routes import match_economy_ml, train_economy_ml
 from modules.matches.interfaces.routes import get_match_economy_ml
 
 
@@ -28,6 +31,34 @@ class EconomyRoutesV10Tests(unittest.TestCase):
             self.assertIsInstance(payload["rounds"], list)
             self.assertIsInstance(payload["limitations"], list)
         self.assertEqual(set(main), set(direct))
+
+    def test_train_route_returns_round_win_result(self):
+        frame = pd.DataFrame({"x": [1]})
+        with patch.dict(os.environ, {"ECONOMY_ML_TRAIN_TOKEN": "token"}), \
+             patch("modules.economy_ml.interfaces.routes.mongo_match_repo.list_training_matches", return_value=[MATCH]), \
+             patch("modules.economy_ml.interfaces.routes.build_economy_dataset_from_matches", return_value=frame), \
+             patch("modules.economy_ml.interfaces.routes.validate_dataset", return_value={"valid": True}), \
+             patch("modules.economy_ml.interfaces.routes.save_dataset"), \
+             patch("modules.economy_ml.interfaces.routes.train_models", return_value={"available": True}), \
+             patch("modules.economy_ml.interfaces.routes.build_round_win_dataset", return_value=frame), \
+             patch("modules.economy_ml.interfaces.routes.train_round_win_model", return_value={"available": True, "samples": 1}):
+            result = train_economy_ml("token")
+        self.assertTrue(result["available"])
+        self.assertTrue(result["round_win_loadout"]["available"])
+
+    def test_train_route_keeps_main_result_when_round_win_fails(self):
+        frame = pd.DataFrame({"x": [1]})
+        with patch.dict(os.environ, {"ECONOMY_ML_TRAIN_TOKEN": "token"}), \
+             patch("modules.economy_ml.interfaces.routes.mongo_match_repo.list_training_matches", return_value=[MATCH]), \
+             patch("modules.economy_ml.interfaces.routes.build_economy_dataset_from_matches", return_value=frame), \
+             patch("modules.economy_ml.interfaces.routes.validate_dataset", return_value={"valid": True}), \
+             patch("modules.economy_ml.interfaces.routes.save_dataset"), \
+             patch("modules.economy_ml.interfaces.routes.train_models", return_value={"available": True}), \
+             patch("modules.economy_ml.interfaces.routes.build_round_win_dataset", side_effect=RuntimeError("boom")):
+            result = train_economy_ml("token")
+        self.assertTrue(result["available"])
+        self.assertFalse(result["round_win_loadout"]["available"])
+        self.assertEqual(result["round_win_loadout"]["reason"], "round_win_training_failed")
 
 
 if __name__ == "__main__":

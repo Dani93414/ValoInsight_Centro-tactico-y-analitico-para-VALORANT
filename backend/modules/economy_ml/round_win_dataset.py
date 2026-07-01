@@ -26,13 +26,50 @@ def _series(frame: pd.DataFrame, name: str, default: Any = 0) -> pd.Series:
     return pd.Series([default] * len(frame), index=frame.index)
 
 
+def _enemy_projected_values(source: pd.DataFrame) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Build training treatment values; inference uses pre-round projections."""
+    credits = pd.to_numeric(_series(source, "enemy_estimated_credits_before_buy"), errors="coerce").fillna(0)
+    case = _series(source, "enemy_economy_case", "ENEMY_UNKNOWN").fillna("ENEMY_UNKNOWN").astype(str)
+    weapon = pd.Series(credits * .38, index=source.index).clip(upper=7000)
+    armor = pd.Series(credits * .14, index=source.index).clip(upper=2500)
+    utility = pd.Series(credits * .07, index=source.index).clip(upper=1400)
+    profiles = {
+        "ENEMY_FULL_BUY": (.55, 14500, .20, 5000, .10, 2500),
+        "ENEMY_HALF_BUY": (.45, 8000, .18, 3000, .08, 1800),
+        "ENEMY_FORCE": (.45, 9000, .16, 3000, .08, 1800),
+        "ENEMY_ECO": (.30, 3000, .10, 1200, .08, 1000),
+        "ENEMY_BONUS": (.42, 9000, .18, 3500, .08, 1600),
+    }
+    for label, (wr, wc, ar, ac, ur, uc) in profiles.items():
+        mask = case == label
+        weapon.loc[mask] = (credits.loc[mask] * wr).clip(upper=wc)
+        armor.loc[mask] = (credits.loc[mask] * ar).clip(upper=ac)
+        utility.loc[mask] = (credits.loc[mask] * ur).clip(upper=uc)
+    pistol = case == "ENEMY_PISTOL"
+    weapon.loc[pistol], armor.loc[pistol], utility.loc[pistol] = 0, 0, 1000
+
+    # When historical enemy treatment columns exist, prefer them for training.
+    # These are never read at inference, where enemy_economy projects pre-round values.
+    observed_total = pd.to_numeric(_series(source, "enemy_action_total_loadout"), errors="coerce")
+    heavy = pd.to_numeric(_series(source, "enemy_action_heavy_armor_count"), errors="coerce").fillna(0)
+    regen = pd.to_numeric(_series(source, "enemy_action_regen_armor_count"), errors="coerce").fillna(0)
+    light = pd.to_numeric(_series(source, "enemy_action_light_armor_count"), errors="coerce").fillna(0)
+    observed_armor = heavy * 1000 + regen * 650 + light * 400
+    observed_utility = pd.to_numeric(_series(source, "enemy_plan_estimated_ability_spend"), errors="coerce").fillna(0)
+    observed = observed_total.notna() & (observed_total > 0)
+    armor.loc[observed] = observed_armor.loc[observed]
+    utility.loc[observed] = observed_utility.loc[observed]
+    weapon.loc[observed] = (observed_total.loc[observed] - observed_armor.loc[observed] - observed_utility.loc[observed]).clip(lower=0)
+    return weapon, armor, utility
+
+
 def validate_round_win_dataset(frame: pd.DataFrame) -> dict[str, Any]:
     leaked = sorted(FORBIDDEN_ROUND_WIN_FEATURES.intersection(frame.columns))
     missing = [name for name in ROUND_WIN_FEATURES + ["round_won"] if name not in frame]
     valid_labels = int(pd.to_numeric(frame.get("round_won"), errors="coerce").notna().sum()) if "round_won" in frame else 0
     return {"valid": not leaked and not missing and valid_labels > 0, "rows": len(frame),
             "valid_labels": valid_labels, "forbidden_features": leaked, "missing_features": missing,
-            "feature_version": "round-win-loadout-v1"}
+            "feature_version": "round-win-loadout-v2"}
 
 
 def build_round_win_dataset(economy_dataset: pd.DataFrame) -> pd.DataFrame:
@@ -47,9 +84,10 @@ def build_round_win_dataset(economy_dataset: pd.DataFrame) -> pd.DataFrame:
         + pd.to_numeric(_series(source, "action_light_armor_count"), errors="coerce").fillna(0) * 400
     )
     result["team_utility_value"] = pd.to_numeric(_series(source, "plan_estimated_ability_spend"), errors="coerce").fillna(0)
-    result["enemy_projected_weapon_value"] = 0
-    result["enemy_projected_armor_value"] = 0
-    result["enemy_projected_utility_value"] = 0
+    enemy_weapon, enemy_armor, enemy_utility = _enemy_projected_values(source)
+    result["enemy_projected_weapon_value"] = enemy_weapon
+    result["enemy_projected_armor_value"] = enemy_armor
+    result["enemy_projected_utility_value"] = enemy_utility
     mappings = {
         "rifle_count": "action_rifle_count", "operator_count": "action_operator_count",
         "smg_count": "action_smg_count", "heavy_shield_count": "action_heavy_armor_count",

@@ -319,7 +319,18 @@ export type EconomyContextSignal = {
 export type EconomyAdvancedContext = {
   map_context?: EconomyContextSignal & { map_id?: string | null; map_name?: string | null; map_url?: string | null; map_profile?: Record<string, unknown> };
   site_tendencies?: EconomyContextSignal & { likely_attack_site?: string | null; rounds_observed?: number };
-  enemy_economy?: EconomyContextSignal & { enemy_buy_recommendation?: string | null; enemy_full_buy_probability?: number };
+  enemy_economy?: EconomyContextSignal & {
+    enemy_buy_recommendation?: string | null;
+    enemy_full_buy_probability?: number;
+    enemy_projected_buy?: {
+      projected_weapon_value?: number;
+      projected_armor_value?: number;
+      projected_utility_value?: number;
+      projected_total_loadout_value?: number;
+      projected_rifle_count?: number;
+      projected_operator_count?: number;
+    };
+  };
   player_profiles?: Record<string, EconomyContextSignal & { preferred_weapons?: string[]; sample_size?: number }>;
   ultimates?: Record<string, EconomyContextSignal & { agent?: string; ultimate_ready?: boolean | null }>;
   armor_durability?: Record<string, EconomyContextSignal & { armor_type?: string | null; armor_value_remaining?: number | null; armor_max_value?: number | null }>;

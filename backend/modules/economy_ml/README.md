@@ -41,6 +41,8 @@ historicos como tratamiento y labels `round_won`. `train_round_win_model.py`
 aplica validacion anti-leakage, split temporal, preprocesado numerico/categorico
 y regresion logistica balanceada. Publica opcionalmente
 `artifacts/round_win_loadout.joblib` con `feature_version`, features y metricas.
+La version `round-win-loadout-v2` incorpora proyecciones pre-ronda enemigas;
+los snapshots v1 se rechazan para evitar tratarlos falsamente como enemy-aware.
 El script `scripts/entrenamiento_economia.py` ejecuta este entrenamiento despues
 del pipeline principal; si faltan muestras o clases informa `available=false`
 sin borrar ni bloquear el motor de reglas.
@@ -71,9 +73,10 @@ Los dos endpoints de lectura de partida usan el mismo contrato:
 
 Ambos devuelven `engine: player_first_v10`, `rounds`, `limitations`, compras
 observadas/inferidas/recomendadas y proyecciones por jugador. `predict.py`,
-`policy.py`, `action_profiles.py`, `team_plan.py`, `plan_allocator.py` y
-`player_recommendations.py` forman el pipeline macro legacy; ningun endpoint de
-produccion los usa para recomendar.
+`policy.py` y los modelos macro entrenados orientan la familia de compra del
+motor player-first. Su ajuste esta acotado por confianza y nunca evita la
+generacion, validacion o scoring legal por jugador. Si el modelo macro no esta
+disponible, el endpoint continua con reglas, contexto y el ML auxiliar.
 
 `confidence` combina calidad de reconciliacion e incertidumbre de inferencia.
 Los `warnings` indican costes ausentes, hipotesis no observables, falta de apoyo
@@ -199,6 +202,18 @@ legales y conserva los creditos restantes de cada jugador para las proyecciones.
   penaliza por defecto aunque siga siendo legal.
 - La durabilidad exacta de armadura conservada no siempre esta disponible;
   se conserva su clase y valor de catalogo.
+
+## Politica De Artefactos
+
+Los `.joblib` versionados son snapshots demo deliberados para que el TFG pueda
+ejecutarse localmente sin un entrenamiento inicial. No deben considerarse un
+registro de modelos de produccion. En un despliegue real se entrenan y publican
+fuera del repositorio, con almacenamiento y versionado de artefactos dedicado.
+
+No se ignoran ni eliminan desde `.gitignore` porque forman parte de la demo. Se
+regeneran con `scripts\entrenamiento_economia.py`; tanto el script como
+`POST /economy-ml/train` actualizan el modelo principal y
+`round_win_loadout.joblib`.
 
 ## Comandos
 

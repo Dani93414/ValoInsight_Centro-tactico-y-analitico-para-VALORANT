@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 import pandas as pd
+import joblib
 
 from modules.economy_ml.round_win_dataset import (ROUND_WIN_FEATURES, build_round_win_dataset,
                                                    validate_round_win_dataset)
@@ -28,6 +29,7 @@ class RoundWinModelTests(unittest.TestCase):
             "score_diff": [0] * rows, "loss_streak": [0] * rows,
             "team_estimated_credits_before_buy": [20000] * rows,
             "enemy_estimated_credits_before_buy": [18000] * rows,
+            "enemy_economy_case": ["ENEMY_FULL_BUY" if i % 2 else "ENEMY_ECO" for i in range(rows)],
             "map_name": ["Ascent"] * rows, "side": ["attack"] * rows,
         })
 
@@ -38,6 +40,11 @@ class RoundWinModelTests(unittest.TestCase):
         self.assertTrue(set(ROUND_WIN_FEATURES).issubset(dataset.columns))
         self.assertEqual(validate_round_win_features({"current_round_damage": 1}), ["current_round_damage"])
         self.assertNotIn("current_round_damage", dataset.columns)
+        self.assertGreater(dataset["enemy_projected_weapon_value"].max(), 0)
+        full = dataset[self._source()["enemy_economy_case"] == "ENEMY_FULL_BUY"]
+        eco = dataset[self._source()["enemy_economy_case"] == "ENEMY_ECO"]
+        self.assertGreater(full["enemy_projected_weapon_value"].mean(),
+                           eco["enemy_projected_weapon_value"].mean())
 
     def test_training_writes_loadable_artifact_and_predicts(self):
         dataset = build_round_win_dataset(self._source())
@@ -59,6 +66,12 @@ class RoundWinModelTests(unittest.TestCase):
             result = train_round_win_model(dataset, artifact_path=artifact, min_samples=20)
             self.assertFalse(result["available"])
             self.assertFalse(artifact.exists())
+
+    def test_old_enemy_unaware_artifact_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "round_win_v1.joblib"
+            joblib.dump({"feature_version": "round-win-loadout-v1", "pipeline": object()}, artifact)
+            self.assertFalse(RoundWinLoadoutModel(artifact).available())
 
 
 if __name__ == "__main__":

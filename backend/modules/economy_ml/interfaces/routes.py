@@ -21,6 +21,8 @@ from modules.economy_ml.economy_ledger import build_economy_ledger_report
 from modules.economy_ml.model_registry import status
 from modules.economy_ml.round_recommender import recommend_match_economy
 from modules.economy_ml.train import train_models
+from modules.economy_ml.round_win_dataset import build_round_win_dataset
+from modules.economy_ml.train_round_win_model import train_round_win_model
 from modules.matches.infrastructure import mongo_match_repo
 
 router = APIRouter()
@@ -104,12 +106,19 @@ def train_economy_ml(x_economy_ml_train_token: str | None = Header(default=None)
             )
         save_dataset(dataset)
         try:
-            return train_models(dataset)
+            main_result = train_models(dataset)
         except ValueError as exc:
             raise HTTPException(
                 status_code=422,
                 detail={"message": "No se pudo entrenar el modelo", "error": str(exc)},
             ) from exc
+        try:
+            round_win_result = train_round_win_model(build_round_win_dataset(dataset))
+        except Exception as exc:
+            round_win_result = {
+                "available": False, "reason": "round_win_training_failed", "error": str(exc),
+            }
+        return {**main_result, "round_win_loadout": round_win_result}
     finally:
         _training_lock.release()
 

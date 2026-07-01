@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 
-FEATURE_VERSION = "round-win-loadout-v1"
+FEATURE_VERSION = "round-win-loadout-v2"
 FORBIDDEN_ROUND_WIN_FEATURES = {
     "current_round_kills", "current_round_damage", "current_round_plant",
     "current_round_defuse", "current_round_result", "post_round_score",
@@ -26,7 +26,8 @@ class RoundWinLoadoutModel:
         if self.artifact_path.exists():
             try:
                 import joblib
-                self.model = joblib.load(self.artifact_path)
+                loaded = joblib.load(self.artifact_path)
+                self.model = loaded if not isinstance(loaded, dict) or loaded.get("feature_version") == FEATURE_VERSION else None
             except Exception:
                 self.model = None
 

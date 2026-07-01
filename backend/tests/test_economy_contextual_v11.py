@@ -81,6 +81,22 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertNotIn("B", result.plant_site_counts)
         self.assertFalse(build_site_tendencies({"roundResults": [{}]}, round_number=2).available)
 
+    def test_site_scoring_requires_sample_and_confidence(self):
+        base = {"team_plan_value": .5, "team_plan_score": .5, "round_win_probability": .5,
+                "weapon_value": 1600, "armor_value": 400, "utility_value": 300,
+                "synchronization": .5, "rule_penalty": 0, "data_confidence": .7,
+                "warnings": [], "debug_warnings": []}
+        player = {"puuid": "p", "weapon": {"displayName": "Spectre"}, "weapon_value": 1600,
+                  "armor_value": 400, "ability_cost": 300, "abilities": [{"tactical_types": ["postplant"]}]}
+        def score(rounds, confidence):
+            return apply_contextual_adjustments(base, [player], {"advanced_context": {"site_tendencies": {
+                "available": True, "rounds_observed": rounds, "confidence": confidence,
+                "likely_attack_site": "A", "plant_success_by_site": {"A": .8},
+            }}})["site_adjustment"]
+        self.assertEqual(score(2, .9), 0)
+        self.assertEqual(score(3, .49), 0)
+        self.assertGreater(score(3, .5), 0)
+
     def test_player_profile_is_prior_round_only_and_confidence_gated(self):
         rounds = []
         for weapon, kills in [("Operator", 2), ("Operator", 1), ("Operator", 2), ("Vandal", 0)]:
@@ -186,6 +202,15 @@ class ContextualEconomyV11Tests(unittest.TestCase):
             round_number=13,
         )
         self.assertEqual(pistol.enemy_buy_recommendation, "ENEMY_PISTOL")
+        self.assertEqual(pistol.enemy_projected_buy["projected_weapon_value"], 0)
+        full_enemy = build_enemy_economy_context({"team_id": "B", "team_player_credit_estimates": {
+            str(i): 5000 for i in range(5)
+        }})
+        eco_enemy = build_enemy_economy_context({"team_id": "B", "team_player_credit_estimates": {
+            str(i): 800 for i in range(5)
+        }})
+        self.assertGreater(full_enemy.enemy_projected_buy["projected_weapon_value"],
+                           eco_enemy.enemy_projected_buy["projected_weapon_value"])
 
         class FakeModel:
             def predict_proba(self, rows):
@@ -194,6 +219,27 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         prediction = model.predict_round_win({"team_weapon_value": 5000})
         self.assertTrue(prediction["available"])
         self.assertEqual(prediction["round_win_probability"], .8)
+
+    def test_contextual_model_receives_enemy_projected_values(self):
+        class SpyModel:
+            def __init__(self): self.features = None
+            def predict_round_win(self, features):
+                self.features = features
+                return {"available": False, "round_win_probability": None, "confidence": 0,
+                        "warnings": ["test"], "model_scope": None, "feature_version": None}
+        spy = SpyModel()
+        base = {"team_plan_value": .5, "team_plan_score": .5, "round_win_probability": .5,
+                "weapon_value": 8000, "armor_value": 2000, "utility_value": 500,
+                "synchronization": .5, "rule_penalty": 0, "data_confidence": .7,
+                "warnings": [], "debug_warnings": []}
+        apply_contextual_adjustments(base, [], {"advanced_context": {"enemy_economy": {
+            "enemy_projected_buy": {"projected_weapon_value": 12000,
+                                    "projected_armor_value": 4000,
+                                    "projected_utility_value": 1800},
+        }}}, spy)
+        self.assertEqual(spy.features["enemy_projected_weapon_value"], 12000)
+        self.assertEqual(spy.features["enemy_projected_armor_value"], 4000)
+        self.assertEqual(spy.features["enemy_projected_utility_value"], 1800)
 
     def test_enemy_distribution_and_bonus_are_not_average_only(self):
         mixed = build_enemy_economy_context({"team_id": "B", "team_player_credit_estimates": {
