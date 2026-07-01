@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from itertools import product
+from math import prod
 from typing import Any, Callable
 
 from .legal_purchase import LegalPurchaseGenerator
@@ -9,6 +11,12 @@ from .inventory import PlayerInventoryState
 from .contextual_scorer import apply_contextual_adjustments
 from .round_win_model import RoundWinLoadoutModel
 from .buy_classifier import classify_team_buy_action
+from .content_catalog import weapon_role
+
+
+MAX_CHOICES_PER_PLAYER = max(1, min(5, int(os.getenv("ECONOMY_SOLVER_CHOICES_PER_PLAYER", "4"))))
+MAX_TEAM_COMBINATIONS = max(64, int(os.getenv("ECONOMY_SOLVER_MAX_TEAM_COMBINATIONS", "320")))
+CONTEXTUAL_SHORTLIST_SIZE = max(8, int(os.getenv("ECONOMY_SOLVER_CONTEXTUAL_SHORTLIST", "16")))
 
 
 def _num(value: Any) -> float:
@@ -105,6 +113,21 @@ def _candidate_action(players: list[dict], context: dict) -> str:
     return classify_team_buy_action(economies, {"won": bool(context.get("previous_round_won"))})
 
 
+def _context_justifies_weapon(player: dict, context: dict) -> bool:
+    advanced = context.get("advanced_context") or {}
+    profile = (advanced.get("player_profiles") or {}).get(str(player.get("puuid"))) or {}
+    role = weapon_role(_weapon_name(player))
+    tendency = _num(profile.get(f"{role}_tendency"))
+    profile_fit = bool(profile.get("available") and _num(profile.get("confidence")) >= .5 and tendency >= .65)
+    map_profile = ((advanced.get("map_context") or {}).get("map_profile") or {})
+    map_fit = (
+        role == "sniper" and _num(map_profile.get("operator_affinity")) >= .15
+        or role == "shotgun" and _num(map_profile.get("shotgun_affinity")) >= .15
+        or role == "heavy" and _num(map_profile.get("heavy_affinity")) >= .15
+    )
+    return profile_fit or map_fit
+
+
 class BuyScorer:
     """Rules govern validity; an optional ML estimate only adjusts plan utility."""
     def score(self, players: list[dict], context: dict, ml_estimator: Callable[[dict], float] | None = None) -> dict:
@@ -164,6 +187,7 @@ class BuyScorer:
         sniper_count = sum(_is_sniper(p) for p in players)
         useful_weapons = sum(_is_useful_weapon(p) for p in players)
         strong_armor = sum(_strong_armor(p) for p in players)
+        armored = sum(_armor_value(p) >= 400 for p in players)
         can_full_buy = sum(_num(inv_credit) >= 3900 for inv_credit in (
             context.get("team_player_credit_estimates") or {}
         ).values())
@@ -174,6 +198,7 @@ class BuyScorer:
         enemy_buy = ((context.get("advanced_context") or {}).get("enemy_economy") or {}).get("enemy_buy_recommendation")
         average_remaining = sum(remaining) / max(1, len(remaining))
         full_buy = weapon_value >= 10500 or useful_weapons >= 4
+        candidate_full_buy = useful_weapons >= 4 and armored >= 3
         post_pistol = bool(context.get("is_post_pistol_conversion") or context.get("is_second_round") or _num(context.get("round_number")) in {2, 14})
         anti_eco = bool(context.get("is_anti_eco"))
         last_round = bool(context.get("is_last_round_before_switch") or context.get("is_match_point"))
@@ -223,12 +248,34 @@ class BuyScorer:
             penalty += .16; penalties.append("enemy_full_buy_underinvestment_penalty")
         if not pistol and not bonus_candidate and average_remaining > 5000 and useful_weapons < 4:
             penalty += .18; penalties.append("excessive_saving_penalty")
+        macro_family = _action_family(recommended_action) if macro_guidance.get("available") else "unknown"
+        if not pistol and not bonus_candidate and macro_family not in {"eco", "semi"}:
+            credits_by_player = context.get("team_player_credit_estimates") or {}
+            ultimates = ((context.get("advanced_context") or {}).get("ultimates") or {})
+            for player in players:
+                credits = _num(credits_by_player.get(str(player.get("puuid"))))
+                value, armor = _weapon_value(player), _armor_value(player)
+                if player.get("keep_weapon"):
+                    continue
+                ult = ultimates.get(str(player.get("puuid"))) or {}
+                ultimate_substitute = bool(ult.get("ultimate_ready") and str(ult.get("agent") or "").lower() in {"jett", "chamber"})
+                reduction = .35 if ultimate_substitute else .60 if _context_justifies_weapon(player, context) else 1.0
+                if credits >= 3900 and value < 1600:
+                    penalty += .16 * reduction; penalties.append("rich_player_low_weapon_full_buy_penalty")
+                if credits >= 5000 and value < 2400 and enemy_buy == "ENEMY_FULL_BUY":
+                    penalty += .14 * reduction; penalties.append("rich_player_underpowered_vs_full_buy")
+                if credits >= 7000 and value < 2400 and armor >= 400 and candidate_full_buy:
+                    penalty += .10 * reduction; penalties.append("high_credit_player_saved_too_much")
         heavy = [p for p in players if _weapon_name(p) in {"odin", "operator"}]
         early_non_decisive = int(_num(context.get("round_number"))) <= 4 and not (decisive_round or closing)
         if heavy and early_non_decisive:
             penalty += .20 * len(heavy); penalties.append("early_heavy_weapon_context_penalty")
         if heavy and enemy_buy in {"ENEMY_ECO", "ENEMY_HALF_BUY", "ENEMY_PISTOL"}:
-            penalty += .18 * len(heavy); penalties.append("heavy_weapon_enemy_low_buy_penalty")
+            weighted = sum(.5 if _context_justifies_weapon(player, context) and _armor_value(player) >= 400 else 1.0
+                           for player in heavy)
+            penalty += .18 * weighted; penalties.append("heavy_weapon_enemy_low_buy_penalty")
+        if heavy and useful_weapons < 4:
+            penalty += .12 * len(heavy); penalties.append("heavy_weapon_weak_team_composition_penalty")
         if not last_round:
             stranded = sum(0 < value < 400 for value in remaining)
             if stranded:
@@ -293,19 +340,40 @@ class TeamBuySolver:
             inv, agent=agents.get(inv.puuid, ""), context=context, ability_combination_limit=12,
         )) for inv in inventories]
         candidates: list[dict] = []
-        # Keep the search bounded while still constructing plans player-first.
-        for combination in product(*choices):
+        total_combinations = prod(len(items) for items in choices)
+        selected_indices = None
+        if total_combinations > MAX_TEAM_COMBINATIONS:
+            selected_indices = {
+                round(index * (total_combinations - 1) / (MAX_TEAM_COMBINATIONS - 1))
+                for index in range(MAX_TEAM_COMBINATIONS)
+            }
+        # Sample deterministically across the complete anchor grid when 4^5/5^5
+        # would otherwise make the synchronous endpoint impractical.
+        for combination_index, combination in enumerate(product(*choices)):
+            if selected_indices is not None and combination_index not in selected_indices:
+                continue
             players = [dict(item) for item in combination]
             self._resolve_weapon_drops(players, inventories, context)
             validation = self.validate(players, inventories)
             if not validation["valid"]:
                 continue
             score = self.scorer.score(players, context, ml_estimator)
-            if context.get("advanced_context"):
-                score = apply_contextual_adjustments(score, players, context, round_win_model)
             candidates.append({"players": players, "team_plan_score": score["team_plan_score"],
                                "team_plan_value": score["team_plan_value"], "economy_projection": score,
                                "valid": True, "warnings": validation["warnings"] + score["warnings"]})
+        if context.get("advanced_context") and candidates:
+            # Enumerate the wider legal search with cheap rule scoring, then run
+            # contextual/ML inference only on the strongest bounded shortlist.
+            candidates.sort(key=lambda item: item["team_plan_value"], reverse=True)
+            candidates = candidates[:max(CONTEXTUAL_SHORTLIST_SIZE, alternatives + 1)]
+            for candidate in candidates:
+                score = apply_contextual_adjustments(
+                    candidate["economy_projection"], candidate["players"], context, round_win_model,
+                )
+                candidate["team_plan_score"] = score["team_plan_score"]
+                candidate["team_plan_value"] = score["team_plan_value"]
+                candidate["economy_projection"] = score
+                candidate["warnings"] = list(dict.fromkeys(candidate["warnings"] + score["warnings"]))
         # The raw value preserves ranking detail; the capped score is an UI metric.
         candidates.sort(key=lambda item: item["team_plan_value"], reverse=True)
         if not candidates:
@@ -333,14 +401,24 @@ class TeamBuySolver:
                                key=lambda p: (_weapon_value(p) + _armor_value(p), -_num(p.get("self_cost"))), default=None)
         if protected_weapon:
             picks.append(protected_weapon)
+        full_buy_candidate = max((p for p in plans if _weapon_value(p) >= 2400 and _armor_value(p) >= 400),
+                                 key=lambda p: (_weapon_value(p) + _armor_value(p), -_num(p.get("self_cost"))), default=None)
+        if full_buy_candidate:
+            picks.append(full_buy_candidate)
         picks.extend([max_utility, ordered[len(ordered)//2], ordered[-1]])
         result: list[dict] = []
+        seen: set[tuple] = set()
         for item in picks:
-            if item not in result:
+            key = (
+                (item.get("weapon") or {}).get("displayName"), item.get("weapon_source"),
+                (item.get("armor") or {}).get("displayName"), item.get("armor_source"),
+                _num(item.get("ability_cost")),
+            )
+            if key not in seen:
+                seen.add(key)
                 result.append(item)
-        # At most 3^5 team combinations. Preserve meaningful economic anchors
-        # instead of sampling thousands of near-duplicate item permutations.
-        return result[:3]
+        # Default 4^5 combinations; operators may opt into five anchors via env.
+        return result[:MAX_CHOICES_PER_PLAYER]
 
     @staticmethod
     def _resolve_weapon_drops(players: list[dict], inventories: list[PlayerInventoryState],

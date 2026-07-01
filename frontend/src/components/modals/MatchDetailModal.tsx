@@ -3907,6 +3907,7 @@ function PlayerFirstEconomyPanel({
                         const advanced = round.advanced_context;
                         const map = advanced?.map_context;
                         const enemy = advanced?.enemy_economy;
+                        const enemyProjection = enemy?.enemy_projected_buy;
                         const readyUlts = Object.values(advanced?.ultimates ?? {}).filter((item) => item.ultimate_ready);
                         const profiles = Object.entries(advanced?.player_profiles ?? {}).filter(([, item]) => item.available);
                         const durability = Object.entries(advanced?.armor_durability ?? {}).filter(([, item]) => item.available);
@@ -3916,12 +3917,13 @@ function PlayerFirstEconomyPanel({
                         return <div className="match-economy-ml-players">
                           <small>Mapa: {map?.available ? map.map_name ?? "Conocido" : "No disponible"}</small>
                           <small>Compra enemiga probable: {enemy?.available ? economyCaseLabel(enemy.enemy_buy_recommendation) : "No disponible"}</small>
+                          {enemyProjection ? <small>Loadout enemigo proyectado: arma {formatNumber(enemyProjection.projected_weapon_value ?? 0)} · armadura {formatNumber(enemyProjection.projected_armor_value ?? 0)} · utilidad {formatNumber(enemyProjection.projected_utility_value ?? 0)}</small> : null}
                           <small>Site probable: {advanced.site_tendencies?.available ? advanced.site_tendencies.likely_attack_site ?? "N/D" : "No disponible"}</small>
                           <small>Ultimates listas: {readyUlts.length ? readyUlts.map((item) => item.agent).join(", ") : "Ninguna confirmada"}</small>
                           <small>Perfiles con muestra: {profiles.length || "No disponibles"}</small>
                           <small>Armaduras con durabilidad: {durability.length || "No disponible"}</small>
                           <small>ML ronda: {mlPrediction?.available && mlPrediction.round_win_probability != null ? formatPercent(mlPrediction.round_win_probability * 100, 1) : "No disponible"}</small>
-                          <small>Modelo económico: {macroModel?.available ? `${economyCaseLabel(macroModel.recommended_action)} · ${macroModel.model_scope ?? "scope desconocido"}` : `Fallback a reglas${macroModel?.reason ? ` · ${macroModel.reason}` : ""}`}</small>
+                          <small>Modelo económico: {macroModel?.available ? `recomienda ${economyCaseLabel(macroModel.recommended_action)}; candidato ${economyCaseLabel(round.economy_projection.macro_model_candidate_action)} · ${macroModel.model_scope ?? "scope desconocido"}` : `Fallback a reglas${macroModel?.reason ? ` · ${macroModel.reason}` : ""}`}</small>
                           <small>Confianza macro: {macroModel?.available && macroModel.confidence != null ? formatPercent(macroModel.confidence * 100, 1) : "No disponible"}</small>
                           <small>Ajuste modelo macro: {formatNumber(round.economy_projection.macro_model_adjustment ?? 0, 3)}</small>
                           <small>Ajuste mapa: {formatNumber(round.economy_projection.map_adjustment ?? 0, 3)}</small>

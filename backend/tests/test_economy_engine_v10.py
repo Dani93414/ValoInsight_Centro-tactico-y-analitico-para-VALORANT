@@ -275,6 +275,75 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertIn("excessive_saving_penalty", score["warnings"])
         self.assertEqual(TeamBuySolver._summarize(players, inventories, context), "BROKEN_BUY")
 
+    def test_rich_player_low_weapon_loses_to_rifle_and_ultimate_reduces_penalty(self):
+        def player(puuid, weapon, value):
+            return {"puuid": puuid, "weapon": {"displayName": weapon}, "weapon_value": value,
+                    "armor": GEAR["heavy"], "armor_value": 1000, "ability_cost": 0,
+                    "self_cost": value + 1000, "expected_remaining": 5000,
+                    "keep_weapon": False}
+        rifles = [player(str(i), "Vandal", 2900) for i in range(5)]
+        weak = [*rifles[:4], player("4", "Bandit", 900)]
+        context = {"round_number": 8, "team_player_credit_estimates": {str(i): 9000 for i in range(5)},
+                   "advanced_context": {"enemy_economy": {"enemy_buy_recommendation": "ENEMY_FULL_BUY"}}}
+        scorer = BuyScorer()
+        rifle_score = scorer.score(rifles, context)
+        weak_score = scorer.score(weak, context)
+        self.assertIn("rich_player_low_weapon_full_buy_penalty", weak_score["warnings"])
+        self.assertIn("rich_player_underpowered_vs_full_buy", weak_score["warnings"])
+        self.assertLess(weak_score["team_plan_value"], rifle_score["team_plan_value"])
+        with_ult = scorer.score(weak, {**context, "advanced_context": {
+            **context["advanced_context"], "ultimates": {"4": {
+                "ultimate_ready": True, "agent": "Jett",
+            }},
+        }})
+        self.assertLess(with_ult["rule_penalty"], weak_score["rule_penalty"])
+
+    def test_bonus_carried_weak_weapon_avoids_rich_player_penalty(self):
+        players = [{"puuid": str(i), "weapon": {"displayName": "Bandit"}, "weapon_value": 900,
+                    "armor": GEAR["heavy"], "armor_value": 1000, "ability_cost": 0,
+                    "self_cost": 0, "expected_remaining": 9000, "keep_weapon": True}
+                   for i in range(5)]
+        score = BuyScorer().score(players, {"round_number": 4, "is_bonus_candidate": True,
+            "team_player_credit_estimates": {str(i): 9000 for i in range(5)}})
+        self.assertNotIn("rich_player_low_weapon_full_buy_penalty", score["warnings"])
+
+    def test_reduced_choices_keeps_carried_and_rifle_armor_anchors(self):
+        plans = LegalPurchaseGenerator().generate(inv("p", 6000, "Spectre", True), limit=200)
+        with patch("modules.economy_ml.team_buy_solver.MAX_CHOICES_PER_PLAYER", 4):
+            choices = TeamBuySolver._reduced_choices(plans)
+        self.assertLessEqual(len(choices), 4)
+        self.assertTrue(any(item.get("keep_weapon") for item in choices))
+        self.assertTrue(any((item.get("weapon") or {}).get("displayName") == "Vandal"
+                            and (item.get("armor") or {}).get("displayName") == "Heavy Shield"
+                            for item in choices))
+
+    def test_contextual_scoring_uses_bounded_shortlist(self):
+        inventories = [inv(str(i), 6000) for i in range(5)]
+        def passthrough(score, players, context, model):
+            return {**score, "warnings": score.get("warnings", []),
+                    "debug_warnings": score.get("debug_warnings", [])}
+        with patch("modules.economy_ml.team_buy_solver.apply_contextual_adjustments",
+                   side_effect=passthrough) as contextual:
+            TeamBuySolver().solve(inventories, context={"advanced_context": {"map_context": {}}})
+        self.assertGreater(contextual.call_count, 0)
+        self.assertLessEqual(contextual.call_count, 16)
+
+    def test_early_heavy_without_justification_is_penalized_more_than_late_fit(self):
+        operator = {"puuid": "p", "weapon": {"displayName": "Operator"}, "weapon_value": 4700,
+                    "armor": GEAR["heavy"], "armor_value": 1000, "ability_cost": 0,
+                    "self_cost": 5700, "expected_remaining": 1000, "keep_weapon": False}
+        rifles = [{**operator, "puuid": str(i), "weapon": {"displayName": "Vandal"},
+                   "weapon_value": 2900, "self_cost": 3900} for i in range(1, 5)]
+        scorer = BuyScorer()
+        early = scorer.score([operator, *rifles], {"round_number": 3})
+        late = scorer.score([operator, *rifles], {"round_number": 8, "advanced_context": {
+            "map_context": {"map_profile": {"operator_affinity": .3}},
+            "player_profiles": {"p": {"available": True, "confidence": .8, "sniper_tendency": .8}},
+            "enemy_economy": {"enemy_buy_recommendation": "ENEMY_FULL_BUY"},
+        }})
+        self.assertIn("early_heavy_weapon_context_penalty", early["warnings"])
+        self.assertLess(late["rule_penalty"], early["rule_penalty"])
+
     def test_one_drop_per_donor_and_no_cheap_drop(self):
         donor = {"puuid": "rich", "weapon": WEAPONS["vandal"], "weapon_value": 2900,
                  "armor": GEAR["heavy"], "armor_value": 1000, "keep_weapon": False,

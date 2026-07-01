@@ -41,7 +41,11 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
     }
     site = advanced.get("site_tendencies") or {}
     likely_site = site.get("likely_attack_site")
-    if site.get("available") and likely_site:
+    site_available_for_scoring = (
+        site.get("available") and int(site.get("rounds_observed") or 0) >= 3
+        and _num(site.get("confidence")) >= .5 and likely_site
+    )
+    if site_available_for_scoring:
         plant_success = _num((site.get("plant_success_by_site") or {}).get(likely_site))
         retake_success = _num((site.get("retake_success_by_site") or {}).get(likely_site))
         weakness = _num((site.get("defense_site_weakness") or {}).get(likely_site))
@@ -68,12 +72,13 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
     player_fit = max(-.06, min(.06, player_fit))
 
     enemy = advanced.get("enemy_economy") or {}
+    enemy_projection = enemy.get("enemy_projected_buy") or {}
     enemy_buy = enemy.get("enemy_buy_recommendation")
     heavy = sum(_name(player) in {"odin", "operator"} for player in players)
     weak = sum(_num(player.get("weapon_value")) < 1600 for player in players)
-    if enemy_buy == "ENEMY_ECO" and heavy:
+    if enemy_buy in {"ENEMY_ECO", "ENEMY_HALF_BUY", "ENEMY_PISTOL"} and heavy:
         enemy_adjustment -= .10 * heavy
-        warnings.append("context_enemy_eco_overbuy")
+        warnings.append("context_enemy_low_buy_heavy_overbuy")
     if enemy_buy == "ENEMY_FULL_BUY" and weak:
         enemy_adjustment -= .055 * weak
         warnings.append("context_enemy_full_buy_underpowered")
@@ -122,8 +127,10 @@ def apply_contextual_adjustments(base: dict, players: list[dict], context: dict,
 
     features = {
         "team_weapon_value": _num(base.get("weapon_value")), "team_armor_value": _num(base.get("armor_value")),
-        "team_utility_value": _num(base.get("utility_value")), "enemy_projected_weapon_value": 0,
-        "enemy_projected_armor_value": 0, "enemy_projected_utility_value": 0,
+        "team_utility_value": _num(base.get("utility_value")),
+        "enemy_projected_weapon_value": _num(enemy_projection.get("projected_weapon_value")),
+        "enemy_projected_armor_value": _num(enemy_projection.get("projected_armor_value")),
+        "enemy_projected_utility_value": _num(enemy_projection.get("projected_utility_value")),
         "rifle_count": sum(weapon_role(_name(p)) == "rifle" for p in players),
         "operator_count": sum(_name(p) == "operator" for p in players),
         "smg_count": sum(weapon_role(_name(p)) == "smg" for p in players),

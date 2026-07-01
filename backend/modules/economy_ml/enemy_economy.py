@@ -48,19 +48,33 @@ def build_enemy_economy_context(enemy_state: dict | None, *, previous_round: dic
         return EnemyEconomyContext(False, str(enemy_state.get("team_id") or "") or None,
                                    warnings=["enemy_economy_unavailable"])
     enemy_players = []
+    projected_weapon_value = projected_armor_value = projected_utility_value = 0.0
+    projected_rifle_count = projected_operator_count = 0
     for puuid, value in credits.items():
         if value >= 5700:
             capacity, weapon = "operator_heavy", "operator"
+            weapon_value, armor_value, utility_value = 4700, 1000, 500
+            projected_operator_count += 1
         elif value >= 3900:
             capacity, weapon = "rifle_heavy", "rifle"
+            weapon_value, armor_value, utility_value = 2900, 1000, 500
+            projected_rifle_count += 1
         elif value >= 3300:
             capacity, weapon = "rifle_light", "rifle"
+            weapon_value, armor_value, utility_value = 2900, 400, 300
+            projected_rifle_count += 1
         elif value >= 2400:
             capacity, weapon = "smg_armor", "smg"
+            weapon_value, armor_value, utility_value = 1600, 650, 300
         elif value >= 1400:
             capacity, weapon = "pistol_force", "sidearm"
+            weapon_value, armor_value, utility_value = 800, 400, 200
         else:
             capacity, weapon = "pistol_save", "sidearm"
+            weapon_value, armor_value, utility_value = 0, 0, min(200, value)
+        projected_weapon_value += weapon_value
+        projected_armor_value += armor_value
+        projected_utility_value += utility_value
         enemy_players.append({"puuid": puuid, "credits": value, "buy_capacity": capacity,
                               "can_full_buy": value >= 3900, "can_force": value >= 1400,
                               "can_operator": value >= 5700, "projected_weapon_class": weapon})
@@ -81,6 +95,8 @@ def build_enemy_economy_context(enemy_state: dict | None, *, previous_round: dic
     bonus = saved_count >= 3
     if is_pistol_round or round_number in {1, 13}:
         label = "ENEMY_PISTOL"
+        projected_weapon_value, projected_armor_value, projected_utility_value = 0, 0, 1000
+        projected_rifle_count = projected_operator_count = 0
     elif bonus:
         label = "ENEMY_BONUS"
     elif full_count >= 4 or rifle_count >= 4:
@@ -96,7 +112,13 @@ def build_enemy_economy_context(enemy_state: dict | None, *, previous_round: dic
     save = low_count / len(values)
     force = sum(item["can_force"] for item in enemy_players) / len(values) * (1 - full)
     projected = {"total_credits": sum(values), "average_credits": round(sum(values) / len(values), 2),
-                 "median_credits": float(median(values)), "buy_class": label}
+                 "median_credits": float(median(values)), "buy_class": label,
+                 "projected_weapon_value": projected_weapon_value,
+                 "projected_armor_value": projected_armor_value,
+                 "projected_utility_value": projected_utility_value,
+                 "projected_total_loadout_value": projected_weapon_value + projected_armor_value + projected_utility_value,
+                 "projected_rifle_count": projected_rifle_count,
+                 "projected_operator_count": projected_operator_count}
     return EnemyEconomyContext(
         available=True, enemy_team_id=str(enemy_state.get("team_id") or "") or None,
         enemy_credits_by_player=credits, enemy_observed_previous_loadout=previous_loadout,
