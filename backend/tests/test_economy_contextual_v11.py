@@ -278,7 +278,9 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         plans = LegalPurchaseGenerator().generate(state, context=context, limit=100)
         carried = next(item for item in plans if item.get("keep_armor"))
         self.assertEqual(carried["armor_value"], 1000)
+        self.assertEqual(carried["armor_full_value"], 1000)
         self.assertEqual(carried["armor_effective_value"], 300)
+        self.assertEqual(carried["armor_durability_ratio"], .3)
         refreshed = next(item for item in plans if not item.get("keep_armor") and item.get("armor_value") == 1000)
         self.assertGreater(refreshed["armor_value"], carried["armor_effective_value"])
 

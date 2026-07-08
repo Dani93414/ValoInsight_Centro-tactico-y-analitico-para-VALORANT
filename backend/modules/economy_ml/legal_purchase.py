@@ -6,6 +6,7 @@ from typing import Any
 
 from .ability_catalog import agent_abilities
 from .content_catalog import find_gear, find_weapon, load_gear_catalog, load_weapon_catalog
+from .display_normalizer import normalize_armor_display
 from .inventory import PlayerInventoryState
 
 
@@ -97,14 +98,19 @@ class LegalPurchaseGenerator:
         durability = (((context or {}).get("advanced_context") or {}).get("armor_durability") or {}).get(state.puuid) or {}
         if state.armor_before_buy and state.armor_before_buy != "Sin escudo":
             catalog_armor = find_gear(state.armor_before_buy)
+            normalized_armor = normalize_armor_display(state.armor_before_buy)
             catalog_value = _price(catalog_armor)
+            if catalog_value <= 0:
+                catalog_value = float(normalized_armor.get("cost") or 0)
             maximum = float(durability.get("armor_max_value") or 0)
             remaining = durability.get("armor_value_remaining")
-            ratio = max(0.0, min(1.0, float(remaining) / maximum)) if maximum and remaining is not None else 0.75
+            ratio = max(0.0, min(1.0, float(remaining) / maximum)) if maximum and remaining is not None else 1.0
             effective_value = catalog_value * ratio
             carried_armor = {
                 **(catalog_armor or {}),
-                "displayName": (catalog_armor or {}).get("displayName") or state.armor_before_buy,
+                "displayName": (catalog_armor or {}).get("displayName")
+                               or normalized_armor.get("displayName")
+                               or state.armor_before_buy,
                 "cost": 0,
                 "purchase_cost": 0,
                 "armor_value": catalog_value,
@@ -113,7 +119,7 @@ class LegalPurchaseGenerator:
                 "armor_durability_ratio": ratio,
                 "source": "carried",
             }
-            if not catalog_armor:
+            if not catalog_armor and not normalized_armor.get("known"):
                 carried_armor["warnings"] = ["carried_armor_missing_catalog"]
             armors.append(carried_armor)
         armors.extend({

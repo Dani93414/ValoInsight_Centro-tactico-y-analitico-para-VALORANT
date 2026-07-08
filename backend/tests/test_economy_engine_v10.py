@@ -131,7 +131,33 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(kept["armor_source"], "carried")
         self.assertEqual(kept["armor_cost"], 0)
         self.assertEqual(kept["armor_value"], 1000)
+        self.assertEqual(kept["armor_full_value"], 1000)
+        self.assertEqual(kept["armor_effective_value"], 1000)
         self.assertIn("Heavy Shield conservada", normalize_purchase_for_display(kept)["armor_label"])
+
+    def test_all_carried_armor_variants_keep_full_value_at_zero_cost(self):
+        expected_values = {"Light Shield": 400, "Regen Shield": 650, "Heavy Shield": 1000}
+        for armor_name, expected_value in expected_values.items():
+            with self.subTest(armor=armor_name):
+                state = PlayerInventoryState(
+                    "p", 1000, weapon_before_buy="Vandal",
+                    armor_before_buy=armor_name, survived_previous_round=True,
+                )
+                plans = LegalPurchaseGenerator().generate(state, limit=300)
+                kept = next(plan for plan in plans if plan["keep_weapon"] and plan["keep_armor"])
+                self.assertEqual(kept["armor_source"], "carried")
+                self.assertEqual(kept["armor_cost"], 0)
+                self.assertEqual(kept["armor_purchase_cost"], 0)
+                self.assertEqual(kept["armor_value"], expected_value)
+                self.assertEqual(kept["armor_full_value"], expected_value)
+                self.assertEqual(kept["armor_effective_value"], expected_value)
+
+    def test_validate_rejects_carried_armor_without_plan_armor(self):
+        state = PlayerInventoryState("p", 1000, armor_before_buy="Heavy Shield")
+        invalid = TeamBuySolver._zero_plan(inv("p", 1000))
+        self.assertIsNone(invalid["armor"])
+        result = TeamBuySolver.validate([invalid], [state])
+        self.assertFalse(result["valid"])
 
     def test_reset_round_discards_carried_weapon_and_armor(self):
         state = PlayerInventoryState("p", 800, weapon_before_buy="Vandal", armor_before_buy="Heavy Shield",
