@@ -71,7 +71,9 @@ export function useMatchEconomyMl(
     queryKey: ["match", matchId, "economy-ml"],
     queryFn: () => getMatchEconomyMl(matchId!),
     enabled: !!matchId && enabled,
-    staleTime: DASHBOARD_STALE,
+    // A finished match is immutable, but its active economic model can change.
+    staleTime: 0,
+    refetchOnMount: "always",
     retry: false,
   });
 }

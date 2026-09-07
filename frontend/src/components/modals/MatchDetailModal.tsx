@@ -31,6 +31,7 @@ import {
 } from "recharts";
 import {
   useMatchById,
+  useMatchEconomyMl,
   useAgentes,
   useArmas,
   useMapasGeo,
@@ -38,7 +39,7 @@ import {
 } from "../../api/hooks";
 import LoadingModal from "../ui/LoadingModal";
 import MatchScoreProgressChart from "./MatchScoreProgressChart";
-import PlayerEconomyPanel from "./PlayerEconomyPanel";
+import EconomyRoundTable from "./EconomyRoundTable";
 import {
   safeDivide,
   formatDateTime,
@@ -56,6 +57,7 @@ import {
   classifyTeamEconomy,
 } from "../../utils/analytics/economyDecision";
 import type {
+  EconomyEfficiency,
   EconomyEfficiencyAnalysis,
 } from "../../utils/analytics/economyDecision";
 import {
@@ -88,6 +90,7 @@ import type {
   RawPlayer,
   RawPlayerLocation,
   RawRound,
+  EconomyMlResponse,
 } from "../../types/matches";
 import { TRADE_WINDOW_MS } from "../../constants/stats";
 import {
@@ -711,6 +714,576 @@ const economyBuyColors: Record<EconomyBuyType, string> = {
   semiEco: "#f3c567",
   fullBuy: "#46c878",
 };
+
+function getEfficiencyLabel(efficiency: EconomyEfficiency): string {
+  switch (efficiency) {
+    case "optimal":
+      return "Óptima";
+    case "acceptable":
+      return "Aceptable";
+    case "risky":
+      return "Arriesgada";
+    case "inefficient":
+      return "Ineficiente";
+    default:
+      return efficiency;
+  }
+}
+
+function economyRecommendationStatusLabel(status?: string | null): string {
+  switch (status) {
+    case "no_supported_counterfactual":
+      return "Sin contrafactual";
+    case "only_one_viable_action":
+      return "Única viable";
+    case "matched_real":
+      return "Coincide real";
+    case "actionable_recommendation":
+      return "Accionable";
+    default:
+      return "Observacional";
+  }
+}
+
+function economyCreditQualityLabel(quality?: string | null): string {
+  switch (quality) {
+    case "exact_observed":
+      return "Exacta";
+    case "reconciled_team":
+      return "Reconciliada";
+    case "rules_only":
+      return "Reglas";
+    case "inconsistent":
+      return "Inconsistente";
+    case "observed_economy":
+      return "Observada";
+    case "observed_with_reconciliation_warnings":
+      return "Avisos";
+    default:
+      return "N/D";
+  }
+}
+
+function economyCaseLabel(value?: string | null): string {
+  if (!value) return "N/D";
+  const labels: Record<string, string> = {
+    PISTOL_UTILITY: "Pistola con utilidad",
+    PISTOL_SIDEARM: "Pistola mejorada",
+    PISTOL_ARMOR: "Pistola con escudo",
+    PISTOL_DEFAULT: "Pistola estándar",
+    POST_PISTOL_CONVERSION: "Conversión tras pistola",
+    ANTI_ECO: "Antieco",
+    ECO: "Ahorro",
+    HALF_BUY: "Compra parcial",
+    FORCE_BUY: "Compra forzada",
+    FULL_BUY: "Compra completa",
+    BONUS_UPGRADE: "Mejora de la ronda de bonificación",
+    BONUS_KEEP_WEAPONS: "Ronda de bonificación conservando armas",
+    BONUS_KEEP_INVENTORY: "Ronda de bonificación conservando equipamiento",
+    BROKEN_BUY: "Compra descoordinada",
+    UNDERINVESTED_BUY: "Compra insuficiente",
+    LAST_HALF_ROUND_BUY: "Compra de última ronda de mitad",
+    ELIMINATION_BUY: "Compra para evitar eliminación",
+    CLOSING_BUY: "Compra para cerrar la partida",
+    OVERTIME_BUY: "Compra de prórroga",
+    ENEMY_PISTOL: "Ronda de pistolas",
+  };
+  if (labels[value]) return labels[value];
+  return value.replaceAll("_", " ").toLocaleLowerCase("es-ES");
+}
+
+function EconomyOptimalPanel({
+  ml,
+  selectedPlayerId,
+  analysis,
+  momentum,
+  teamAId,
+  teamBId,
+  teamALabel,
+  teamBLabel,
+  selectedTeamKey,
+  agents,
+}: {
+  ml: EconomyMlResponse | undefined;
+  selectedPlayerId: string;
+  analysis: EconomyEfficiencyAnalysis | null;
+  momentum: MatchMomentumResult | null;
+  teamAId: string;
+  teamBId: string;
+  teamALabel: string;
+  teamBLabel: string;
+  selectedTeamKey: "teamA" | "teamB";
+  agents: AgentContent[];
+}) {
+  if (ml?.available && (ml.engine === "player_first_v10" || ml.engine === "player_first_v12_decision_grade") && ml.rounds.length > 0) {
+    return <EconomyRoundTable key={selectedPlayerId} ml={ml} playerId={selectedPlayerId} agents={agents} />;
+  }
+  // LEGACY read-only fallback for saved responses. Production routes only emit player_first_v10.
+  if (ml?.available && ml.rounds.length > 0) {
+    const different = ml.rounds.filter(
+      (round) => round.real_buy_action !== round.recommended_action,
+    );
+    const validDeltas = ml.rounds
+      .map((round) => round.delta_team_plan_value)
+      .filter((value): value is number => typeof value === "number");
+    const averageConfidence = safeDivide(
+      ml.rounds.reduce((sum, round) => sum + round.confidence, 0),
+      ml.rounds.length,
+    );
+    const similarRounds = ml.rounds.reduce(
+      (sum, round) => sum + round.similar_rounds_summary.similar_rounds_found,
+      0,
+    );
+    const scopes = [...new Set(ml.rounds.map((round) => round.model_scope))].join(", ");
+    const ranks = [...new Set(ml.rounds.map((round) => round.rank_name))].join(", ");
+    const metadata = ml.model_metadata;
+    const modelCounts = metadata?.model_counts;
+    const globalMetrics = metadata?.global_metrics;
+    const trainedAt = metadata?.created_at
+      ? new Date(metadata.created_at).toLocaleString("es-ES", {
+          dateStyle: "short",
+          timeStyle: "short",
+        })
+      : "N/D";
+    const teamLabel = (teamId: string) =>
+      teamId === teamAId ? teamALabel : teamId === teamBId ? teamBLabel : teamId;
+
+    return (
+      <section className="match-economy-optimal-panel">
+        <div className="panel-header">
+          <div>
+            <h3 className="panel-title">Predicción de economía útil</h3>
+            <p className="panel-subtitle">
+              Estimación observacional calibrada para mejorar el valor de partida. Solo compara acciones viables con soporte histórico suficiente.
+            </p>
+          </div>
+        </div>
+        <div className="match-economy-optimal-summary">
+          <article><span>Modelo usado</span><strong>{scopes} · calibrado</strong></article>
+          <article><span>Rango analizado</span><strong>{ranks}</strong></article>
+          <article><span>Recomendaciones distintas</span><strong>{different.length}</strong></article>
+          <article><span>Mayor mejora estimada</span><strong>{formatPercent(Math.max(0, ...validDeltas) * 100, 1)}</strong></article>
+          <article><span>Confianza media</span><strong>{formatPercent(averageConfidence * 100, 1)}</strong></article>
+          <article><span>Rondas similares usadas</span><strong>{formatNumber(similarRounds)}</strong></article>
+          <article><span>Filas entrenamiento</span><strong>{formatNumber(metadata?.dataset_rows ?? 0)}</strong></article>
+          <article><span>Entrenado</span><strong>{trainedAt}</strong></article>
+          <article><span>Schema</span><strong>{metadata?.schema_version ? `v${metadata.schema_version}` : "N/D"}</strong></article>
+          <article>
+            <span>Modelos entrenados</span>
+            <strong>
+              G {modelCounts?.global ?? 0} · Gr {modelCounts?.rank_groups ?? 0} · R {modelCounts?.rank_names ?? 0}
+            </strong>
+          </article>
+          <article>
+            <span>Utilidad agentes</span>
+            <strong>{metadata?.includes_agent_utility ? `Sí · ${metadata.agent_utility_features_count ?? 0} señales` : "No"}</strong>
+          </article>
+          <article>
+            <span>ROC AUC global</span>
+            <strong>{globalMetrics?.roc_auc == null ? "N/D" : formatNumber(globalMetrics.roc_auc, 3)}</strong>
+          </article>
+        </div>
+        <div className="match-economy-optimal-table-wrap">
+          <table className="match-economy-optimal-table">
+            <thead><tr>
+              <th>Ronda</th><th>Equipo</th><th>Rango</th><th>Compra real</th>
+              <th>Créditos inicio</th><th>Spent</th><th>Loadout</th>
+              <th>Calidad créditos</th><th>Caso</th>
+              <th>Recomendación</th><th>Estado</th><th>Δ plan</th><th>Δ ronda</th><th>Δ fullbuy</th><th>Valor real</th><th>Valor recomendado</th>
+              <th>Δ prob. partida</th><th>Confianza</th><th>Motivo</th>
+            </tr></thead>
+            <tbody>
+              {ml.rounds.map((round) => (
+                <tr key={`${round.round_number}-${round.team_id}`}>
+                  <td>{round.round_number}</td>
+                  <td>{teamLabel(round.team_id)}</td>
+                  <td>{round.rank_name}</td>
+                  <td>{round.real_buy_action}</td>
+                  <td className="match-economy-number-cell">
+                    {formatNumber(round.prebuy_credits_selected ?? round.team_credits_before_buy ?? 0)}
+                    <small>selected</small>
+                  </td>
+                  <td className="match-economy-number-cell">{formatNumber(round.team_spent ?? 0)}</td>
+                  <td className="match-economy-number-cell">{formatNumber(round.team_loadout ?? 0)}</td>
+                  <td>
+                    <span className={`match-economy-quality-pill is-${round.credit_estimate_quality ?? "unknown"}`}>
+                      {economyCreditQualityLabel(round.credit_estimate_quality)}
+                    </span>
+                    {(round.team_possible_drop_credit_gap ?? 0) > 0 ? (
+                      <small>gap {formatNumber(round.team_possible_drop_credit_gap ?? 0)}</small>
+                    ) : null}
+                  </td>
+                  <td>
+                    <span className="match-economy-case-label">{economyCaseLabel(round.target_loadout_case)}</span>
+                    <small>obs. {economyCaseLabel(round.observed_cashflow_case ?? round.cashflow_case)}</small>
+                    <small>plan {economyCaseLabel(round.planned_cashflow_case)}</small>
+                  </td>
+                  <td>{round.recommended_action}</td>
+                  <td>
+                    <span className={`match-economy-status-pill is-${round.recommendation_status ?? "unknown"}`}>
+                      {economyRecommendationStatusLabel(round.recommendation_status)}
+                    </span>
+                    <small>{round.num_viable_alternatives ?? 0} viables</small>
+                    {round.credit_estimate_quality === "inconsistent" ? (
+                      <small>Baja confianza por créditos</small>
+                    ) : null}
+                    {round.in_sample ? <small>En entrenamiento</small> : null}
+                  </td>
+                  <td>{round.delta_team_plan_value == null ? "N/D" : `${round.delta_team_plan_value >= 0 ? "+" : ""}${formatPercent(round.delta_team_plan_value * 100, 1)}`}</td>
+                  <td>{round.delta_round_win == null ? "N/D" : `${round.delta_round_win >= 0 ? "+" : ""}${formatPercent(round.delta_round_win * 100, 1)}`}</td>
+                  <td>{round.delta_next_fullbuy == null ? "N/D" : `${round.delta_next_fullbuy >= 0 ? "+" : ""}${formatPercent(round.delta_next_fullbuy * 100, 1)}`}</td>
+                  <td>{round.real_action_estimated_match_win_probability === null ? "N/D" : formatPercent(round.real_action_estimated_match_win_probability * 100, 1)}</td>
+                  <td>{formatPercent(round.estimated_match_win_probability * 100, 1)}</td>
+                  <td>{round.delta_vs_real === null ? "N/D" : `${round.delta_vs_real >= 0 ? "+" : ""}${formatPercent(round.delta_vs_real * 100, 1)}`}</td>
+                  <td>{formatPercent(round.confidence * 100, 1)}</td>
+                  <td>
+                    <details className="match-economy-ml-detail">
+                      <summary>{round.explanation[0] ?? "Ver explicación"}</summary>
+                      <p>{round.explanation.join(" ")}</p>
+                      <small>
+                        Scope: {round.model_scope} · Similares: {round.similar_rounds_summary.similar_rounds_found}
+                        {" · "}Créditos: {economyCreditQualityLabel(round.credit_estimate_quality)}
+                        {" · "}Rules {formatNumber(round.prebuy_credits_rules ?? 0)}
+                        {" · "}Observed {round.prebuy_credits_observed == null ? "N/D" : formatNumber(round.prebuy_credits_observed)}
+                        {" · "}Selected {formatNumber(round.prebuy_credits_selected ?? round.team_credits_before_buy ?? 0)}
+                        {round.in_sample ? " · Partida dentro del entrenamiento" : ""}
+                        {round.credit_estimate_inconsistency_reason ? ` · ${round.credit_estimate_inconsistency_reason}` : ""}
+                        {round.team_drop_reconciliation_status ? ` · ${economyCaseLabel(round.team_drop_reconciliation_status)}` : ""}
+                      </small>
+                      {round.utility_summary && (
+                        <div className="match-economy-ml-utility">
+                          <span>Utilidad de composición: <strong>{formatPercent((round.utility_summary.team_total_utility_score ?? 0) * 100, 1)}</strong></span>
+                          <span>Resiliencia baja economía: <strong>{formatPercent((round.utility_summary.team_low_economy_resilience ?? 0) * 100, 1)}</strong></span>
+                          <span>Dependencia de armas: <strong>{formatPercent((round.utility_summary.team_weapon_dependency_score ?? 0) * 100, 1)}</strong></span>
+                          <span>Ventaja utilidad: <strong>{`${(round.utility_summary.utility_score_diff ?? 0) >= 0 ? "+" : ""}${formatPercent((round.utility_summary.utility_score_diff ?? 0) * 100, 1)}`}</strong></span>
+                        </div>
+                      )}
+                      {round.recommended_team_plan && (
+                        <div className="match-economy-ml-plan">
+                          <span>Estrategia <strong>{round.recommended_team_plan.macro_case ?? round.recommended_team_plan.team_buy_case ?? round.recommended_action}</strong></span>
+                          <span>Subtipo <strong>{round.recommended_team_plan.subtype ?? round.recommended_team_plan.team_buy_subtype ?? "N/D"}</strong></span>
+                          <span>Valor plan <strong>{formatPercent((round.recommended_team_plan.team_plan_value ?? 0) * 100, 1)}</strong></span>
+                          <span>Ganar ronda <strong>{round.recommended_team_plan.predicted_round_win == null ? "N/D" : formatPercent(round.recommended_team_plan.predicted_round_win * 100, 1)}</strong></span>
+                          <span>Ganar partida <strong>{round.recommended_team_plan.predicted_match_win == null ? formatPercent(round.estimated_match_win_probability * 100, 1) : formatPercent(round.recommended_team_plan.predicted_match_win * 100, 1)}</strong></span>
+                          <span>Fullbuy sig. <strong>{round.recommended_team_plan.next_round_fullbuy_probability == null ? "N/D" : formatPercent(round.recommended_team_plan.next_round_fullbuy_probability * 100, 1)}</strong></span>
+                          <span>Coherencia <strong>{formatPercent((round.recommended_team_plan.coherence_score ?? 0) * 100, 1)}</strong></span>
+                          <span>Riesgo <strong>{formatPercent((round.recommended_team_plan.economic_risk_score ?? 0) * 100, 1)}</strong></span>
+                          <span>Armas <strong>{formatNumber(round.recommended_team_plan.estimated_weapon_spend ?? round.recommended_team_plan.weapon_spend_estimate ?? 0)}</strong></span>
+                          <span>Escudos <strong>{formatNumber(round.recommended_team_plan.estimated_armor_spend ?? round.recommended_team_plan.armor_spend_estimate ?? 0)}</strong></span>
+                          <span>Utilidad <strong>{round.recommended_team_plan.estimated_ability_spend == null ? "N/D" : formatNumber(round.recommended_team_plan.estimated_ability_spend)}</strong></span>
+                          <span>Restante <strong>{formatNumber(round.recommended_team_plan.expected_remaining ?? round.recommended_team_plan.expected_remaining_after_buy ?? 0)}</strong></span>
+                        </div>
+                      )}
+                      {round.recommended_team_plan?.ability_budget_unknown ? (
+                        <p className="match-economy-ml-warning">Coste de habilidades no disponible. Se muestra foco de utilidad, no presupuesto exacto.</p>
+                      ) : null}
+                      {(round.recommended_team_plan?.warnings?.length ?? 0) > 0 ? (
+                        <ul className="match-economy-ml-warnings">
+                          {round.recommended_team_plan?.warnings?.map((warning: string) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {(round.limitations?.length ?? 0) > 0 ? (
+                        <ul className="match-economy-ml-limitations">
+                          {round.limitations?.map((limitation: string) => (
+                            <li key={limitation}>{limitation}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      <ul>
+                        {round.alternatives.map((alternative) => (
+                          <li key={alternative.action}>
+                            {alternative.action}: {alternative.estimated_match_win_probability === null
+                              ? alternative.reason_if_unavailable ?? "No disponible"
+                              : `${formatPercent(alternative.estimated_match_win_probability * 100, 1)} · soporte ${alternative.historical_support ?? "N/D"}`}
+                          </li>
+                        ))}
+                      </ul>
+                      {(round.player_recommendations?.length ?? 0) > 0 && (
+                        <div className="match-economy-ml-players">
+                          <div className="match-economy-ml-players-header">
+                            <strong>Plan por jugador</strong>
+                            <span>{teamLabel(round.team_id)} · ronda {round.round_number}</span>
+                          </div>
+                          <table className="match-economy-player-table">
+                            <thead>
+                              <tr>
+                                <th>Jugador</th>
+                                <th>Agente</th>
+                                <th>Créditos inicio</th>
+                                <th>Spent</th>
+                                <th>Loadout</th>
+                                <th>Compra real</th>
+                                <th>Recomendación</th>
+                                <th>Utilidad / ajuste</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {round.player_recommendations?.map((player: any) => (
+                                <tr key={player.puuid}>
+                                  <td>
+                                    <strong className="match-economy-player-name">{player.player_name}</strong>
+                                  </td>
+                                  <td>
+                                    <span className="match-economy-player-agent">{player.agent ?? "N/D"}</span>
+                                    <small>{player.role ?? "N/D"}</small>
+                                  </td>
+                                  <td className="match-economy-number-cell">
+                                    {formatNumber(player.credits_before_buy ?? player.estimated_credits ?? 0)}
+                                    <small>pre-buy</small>
+                                  </td>
+                                  <td className="match-economy-number-cell">
+                                    {formatNumber(player.real_spent ?? 0)}
+                                    <small>gastado</small>
+                                  </td>
+                                  <td className="match-economy-number-cell">
+                                    {formatNumber(player.real_loadout_value ?? 0)}
+                                    <small>equipo</small>
+                                  </td>
+                                  <td>
+                                    <span className="match-economy-loadout-chip">
+                                      {[player.real_weapon, player.real_armor].filter(Boolean).join(" + ") || "N/D"}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span className="match-economy-loadout-chip is-recommended">
+                                      {[player.recommended_weapon, player.recommended_armor].filter(Boolean).join(" + ") || "Ahorrar"}
+                                    </span>
+                                    <small>
+                                      Utilidad {formatPercent((player.agent_utility_score ?? 0) * 100, 1)}
+                                      {" · "}
+                                      Dep. arma {formatPercent((player.agent_weapon_dependency_score ?? 0) * 100, 1)}
+                                    </small>
+                                    {player.reason?.[0] ? <small>{player.reason[0]}</small> : null}
+                                  </td>
+                                  <td>
+                                    <small>
+                                      Presupuesto utilidad {player.recommended_ability_budget == null ? "N/D" : formatNumber(player.recommended_ability_budget)}
+                                    </small>
+                                    <small>
+                                      Foco {(player.recommended_utility_focus ?? player.recommended_ability_focus ?? []).join(", ") || "N/D"}
+                                    </small>
+                                    <small>
+                                      Estilo {formatPercent((Number(player.player_fit_score) || 0) * 100, 1)}
+                                      {" · "}
+                                      Racha {formatPercent((Number(player.player_form_score) || 0) * 100, 1)}
+                                    </small>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </details>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  }
+
+  if (!analysis || analysis.rounds.length === 0) {
+    return (
+      <section className="match-economy-optimal-panel">
+        <div className="panel-header">
+          <div>
+            <h3 className="panel-title">Predicción de economía útil</h3>
+            <p className="panel-subtitle">
+              {ml?.reason ?? "No hay modelo entrenado ni datos heurísticos suficientes."}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const momentumByRound = new Map(
+    (momentum?.rounds ?? []).map((round) => [round.roundNumber, round]),
+  );
+  const chartData = analysis.rounds.map((round) => ({
+    round: round.roundNumber,
+    teamA: round.teamA.efficiencyScore,
+    teamB: round.teamB.efficiencyScore,
+  }));
+  const teamRows = (round: EconomyEfficiencyAnalysis["rounds"][number]) => [
+    {
+      key: "teamA" as const,
+      roundNumber: round.roundNumber,
+      team: `${teamALabel}${selectedTeamKey === "teamA" ? " · Tu equipo" : " · Rival"}`,
+      data: round.teamA,
+      momentum: momentumByRound.get(round.roundNumber),
+    },
+    {
+      key: "teamB" as const,
+      roundNumber: round.roundNumber,
+      team: `${teamBLabel}${selectedTeamKey === "teamB" ? " · Tu equipo" : " · Rival"}`,
+      data: round.teamB,
+      momentum: momentumByRound.get(round.roundNumber),
+    },
+  ].sort((a, b) => (a.key === selectedTeamKey ? -1 : b.key === selectedTeamKey ? 1 : 0));
+  const flattenedRows = analysis.rounds.flatMap(teamRows);
+  const biggestError = [
+    analysis.summary.teamAMostInefficientRound,
+    analysis.summary.teamBMostInefficientRound,
+  ]
+    .filter((value): value is number => typeof value === "number")
+    .sort((a, b) => a - b)[0];
+
+  return (
+    <section className="match-economy-optimal-panel">
+      <div className="panel-header">
+        <div>
+          <h3 className="panel-title">Predicción de economía útil</h3>
+          <p className="panel-subtitle">
+            {ml?.reason ?? "Modelo no disponible."} Mostrando heurística actual como fallback visual.
+          </p>
+        </div>
+      </div>
+
+      <div className="match-economy-optimal-summary">
+        <article>
+          <span>Eficiencia de tu equipo</span>
+          <strong>
+            {formatPercent(
+              selectedTeamKey === "teamA"
+                ? analysis.summary.teamAAverageEfficiency
+                : analysis.summary.teamBAverageEfficiency,
+              0,
+            )}
+          </strong>
+        </article>
+        <article>
+          <span>Eficiencia rival</span>
+          <strong>
+            {formatPercent(
+              selectedTeamKey === "teamA"
+                ? analysis.summary.teamBAverageEfficiency
+                : analysis.summary.teamAAverageEfficiency,
+              0,
+            )}
+          </strong>
+        </article>
+        <article>
+          <span>Óptima equipo seleccionado</span>
+          <strong>
+            {selectedTeamKey === "teamA"
+              ? analysis.summary.teamAOptimalRounds
+              : analysis.summary.teamBOptimalRounds}
+          </strong>
+        </article>
+        <article>
+          <span>Óptima rival</span>
+          <strong>
+            {selectedTeamKey === "teamA"
+              ? analysis.summary.teamBOptimalRounds
+              : analysis.summary.teamAOptimalRounds}
+          </strong>
+        </article>
+        <article>
+          <span>Mayor error económico</span>
+          <strong>{biggestError ? roundLabel(biggestError - 1) : "Sin datos"}</strong>
+        </article>
+        <article>
+          <span>Mejor aprovechamiento económico</span>
+          <strong>
+            {analysis.summary.biggestEconomicUpsetRound
+              ? roundLabel(analysis.summary.biggestEconomicUpsetRound - 1)
+              : "Sin datos"}
+          </strong>
+        </article>
+      </div>
+
+      <div className="match-economy-efficiency-chart">
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={chartData}>
+            <CartesianGrid stroke="rgba(255,255,255,0.07)" vertical={false} />
+            <XAxis dataKey="round" stroke="#9ea8b8" tickLine={false} axisLine={false} />
+            <YAxis stroke="#9ea8b8" tickLine={false} axisLine={false} domain={[0, 100]} />
+            <ReTooltip
+              contentStyle={{
+                background: "#11151c",
+                border: "1px solid rgba(255,70,85,0.35)",
+                borderRadius: 10,
+                color: "#f4f7fb",
+              }}
+              labelFormatter={(label) => `Ronda ${label}`}
+            />
+            <Line
+              type="monotone"
+              dataKey="teamA"
+              name={teamALabel}
+              stroke={selectedTeamKey === "teamA" ? "#46c878" : "#ff4655"}
+              strokeWidth={selectedTeamKey === "teamA" ? 3 : 2}
+              dot={{ r: selectedTeamKey === "teamA" ? 3 : 2 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="teamB"
+              name={teamBLabel}
+              stroke={selectedTeamKey === "teamB" ? "#46c878" : "#ff4655"}
+              strokeWidth={selectedTeamKey === "teamB" ? 3 : 2}
+              dot={{ r: selectedTeamKey === "teamB" ? 3 : 2 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="match-economy-optimal-table-wrap">
+        <table className="match-economy-optimal-table">
+          <thead>
+            <tr>
+              <th>Ronda</th>
+              <th>Equipo</th>
+              <th>Compra real</th>
+              <th>Compra recomendada</th>
+              <th>Créditos inicio</th>
+              <th>Spent</th>
+              <th>Loadout</th>
+              <th>Resultado</th>
+              <th>Eficiencia</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {flattenedRows.map((row) => {
+              const momentumTag = row.momentum?.isSwingRound
+                ? "Ronda de alto momentum"
+                : row.data.isEconomicSwing
+                  ? "Swing económico"
+                  : "";
+              return (
+                <tr key={`${row.roundNumber}-${row.team}`}>
+                  <td>{row.roundNumber}</td>
+                  <td>{row.team}</td>
+                  <td>{row.data.realType}</td>
+                  <td>{row.data.recommendedType}</td>
+                  <td className="match-economy-number-cell">{formatNumber(row.data.credits ?? 0)}</td>
+                  <td className="match-economy-number-cell">{formatNumber(row.data.spent ?? 0)}</td>
+                  <td>{formatNumber(row.data.loadout)}</td>
+                  <td>{row.data.result === "win" ? "Victoria" : "Derrota"}</td>
+                  <td>
+                    <span className={`match-efficiency-pill is-${row.data.efficiency}`}>
+                      {getEfficiencyLabel(row.data.efficiency)} · {row.data.efficiencyScore}
+                    </span>
+                  </td>
+                  <td>
+                    {row.data.reason}
+                    {momentumTag ? <em>{momentumTag}</em> : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 function summarizeTeamEconomy(
   data: RoundTeamLoadout[],
@@ -4694,6 +5267,10 @@ export default function MatchDetailModal({
       section,
     });
   };
+  const {
+    data: economyMlData,
+    isLoading: economyMlLoading,
+  } = useMatchEconomyMl(matchId, activeSection === "economy");
   const [teamScoreboardMode, setTeamScoreboardMode] =
     useState<TeamScoreboardMode>("grouped");
   const [scoreboardSideFilter, setScoreboardSideFilter] =
@@ -7774,7 +8351,35 @@ export default function MatchDetailModal({
             )}
 
             {activeSection === "economy" && (
-              <div className="player-economy-section">
+            economyMlLoading && !economyMlData ? (
+              <LoadingModal placement="section" />
+            ) : (
+            <section
+              className="match-economy-panel"
+              role="region"
+              aria-label={activeSectionLabel}
+            >
+              <div className="panel-header">
+                <div>
+                  <h3 className="panel-title">Predicción económica</h3>
+                </div>
+              </div>
+
+              <EconomyOptimalPanel
+                ml={economyMlData}
+                selectedPlayerId={effectiveSelectedPlayerId}
+                analysis={economyEfficiencyAnalysis}
+                momentum={momentumAnalysis}
+                teamAId={teamAId}
+                teamBId={teamBId}
+                teamALabel={teamALabel}
+                teamBLabel={teamBLabel}
+                selectedTeamKey={selectedTeamKey}
+                agents={agents}
+              />
+
+              <h3 className="panel-title">Contexto de la partida</h3>
+              <div className="economy-chart-legend" aria-label="Leyenda de equipos"><span>Tu equipo</span><span>Rival</span></div>
               <div className="match-economy-chart-grid">
                 <article className="match-economy-chart-card">
                   <header>
@@ -7798,13 +8403,13 @@ export default function MatchDetailModal({
                         />
                         <Bar
                           dataKey="teamA"
-                          name={teamEconomySummaries[0]?.label ?? "Team A"}
+                          name={selectedTeamKey === "teamA" ? "Tu equipo" : "Rival"}
                           fill={selectedTeamKey === "teamA" ? "#46c878" : "#ff4655"}
                           radius={[8, 8, 3, 3]}
                         />
                         <Bar
                           dataKey="teamB"
-                          name={teamEconomySummaries[1]?.label ?? "Team B"}
+                          name={selectedTeamKey === "teamB" ? "Tu equipo" : "Rival"}
                           fill={selectedTeamKey === "teamB" ? "#46c878" : "#ff4655"}
                           radius={[8, 8, 3, 3]}
                         />
@@ -7816,7 +8421,7 @@ export default function MatchDetailModal({
                 <article className="match-economy-chart-card">
                   <header>
                     <h4>Rendimiento por compra</h4>
-                    <span>Winrate y ACS exacto por tipo de compra</span>
+                    <span>Victorias y puntuación media de combate por tipo de compra</span>
                   </header>
                   <div className="match-economy-performance-list">
                     {economyChartData.map((entry) => (
@@ -7840,7 +8445,7 @@ export default function MatchDetailModal({
                             </strong>
                           </span>
                           <span>
-                            <small>Winrate</small>
+                            <small>Victorias %</small>
                             <strong>{formatPercent(entry.winRate, 1)}</strong>
                           </span>
                           <span>
@@ -7856,7 +8461,7 @@ export default function MatchDetailModal({
                 <article className="match-economy-chart-card match-economy-chart-card--wide">
                   <header>
                     <h4>Evolución económica</h4>
-                    <span>Loadout de ambos equipos ronda a ronda</span>
+                    <span>Valor del equipamiento de cada equipo por ronda</span>
                   </header>
                   <div className="match-economy-chart">
                     <ResponsiveContainer width="100%" height={230}>
@@ -7876,7 +8481,7 @@ export default function MatchDetailModal({
                         <Line
                           type="monotone"
                           dataKey="teamA"
-                          name={teamEconomySummaries[0]?.label ?? "Team A"}
+                          name={selectedTeamKey === "teamA" ? "Tu equipo" : "Rival"}
                           stroke={selectedTeamKey === "teamA" ? "#46c878" : "#ff4655"}
                           strokeWidth={selectedTeamKey === "teamA" ? 3 : 2}
                           dot={{ r: selectedTeamKey === "teamA" ? 3 : 2 }}
@@ -7884,7 +8489,7 @@ export default function MatchDetailModal({
                         <Line
                           type="monotone"
                           dataKey="teamB"
-                          name={teamEconomySummaries[1]?.label ?? "Team B"}
+                          name={selectedTeamKey === "teamB" ? "Tu equipo" : "Rival"}
                           stroke={selectedTeamKey === "teamB" ? "#46c878" : "#ff4655"}
                           strokeWidth={selectedTeamKey === "teamB" ? 3 : 2}
                           dot={{ r: selectedTeamKey === "teamB" ? 3 : 2 }}
@@ -7894,8 +8499,10 @@ export default function MatchDetailModal({
                   </div>
                 </article>
               </div>
-              <PlayerEconomyPanel matchId={matchId} playerId={effectiveSelectedPlayerId} />
-              </div>
+
+
+            </section>
+            )
             )}
             </div>
 

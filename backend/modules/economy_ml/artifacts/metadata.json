@@ -4303,9 +4303,9 @@
     "rank_groups": {},
     "rank_names": {}
   },
-  "deployment_mode": "prediction_only",
-  "policy_enabled": false,
+  "deployment_mode": "experimental_full",
+  "policy_enabled": true,
   "policy_validation_passed": false,
-  "experimental_policy_override": false,
-  "policy_block_reason": "La politica no supera el intervalo de mejora; el artefacto se usa solo para prediccion."
+  "experimental_policy_override": true,
+  "policy_warning": "Politica experimental activada por solicitud explicita; no ha demostrado mejora doubly robust frente a las reglas."
 }

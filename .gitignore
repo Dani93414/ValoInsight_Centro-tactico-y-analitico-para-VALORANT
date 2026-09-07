@@ -87,14 +87,3 @@ backend/src/obtener_partidas/*_match_ids_*.json
 # Others
 .cache/
 .ipynb_checkpoints/
-
-# Reproducible individual economy artifacts (local player identifiers / binary data)
-backend/modules/economy_ml/artifacts/player_buy_v1/*.parquet
-backend/modules/economy_ml/artifacts/player_buy_v1/*.joblib
-backend/modules/economy_ml/artifacts/player_buy_v1/splits.json
-backend/modules/economy_ml/artifacts/player_buy_v2/*.parquet
-backend/modules/economy_ml/artifacts/player_buy_v2/*.joblib
-backend/modules/economy_ml/artifacts/player_buy_v2/splits.json
-
-# Local examples contain match/player identifiers
-backend/modules/economy_ml/artifacts/player_buy_v2/saving_examples.json

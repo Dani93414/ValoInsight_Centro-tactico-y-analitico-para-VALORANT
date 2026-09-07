@@ -386,6 +386,8 @@ export type EconomyAdvancedContext = {
 
 export type EconomyMlRoundRecommendation = {
   [key: string]: any;
+  recommendation_source?: "ml_guided_solver" | "deterministic_solver";
+  recommendation_is_experimental?: boolean;
   round_number: number;
   team_id: string;
   side: string;
