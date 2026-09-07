@@ -111,18 +111,29 @@ function findAbility(
   agentId?: string,
 ): ResolvedAbility | null {
   let normalized = normalizeLookup(value);
-  const agentKey = cleanId(agentId);
-  const weaponSlotAlias = ABILITY_WEAPON_SLOT_ALIASES.get(
-    `${agentKey}:${cleanId(value).toLowerCase()}`,
+  let resolvedAgentKey = cleanId(agentId);
+  let weaponSlotAlias = ABILITY_WEAPON_SLOT_ALIASES.get(
+    `${resolvedAgentKey}:${cleanId(value).toLowerCase()}`,
   );
+  if (!weaponSlotAlias && !resolvedAgentKey) {
+    const suffix = `:${cleanId(value).toLowerCase()}`;
+    const aliasEntry = [...ABILITY_WEAPON_SLOT_ALIASES.entries()].find(
+      ([key]) => key.endsWith(suffix),
+    );
+    if (aliasEntry) {
+      resolvedAgentKey = aliasEntry[0].slice(0, -suffix.length);
+      weaponSlotAlias = aliasEntry[1];
+    }
+  }
   const slotAlias = ABILITY_SLOT_ALIASES[normalized];
   if (weaponSlotAlias) {
     normalized = weaponSlotAlias;
   } else if (slotAlias) {
+    if (!resolvedAgentKey) return null;
     normalized = slotAlias;
   }
-  const agents = agentId
-    ? [agentsById.get(agentId), ...[...agentsById.values()].filter((agent) => cleanId(agent.uuid ?? agent.id) !== agentId)]
+  const agents = resolvedAgentKey
+    ? [agentsById.get(resolvedAgentKey)]
     : [...agentsById.values()];
 
   for (const agent of agents) {
@@ -149,7 +160,7 @@ function findAbility(
         (key) => key && normalizeLookup(key) === normalized,
       );
       const matchesAgentSlot =
-        currentAgentId === agentKey && normalizeLookup(slot) === normalized;
+        currentAgentId === resolvedAgentKey && normalizeLookup(slot) === normalized;
       if (matchesDirectly || matchesAgentSlot) {
         return {
           id:

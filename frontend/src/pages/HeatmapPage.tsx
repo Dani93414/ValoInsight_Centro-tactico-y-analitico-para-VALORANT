@@ -1,5 +1,10 @@
 import { useMemo } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { usePlayerDashboard } from "../api/hooks";
 import BackButton from "../components/BackButton";
 import FloatingActionButton from "../components/FloatingActionButton";
@@ -31,6 +36,7 @@ function parseSide(
 export default function HeatmapPage() {
   const { playerId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
   const { data: dashboardRaw, isLoading: loading } =
@@ -78,7 +84,21 @@ export default function HeatmapPage() {
     <div className="stats-container heatmap-page-container">
       <FloatingActionButton
         label="Volver"
-        onClick={() => navigate(`/estadisticas/${playerId}`)}
+        onClick={() => {
+          const profileScrollY = Number(
+            (location.state as { profileScrollY?: number } | null)
+              ?.profileScrollY,
+          );
+          if (Number.isFinite(profileScrollY)) {
+            window.sessionStorage.setItem(
+              `valoinsight:profile-scroll:${playerId}`,
+              String(profileScrollY),
+            );
+            navigate(-1);
+            return;
+          }
+          navigate(`/estadisticas/${playerId}`);
+        }}
         ariaLabel="Volver a estadisticas"
       />
 

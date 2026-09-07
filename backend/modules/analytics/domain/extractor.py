@@ -933,6 +933,11 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
     is_draw = bool(teams) and not any(team.get("won") for team in teams)
 
     player_team = {p["puuid"]: p.get("teamId") for p in players if p.get("puuid")}
+    player_agents = {
+        p["puuid"]: str(p.get("characterId") or "")
+        for p in players
+        if p.get("puuid") and p.get("characterId")
+    }
     team_members: Dict[str, Set[str]] = defaultdict(set)
     for player in players:
         puuid = player.get("puuid")
@@ -1231,7 +1236,12 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
 
         overview["weapon_stats"] = merge_precise_weapon_core_stats(
             overview.get("weapon_stats"),
-            compute_precise_weapon_stats_core(round_results, puuid, player_team),
+            compute_precise_weapon_stats_core(
+                round_results,
+                puuid,
+                player_team,
+                player_agents,
+            ),
         )
         overview["weapon_stats"].update(overview.get("armor_stats") or {})
         for side_name in (SIDE_ATTACK, SIDE_DEFENSE):
@@ -1241,6 +1251,7 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
                     side_round_results[side_name],
                     puuid,
                     player_team,
+                    player_agents,
                 ),
             )
             sides[side_name]["weapon_stats"].update(sides[side_name].get("armor_stats") or {})

@@ -144,8 +144,9 @@ export default function HeatmapCanvas({
   }, [events, radius, opacity, maxWeight, imgSize]);
 
   // ── Zoom (mouse wheel) ────────────────────────────────────
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     const dir = e.deltaY < 0 ? 1 : -1;
     setScale((s) => {
       const next = Math.min(Math.max(s + dir * 0.2, 1), 5);
@@ -156,6 +157,13 @@ export default function HeatmapCanvas({
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
 
   // ── Pan (mouse drag) ─────────────────────────────────────
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -274,7 +282,6 @@ export default function HeatmapCanvas({
     <div
       ref={containerRef}
       className="heatmap-canvas-container"
-      onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}

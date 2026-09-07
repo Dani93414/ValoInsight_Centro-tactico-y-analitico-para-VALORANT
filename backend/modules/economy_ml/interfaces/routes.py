@@ -138,3 +138,15 @@ def match_economy_ml(match_id: str):
     if not match:
         raise HTTPException(status_code=404, detail="Partida no encontrada")
     return get_match_economy_analysis(match)
+
+
+@router.get("/matches/{match_id}/players/{puuid}/purchases")
+def player_economy_purchases(match_id: str, puuid: str):
+    from modules.economy_ml.player_buy_service import player_purchase_analysis
+
+    match = mongo_match_repo.find_by_id(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    if not any(str(player.get("puuid")) == puuid for player in match.get("players") or []):
+        raise HTTPException(status_code=404, detail="Jugador no encontrado en esta partida")
+    return player_purchase_analysis(match, puuid)

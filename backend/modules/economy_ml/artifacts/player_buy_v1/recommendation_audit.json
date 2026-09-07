@@ -1,0 +1,16 @@
+{
+  "checked_rows": 4210,
+  "checked_matches": 20,
+  "evaluated_rows": 4086,
+  "recommendations": {
+    "both": 554,
+    "armor": 11,
+    "weapon": 280
+  },
+  "budget_violations": 0,
+  "split_overlap": 0,
+  "grade_range": [
+    42,
+    100
+  ]
+}

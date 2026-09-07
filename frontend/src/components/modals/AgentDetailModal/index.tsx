@@ -429,15 +429,22 @@ export default function AgentDetailModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay content-detail-modal-overlay" onClick={onClose}>
       <div
-        className="modal-panel agent-modal-panel"
+        className="content-detail-modal-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <button className="modal-close" onClick={onClose} aria-label="Cerrar modal">
-          ×
+        <button
+          type="button"
+          className="content-detail-close modal-close"
+          onClick={onClose}
+          aria-label="Cerrar modal"
+        >
+          <span className="content-detail-close-icon modal-close-icon" aria-hidden="true" />
         </button>
-
+      <div
+        className="modal-panel agent-modal-panel"
+      >
         <AgentModalHeader
           agentContent={agentContent}
           displayName={displayName}
@@ -468,6 +475,7 @@ export default function AgentDetailModal({
           <Multikills chartsReady={chartsReady} multikillData={multikillData} />
           <RecentMatches recentMatches={recentMatches} />
         </div>
+      </div>
       </div>
     </div>
   );

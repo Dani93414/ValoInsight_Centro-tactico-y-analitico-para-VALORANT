@@ -7,7 +7,7 @@ from modules.analytics.infrastructure.reference_data import (
 )
 
 from shared.combat_events import is_valid_kill, valid_assistants
-from shared.damage_attribution import resolve_damage_source
+from shared.damage_attribution import can_source_produce_kill, resolve_damage_source
 from shared.math_utils import safe_div as _safe_div_raw
 
 
@@ -124,6 +124,7 @@ def compute_precise_weapon_stats_core(
     round_results: Iterable[dict[str, Any]] | None,
     puuid: str,
     team_by_puuid: dict[str, str] | None = None,
+    agent_by_puuid: dict[str, str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     weapon_stats: dict[str, dict[str, Any]] = {}
 
@@ -168,10 +169,17 @@ def compute_precise_weapon_stats_core(
             damage_source = resolve_damage_source(
                 kill,
                 fallback_weapon_id=current_known_weapon_id,
-                killer_agent_id=kill.get("killerAgentId") or kill.get("killerAgentID"),
+                killer_agent_id=(
+                    kill.get("killerAgentId")
+                    or kill.get("killerAgentID")
+                    or (agent_by_puuid or {}).get(str(kill.get("killer") or ""))
+                ),
             )
+            if not can_source_produce_kill(damage_source):
+                continue
             kill_weapon_id = _normalize_weapon_id(damage_source.get("source_id"))
-            _ensure_weapon_bucket(weapon_stats, kill_weapon_id, damage_source)["kills"] += 1
+            bucket = _ensure_weapon_bucket(weapon_stats, kill_weapon_id, damage_source)
+            bucket["kills"] += 1
             kill_weapon_ids.append(kill_weapon_id)
             if not damage_source.get("is_ability"):
                 current_known_weapon_id = kill_weapon_id

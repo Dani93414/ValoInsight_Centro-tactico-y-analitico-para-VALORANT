@@ -69,15 +69,22 @@ export default function WeaponDetailModal({
   );
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay content-detail-modal-overlay" onClick={onClose}>
       <div
-        className="modal-panel weapon-modal-panel"
+        className="content-detail-modal-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <button className="modal-close" onClick={onClose}>
-          ✕
+        <button
+          type="button"
+          className="content-detail-close modal-close"
+          onClick={onClose}
+          aria-label="Cerrar modal"
+        >
+          <span className="content-detail-close-icon modal-close-icon" aria-hidden="true" />
         </button>
-
+      <div
+        className="modal-panel weapon-modal-panel"
+      >
         <div className="modal-header-block">
           <div className="weapon-modal-header">
             {weaponImage ? (
@@ -377,6 +384,7 @@ export default function WeaponDetailModal({
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );

@@ -52,7 +52,8 @@ type WeaponBreakdown = {
   shortName: string;
   kills: number;
   matches: number;
-  headshotPct: number;
+  headshotPct: number | null;
+  isAbility: boolean;
 };
 
 type MapDetailStats = {
@@ -165,6 +166,7 @@ export function useMapDetailStats({
         headshots: number;
         bodyshots: number;
         legshots: number;
+        isAbility: boolean;
       }
     >();
 
@@ -178,6 +180,16 @@ export function useMapDetailStats({
         playerTotals.rounds_played ?? overview.rounds,
       );
       const matchScore = toNumber(playerTotals.score);
+      const storedAcs = toNumber(overview.acs);
+      const calculatedAcs =
+        matchRounds > 0 ? safeDivide(matchScore, matchRounds) : 0;
+      const matchAcs =
+        storedAcs > 0 && storedAcs <= 1000
+          ? storedAcs
+          : calculatedAcs > 0 && calculatedAcs <= 1000
+            ? calculatedAcs
+            : 0;
+      const effectiveScore = matchAcs * Math.max(matchRounds, 0);
       const matchDamage = toNumber(overview.adr) * Math.max(matchRounds, 0);
 
       matches += 1;
@@ -186,7 +198,7 @@ export function useMapDetailStats({
       kills += matchKills;
       deaths += matchDeaths;
       assists += matchAssists;
-      totalScore += matchScore;
+      totalScore += effectiveScore;
       totalDamage += matchDamage;
       totalHeadshots += toNumber(overview.headshots);
       totalBodyshots += toNumber(overview.bodyshots);
@@ -195,13 +207,15 @@ export function useMapDetailStats({
       totalFirstKills += toNumber(overview.first_kills);
 
       const timestamp = toNumber(match.game_start_millis);
-      recentTimeline.push({
-        timestamp,
-        label: formatDate(timestamp),
-        shortLabel: "",
-        acs: safeDivide(matchScore, Math.max(matchRounds, 1)),
-        won: Boolean(match.won_match),
-      });
+      if (matchAcs > 0) {
+        recentTimeline.push({
+          timestamp,
+          label: formatDate(timestamp),
+          shortLabel: "",
+          acs: matchAcs,
+          won: Boolean(match.won_match),
+        });
+      }
 
       const agentKey = String(
         match.agent_id ?? match.agent_name ?? "unknown",
@@ -213,16 +227,13 @@ export function useMapDetailStats({
       if (currentAgent) {
         currentAgent.matches += 1;
         currentAgent.wins += match.won_match ? 1 : 0;
-        currentAgent.acsTotal += safeDivide(
-          matchScore,
-          Math.max(matchRounds, 1),
-        );
+        currentAgent.acsTotal += matchAcs;
       } else {
         agentMap.set(agentKey, {
           name: agentName,
           matches: 1,
           wins: match.won_match ? 1 : 0,
-          acsTotal: safeDivide(matchScore, Math.max(matchRounds, 1)),
+          acsTotal: matchAcs,
         });
       }
 
@@ -251,32 +262,30 @@ export function useMapDetailStats({
         if (!row || typeof row !== "object") continue;
         const item = row as Record<string, unknown>;
         const weaponKills = toNumber(item.kills);
-        const weaponDeaths = toNumber(item.deaths);
-        const weaponAssists = toNumber(item.assists);
-        const weaponRounds = toNumber(item.rounds);
-        const hasUsage =
-          weaponKills > 0 ||
-          weaponDeaths > 0 ||
-          weaponAssists > 0 ||
-          weaponRounds > 0;
-
-        if (!hasUsage) continue;
+        if (weaponKills <= 0) continue;
 
         const weaponKey = String(
-          item.weapon_id ??
+          item.source_id ??
+            item.weapon_id ??
             item.key ??
+            item.source_name ??
             item.weapon_name ??
             item.name ??
             "unknown",
         ).trim();
         const weaponName =
           String(
-            item.weapon_name ?? item.name ?? item.key ?? "Arma desconocida",
+            item.source_name ??
+              item.weapon_name ??
+              item.name ??
+              item.key ??
+              "Arma desconocida",
           ).trim() || "Arma desconocida";
+        const isAbility = Boolean(item.is_ability);
         const currentWeapon = weaponMap.get(weaponKey);
-        const headshots = toNumber(item.headshots);
-        const bodyshots = toNumber(item.bodyshots);
-        const legshots = toNumber(item.legshots);
+        const headshots = isAbility ? 0 : toNumber(item.headshots);
+        const bodyshots = isAbility ? 0 : toNumber(item.bodyshots);
+        const legshots = isAbility ? 0 : toNumber(item.legshots);
 
         if (currentWeapon) {
           currentWeapon.kills += weaponKills;
@@ -284,6 +293,7 @@ export function useMapDetailStats({
           currentWeapon.headshots += headshots;
           currentWeapon.bodyshots += bodyshots;
           currentWeapon.legshots += legshots;
+          currentWeapon.isAbility = currentWeapon.isAbility || isAbility;
         } else {
           weaponMap.set(weaponKey, {
             name: weaponName,
@@ -292,6 +302,7 @@ export function useMapDetailStats({
             headshots,
             bodyshots,
             legshots,
+            isAbility,
           });
         }
       }
@@ -376,10 +387,15 @@ export function useMapDetailStats({
         shortName: shortenLabel(entry.name),
         kills: entry.kills,
         matches: entry.matches,
-        headshotPct: pct(
-          entry.headshots,
-          entry.headshots + entry.bodyshots + entry.legshots,
-        ),
+        headshotPct:
+          !entry.isAbility &&
+          entry.headshots + entry.bodyshots + entry.legshots > 0
+            ? pct(
+                entry.headshots,
+                entry.headshots + entry.bodyshots + entry.legshots,
+              )
+            : null,
+        isAbility: entry.isAbility,
       }))
       .sort((a, b) => {
         if (b.kills !== a.kills) return b.kills - a.kills;

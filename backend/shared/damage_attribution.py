@@ -15,6 +15,20 @@ from modules.analytics.infrastructure.reference_data import (
 )
 
 
+_NON_LETHAL_ABILITY_IDS = {
+    "e370fa57-4757-3604-3648-499e1f642d3f:ultimate",  # Gekko - Thrash
+    "1dbf2edd-4729-0984-3115-daa5eed44993:ultimate",  # Clove - No me voy
+    "eb93336a-449b-9c1b-0a54-a891f7921d69:ability2",  # Phoenix - Bola curva
+}
+_NON_LETHAL_ABILITY_NAMES = {
+    "thrash",
+    "no me voy",
+    "not dead yet",
+    "bola curva",
+    "curveball",
+}
+
+
 def _clean_id(value: Any) -> str:
     text = str(value or "").strip()
     return text or "UNKNOWN"
@@ -26,6 +40,17 @@ def _readable_unknown(value: Any, fallback: str) -> str:
         return fallback
     text = re.sub(r"[_-]+", " ", text)
     return " ".join(part.capitalize() for part in text.split()) or fallback
+
+
+def can_source_produce_kill(source: dict[str, Any]) -> bool:
+    if not source.get("is_ability"):
+        return True
+    source_id = str(source.get("source_id") or "").strip().lower()
+    source_name = str(source.get("source_name") or "").strip().lower()
+    return (
+        source_id not in _NON_LETHAL_ABILITY_IDS
+        and source_name not in _NON_LETHAL_ABILITY_NAMES
+    )
 
 
 def resolve_damage_source(

@@ -262,7 +262,7 @@ export default function Home() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState("");
-  const [showScrollHint, setShowScrollHint] = useState(false);
+  const [showScrollHint, setShowScrollHint] = useState(true);
   const [activeSearchSection, setActiveSearchSection] =
     useState<SearchSectionId>("search");
   const [favoritePlayers, setFavoritePlayers] = useState<UserPlayer[]>([]);
@@ -515,15 +515,22 @@ export default function Home() {
       setShowScrollHint(!isNearBottom);
     };
 
-    updateScrollHintVisibility();
+    const initialFrame = window.requestAnimationFrame(updateScrollHintVisibility);
     window.addEventListener("scroll", updateScrollHintVisibility, {
       passive: true,
     });
     window.addEventListener("resize", updateScrollHintVisibility);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateScrollHintVisibility);
+    resizeObserver?.observe(document.documentElement);
 
     return () => {
+      window.cancelAnimationFrame(initialFrame);
       window.removeEventListener("scroll", updateScrollHintVisibility);
       window.removeEventListener("resize", updateScrollHintVisibility);
+      resizeObserver?.disconnect();
     };
   }, []);
 

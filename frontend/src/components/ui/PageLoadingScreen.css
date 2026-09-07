@@ -1,4 +1,11 @@
 .page-loading-screen {
+  --loading-progress: 6;
+  --runner-size: clamp(190px, 22vw, 250px);
+  --terrain-height: 54px;
+  /* The WebM has generous transparent padding around Wingman. These variables align its visible feet and nose. */
+  --wingman-anchor-x: -40%;
+  --wingman-media-scale: 1.5;
+  --terrain-cycle-duration: 1.25s;
   position: fixed;
   inset: 0;
   z-index: 10000;
@@ -53,13 +60,13 @@
 
 .page-loading-screen__content {
   display: flex;
-  width: min(820px, calc(100vw - 48px));
-  min-height: min(540px, calc(100dvh - 64px));
+  width: min(900px, calc(100vw - 32px));
+  min-height: min(570px, calc(100dvh - 48px));
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  padding: clamp(32px, 6vw, 72px);
+  gap: 16px;
+  padding: clamp(24px, 5vw, 64px) 0;
   text-align: center;
 }
 
@@ -71,20 +78,75 @@
   text-transform: uppercase;
 }
 
+.page-loading-screen__stage {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: calc(var(--runner-size) + 26px);
+  padding-inline: calc(var(--runner-size) * 0.46);
+}
+
+.page-loading-screen__track {
+  position: absolute;
+  right: calc(var(--runner-size) * 0.46);
+  bottom: 0;
+  left: calc(var(--runner-size) * 0.46);
+  height: var(--terrain-height);
+}
+
+.page-loading-screen__track-base,
+.page-loading-screen__track-reveal {
+  position: absolute;
+  inset: 0;
+}
+
+.page-loading-screen__track-base {
+  border-bottom: 1px solid rgba(129, 152, 139, 0.24);
+  opacity: 0.24;
+  background: url("/content/loader/grass-strip.svg") repeat-x left bottom / 240px 54px;
+  filter: grayscale(0.5);
+  animation: page-loading-terrain var(--terrain-cycle-duration) linear infinite;
+}
+
+.page-loading-screen__track-reveal {
+  width: calc(var(--loading-progress) * 1%);
+  overflow: hidden;
+  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.42));
+  transition: width 120ms linear;
+}
+
+.page-loading-screen__track-texture {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  background: url("/content/loader/grass-strip.svg") repeat-x left bottom / 240px 54px;
+  animation: page-loading-terrain var(--terrain-cycle-duration) linear infinite;
+}
+
+.page-loading-screen__runner {
+  position: absolute;
+  bottom: calc(var(--terrain-height) - 14px);
+  left: calc(var(--loading-progress) * 1%);
+  width: var(--runner-size);
+  height: var(--runner-size);
+  transform: translateX(var(--wingman-anchor-x));
+  transition: left 120ms linear;
+  will-change: left;
+}
+
 .page-loading-screen__video {
   display: block;
-  width: clamp(140px, 18vw, 220px);
-  height: clamp(140px, 18vw, 220px);
-  margin: 6px 0;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   background: transparent;
   pointer-events: none;
-  transform: translate(6%, -5%);
+  transform: scale(var(--wingman-media-scale));
   user-select: none;
 }
 
 .page-loading-screen h1 {
-  margin: 0;
+  margin: 2px 0 0;
   font-size: clamp(2rem, 5vw, 4rem);
   font-weight: 950;
   letter-spacing: 0.08em;
@@ -101,25 +163,8 @@
   animation: page-loading-phrase 420ms ease both;
 }
 
-.page-loading-screen__progress {
-  width: min(320px, 70vw);
-  height: 3px;
-  margin-top: 10px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.page-loading-screen__progress span {
-  display: block;
-  width: 42%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, #ff4655, #ff7a84, transparent);
-  animation: page-loading-progress 1.35s ease-in-out infinite;
-}
-
-@keyframes page-loading-progress {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(340%); }
+@keyframes page-loading-terrain {
+  to { background-position: -240px bottom; }
 }
 
 @keyframes page-loading-phrase {
@@ -133,25 +178,58 @@
 }
 
 @media (max-width: 640px) {
+  .page-loading-screen {
+    --runner-size: clamp(150px, 48vw, 190px);
+    --terrain-height: 46px;
+    --wingman-media-scale: 1.45;
+  }
+
   .page-loading-screen__content {
-    width: calc(100vw - 28px);
-    min-height: 72dvh;
-    padding: 28px 18px;
+    width: calc(100vw - 20px);
+    min-height: 76dvh;
+    gap: 12px;
+    padding: 18px 0;
   }
 
   .page-loading-screen__ambient {
     width: 112vw;
   }
 
-  .page-loading-screen__video {
-    width: clamp(130px, 42vw, 180px);
-    height: clamp(130px, 42vw, 180px);
+  .page-loading-screen__stage {
+    height: calc(var(--runner-size) + 16px);
+    padding-inline: calc(var(--runner-size) * 0.4);
+  }
+
+  .page-loading-screen__track {
+    right: calc(var(--runner-size) * 0.4);
+    left: calc(var(--runner-size) * 0.4);
+  }
+
+  .page-loading-screen__runner {
+    bottom: calc(var(--terrain-height) - 12px);
+  }
+
+  .page-loading-screen h1 {
+    font-size: clamp(1.9rem, 11vw, 3rem);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .page-loading-screen::before,
-  .page-loading-screen__progress span {
-    animation-duration: 2.5s;
+  .page-loading-screen::before {
+    animation-duration: 14s;
+  }
+
+  .page-loading-screen__track-base,
+  .page-loading-screen__track-texture {
+    animation: none;
+  }
+
+  .page-loading-screen__track-reveal,
+  .page-loading-screen__runner {
+    transition-duration: 180ms;
+  }
+
+  .page-loading-screen p {
+    animation: none;
   }
 }

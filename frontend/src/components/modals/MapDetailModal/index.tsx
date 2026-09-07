@@ -34,7 +34,10 @@ const TOOLTIP_STYLE = {
   border: "1px solid rgba(255,255,255,0.1)",
   borderRadius: "10px",
   fontSize: "0.85rem",
+  color: "#fff",
 };
+
+const TOOLTIP_TEXT_STYLE = { color: "#fff" } as const;
 
 export default function MapDetailModal({
   mapName,
@@ -71,17 +74,36 @@ export default function MapDetailModal({
     ...entry,
     color: "#64a0ff",
   }));
+  const recentAcsValues = recentTrendData
+    .map((entry) => entry.acs)
+    .filter((value) => Number.isFinite(value) && value >= 0 && value <= 1000);
+  const recentAcsMin = Math.min(...recentAcsValues);
+  const recentAcsMax = Math.max(...recentAcsValues);
+  const recentAcsPadding = Math.max(20, (recentAcsMax - recentAcsMin) * 0.12);
+  const recentAcsDomain: [number, number] = recentAcsValues.length
+    ? [
+        Math.max(0, Math.floor((recentAcsMin - recentAcsPadding) / 10) * 10),
+        Math.min(1000, Math.ceil((recentAcsMax + recentAcsPadding) / 10) * 10),
+      ]
+    : [0, 400];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay content-detail-modal-overlay" onClick={onClose}>
       <div
-        className="modal-panel map-detail-modal-panel"
+        className="content-detail-modal-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <button className="modal-close" onClick={onClose}>
-          ✕
+        <button
+          type="button"
+          className="content-detail-close modal-close"
+          onClick={onClose}
+          aria-label="Cerrar modal"
+        >
+          <span className="content-detail-close-icon modal-close-icon" aria-hidden="true" />
         </button>
-
+      <div
+        className="modal-panel map-detail-modal-panel"
+      >
         <div className="modal-header-block">
           <div className="map-detail-header">
             {mapImage ? (
@@ -242,10 +264,13 @@ export default function MapDetailModal({
                             tick={{ fill: "#b5b5b5", fontSize: 12 }}
                             axisLine={false}
                             tickLine={false}
-                            domain={["dataMin - 20", "dataMax + 20"]}
+                            domain={recentAcsDomain}
+                            allowDataOverflow
                           />
                           <ReTooltip
                             contentStyle={TOOLTIP_STYLE}
+                            itemStyle={TOOLTIP_TEXT_STYLE}
+                            labelStyle={TOOLTIP_TEXT_STYLE}
                             formatter={(
                               value: unknown,
                               _name: unknown,
@@ -351,7 +376,7 @@ export default function MapDetailModal({
                       <ResponsiveContainer width="100%" height={250}>
                         <BarChart
                           data={agentsChartData}
-                          margin={{ top: 10, right: 14, bottom: 6, left: -16 }}
+                          margin={{ top: 10, right: 14, bottom: 24, left: 4 }}
                         >
                           <CartesianGrid
                             strokeDasharray="3 3"
@@ -366,6 +391,11 @@ export default function MapDetailModal({
                             }}
                             axisLine={false}
                             tickLine={false}
+                            interval={0}
+                            angle={-18}
+                            textAnchor="end"
+                            height={52}
+                            tickMargin={10}
                           />
                           <YAxis
                             tick={{ fill: "#b5b5b5", fontSize: 11 }}
@@ -375,6 +405,8 @@ export default function MapDetailModal({
                           />
                           <ReTooltip
                             contentStyle={TOOLTIP_STYLE}
+                            itemStyle={TOOLTIP_TEXT_STYLE}
+                            labelStyle={TOOLTIP_TEXT_STYLE}
                             formatter={(
                               value: unknown,
                               _name: unknown,
@@ -423,9 +455,11 @@ export default function MapDetailModal({
               <section className="detail-card detail-card-half">
                 <div className="panel-header">
                   <div>
-                    <h3 className="panel-title">Armas más efectivas</h3>
+                    <h3 className="panel-title">
+                      Armas y habilidades más efectivas
+                    </h3>
                     <p className="panel-subtitle">
-                      Armas con más kills acumuladas en este mapa.
+                      Fuentes con más kills acumuladas en este mapa.
                     </p>
                   </div>
                 </div>
@@ -435,7 +469,7 @@ export default function MapDetailModal({
                       <ResponsiveContainer width="100%" height={250}>
                         <BarChart
                           data={weaponsChartData}
-                          margin={{ top: 10, right: 14, bottom: 6, left: -16 }}
+                          margin={{ top: 10, right: 14, bottom: 24, left: 4 }}
                         >
                           <CartesianGrid
                             strokeDasharray="3 3"
@@ -450,6 +484,11 @@ export default function MapDetailModal({
                             }}
                             axisLine={false}
                             tickLine={false}
+                            interval={0}
+                            angle={-18}
+                            textAnchor="end"
+                            height={52}
+                            tickMargin={10}
                           />
                           <YAxis
                             tick={{ fill: "#b5b5b5", fontSize: 11 }}
@@ -459,6 +498,8 @@ export default function MapDetailModal({
                           />
                           <ReTooltip
                             contentStyle={TOOLTIP_STYLE}
+                            itemStyle={TOOLTIP_TEXT_STYLE}
+                            labelStyle={TOOLTIP_TEXT_STYLE}
                             formatter={(
                               value: unknown,
                               _name: unknown,
@@ -469,12 +510,21 @@ export default function MapDetailModal({
                                   payload?: {
                                     name?: string;
                                     matches?: number;
-                                    headshotPct?: number;
+                                    headshotPct?: number | null;
+                                    isAbility?: boolean;
                                   };
                                 }
                               )?.payload;
+                              const hitZoneLabel = payload?.isAbility
+                                ? ""
+                                : payload?.headshotPct == null
+                                  ? "HS no disponible"
+                                  : `${formatPercent(payload.headshotPct, 1)} HS`;
+                              const details = `${formatNumber(Number(value))} kills · ${formatNumber(payload?.matches ?? 0)} partidas`;
                               return [
-                                `${formatNumber(Number(value))} kills · ${formatNumber(payload?.matches ?? 0)} partidas · ${formatPercent(payload?.headshotPct ?? 0, 1)} HS`,
+                                hitZoneLabel
+                                  ? `${details} · ${hitZoneLabel}`
+                                  : details,
                                 payload?.name ?? "",
                               ];
                             }}
@@ -506,6 +556,7 @@ export default function MapDetailModal({
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );

@@ -80,6 +80,11 @@ def _extract_player_weapon_stats(match_obj: dict, puuid: str) -> dict[str, dict[
         match_obj.get("roundResults") or [],
         puuid,
         build_team_lookup(match_obj.get("players") or []),
+        {
+            str(player.get("puuid")): str(player.get("characterId"))
+            for player in (match_obj.get("players") or [])
+            if player.get("puuid") and player.get("characterId")
+        },
     )
 
     weapon_stats: dict[str, dict[str, int]] = {}

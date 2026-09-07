@@ -807,6 +807,14 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
     return map;
   }, [dashboard?.mostPlayedWeapons]);
 
+  const dashboardWeaponNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (dashboard?.mostPlayedWeapons ?? []).forEach((weapon) => {
+      if (weapon.name) map.set(weapon.id, weapon.name);
+    });
+    return map;
+  }, [dashboard?.mostPlayedWeapons]);
+
   const dashboardWeaponImageByName = useMemo(() => {
     const map = new Map<string, string | null>();
     (dashboard?.mostPlayedWeapons ?? []).forEach((weapon) => {
@@ -827,23 +835,36 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
         wins: number;
         kd: number;
         winRate: number;
+        isAbility: boolean;
+        sourceType?: string;
         image?: string | null;
       }
     >();
 
     filteredMatches.forEach((match) => {
       (match.weaponStats ?? []).forEach((weapon) => {
-        const rounds = weapon.rounds ?? 0;
         const kills = weapon.kills ?? 0;
-        const deaths = weapon.deaths ?? 0;
-        const assists = weapon.assists ?? 0;
-        const hasUsage =
-          rounds > 0 || kills > 0 || deaths > 0 || assists > 0;
-        if (!hasUsage) return;
+        if (kills <= 0) return;
+        if (
+          weapon.sourceType &&
+          !["weapon", "ability", "melee"].includes(weapon.sourceType)
+        ) {
+          return;
+        }
 
-        const key = weapon.weaponId || weapon.weaponName || "unknown";
-        const name = weapon.weaponName || "Arma desconocida";
+        const key =
+          weapon.sourceId ||
+          weapon.weaponId ||
+          weapon.sourceName ||
+          weapon.weaponName ||
+          "unknown";
+        const name =
+          dashboardWeaponNameById.get(key) ||
+          weapon.sourceName ||
+          weapon.weaponName ||
+          "Arma desconocida";
         const imageFromDashboard =
+          weapon.sourceIcon ??
           dashboardWeaponImageById.get(key) ??
           dashboardWeaponImageByName.get(normalizeLabel(name)) ??
           null;
@@ -855,6 +876,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
           if (match.result === "Victoria") {
             current.wins += 1;
           }
+          current.isAbility = current.isAbility || Boolean(weapon.isAbility);
         } else {
           grouped.set(key, {
             id: key,
@@ -865,6 +887,8 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
             wins: match.result === "Victoria" ? 1 : 0,
             kd: 0,
             winRate: 0,
+            isAbility: Boolean(weapon.isAbility),
+            sourceType: weapon.sourceType,
             image: imageFromDashboard,
           });
         }
@@ -886,22 +910,27 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
       return aggregated;
     }
 
-    return (dashboard?.mostPlayedWeapons ?? []).map((weapon) => ({
-      id: weapon.id,
-      name: weapon.name,
-      kills: weapon.kills,
-      deaths: 0,
-      matches: weapon.matches,
-      wins: 0,
-      kd: safeDiv(weapon.kills, Math.max(weapon.matches, 1)),
-      winRate: 0,
-      image: weapon.image ?? null,
-    }));
+    return (dashboard?.mostPlayedWeapons ?? [])
+      .filter((weapon) => weapon.kills > 0)
+      .map((weapon) => ({
+        id: weapon.id,
+        name: weapon.name,
+        kills: weapon.kills,
+        deaths: 0,
+        matches: weapon.matches,
+        wins: 0,
+        kd: safeDiv(weapon.kills, Math.max(weapon.matches, 1)),
+        winRate: 0,
+        isAbility: Boolean(weapon.isAbility),
+        sourceType: weapon.type,
+        image: weapon.image ?? null,
+      }));
   }, [
     filteredMatches,
     dashboard?.mostPlayedWeapons,
     dashboardWeaponImageById,
     dashboardWeaponImageByName,
+    dashboardWeaponNameById,
   ]);
 
   const mapPerformance = useMemo(() => {

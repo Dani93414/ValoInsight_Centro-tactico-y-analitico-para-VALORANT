@@ -189,7 +189,7 @@ export default function Informacion() {
 
   return (
     <ContentShell
-      title="Informacion"
+      title="Información"
       subtitle="Version, rangos, economia, contratos y datos de sistema del contenido actual."
     >
       {isError && (

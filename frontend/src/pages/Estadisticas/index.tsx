@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ResponsiveContainer,
   PieChart,
@@ -19,8 +19,12 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { Info } from "lucide-react";
+import { ChevronRight, Info, X } from "lucide-react";
 import type { HeatmapEntryFilters } from "../../components/modals/HeatmapModal";
+import type {
+  RoundEventKind,
+  RoundHistoryEvent,
+} from "./roundEventHistory";
 import BackButton from "../../components/BackButton";
 import LoadingModal from "../../components/ui/LoadingModal";
 import PageLoadingScreen from "../../components/ui/PageLoadingScreen";
@@ -77,6 +81,9 @@ const MapDetailModal = React.lazy(
 );
 const HeatmapModal = React.lazy(
   () => import("../../components/modals/HeatmapModal"),
+);
+const RoundEventHistoryModal = React.lazy(
+  () => import("./RoundEventHistoryModal"),
 );
 
 // --- Resolve helpers (use normalizeLabel from utils) ---
@@ -154,6 +161,7 @@ type MatchHistoryCardProps = {
     string,
     { image?: string | null; displayIcon?: string | null }
   >;
+  mapMediaMap?: Record<string, string>;
   rankIconUrl?: string | null;
   onClick: () => void;
 };
@@ -191,6 +199,7 @@ const COLLAPSED_HISTORY_MATCHES = 3;
 function MatchHistoryCard({
   match,
   agentMediaMap,
+  mapMediaMap,
   rankIconUrl,
   onClick,
 }: MatchHistoryCardProps) {
@@ -204,11 +213,19 @@ function MatchHistoryCard({
   const agentIcon = match.agentId
     ? (agentMediaMap?.[match.agentId]?.displayIcon ?? "")
     : "";
+  const mapImage = mapMediaMap?.[normalizeLabel(match.map)];
 
   return (
     <button
       type="button"
-      className={`match-card match-card-button match-card--${resultVariant}`}
+      className={`match-card match-card-button match-card--${resultVariant}${mapImage ? " has-map-image" : ""}`}
+      style={
+        mapImage
+          ? ({
+              ["--match-card-map-bg" as string]: `url("${mapImage}")`,
+            } as React.CSSProperties)
+          : undefined
+      }
       onClick={onClick}
     >
       <div className="match-card-top">
@@ -397,6 +414,7 @@ function MetricInfo({ content, className, getHoverHandlers }: MetricInfoProps) {
 export default function Estadisticas() {
   const { playerId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const {
     loading,
@@ -474,6 +492,16 @@ export default function Estadisticas() {
     updateFloatingTooltipLayout,
     getFloatingInfoHoverHandlers,
   } = useEstadisticasViewModel(playerId);
+  const resetFilters = () => {
+    setFilters({
+      actId: ACT_FILTER_CURRENT,
+      agentId: AGENT_FILTER_ALL,
+      map: MAP_FILTER_ALL,
+      side: "all",
+      partySize: "all",
+      queueId: QUEUE_FILTER_COMPETITIVE,
+    });
+  };
   const [shotChartRange, setShotChartRange] = React.useState<
     "total" | "recent20"
   >("total");
@@ -559,6 +587,93 @@ export default function Estadisticas() {
   const [heatmapInitialMapName, setHeatmapInitialMapName] = React.useState<
     string | null
   >(null);
+  const [roundEventKind, setRoundEventKind] =
+    React.useState<RoundEventKind | null>(null);
+  const [roundPlaybackTarget, setRoundPlaybackTarget] = React.useState<{
+    matchId: string;
+    roundNum: number;
+  } | null>(null);
+  const restoredProfileScrollRef = React.useRef(false);
+
+  React.useLayoutEffect(() => {
+    const storageKey = playerId
+      ? `valoinsight:profile-scroll:${playerId}`
+      : "";
+    const storedScrollY = storageKey
+      ? window.sessionStorage.getItem(storageKey)
+      : null;
+    const stateScrollY = (
+      location.state as { restoreProfileScrollY?: number } | null
+    )?.restoreProfileScrollY;
+    const restoreScrollY =
+      stateScrollY == null && storedScrollY == null
+        ? Number.NaN
+        : Number(stateScrollY ?? storedScrollY);
+    if (
+      loading ||
+      restoredProfileScrollRef.current ||
+      !Number.isFinite(restoreScrollY)
+    ) {
+      return;
+    }
+
+    restoredProfileScrollRef.current = true;
+    let secondFrame = 0;
+    const retryTimers: number[] = [];
+    const restoreScroll = () => {
+      window.scrollTo({ top: restoreScrollY, left: 0, behavior: "auto" });
+    };
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        restoreScroll();
+        [100, 350, 800].forEach((delay) => {
+          retryTimers.push(window.setTimeout(restoreScroll, delay));
+        });
+        if (storageKey) {
+          retryTimers.push(
+            window.setTimeout(() => {
+              window.sessionStorage.removeItem(storageKey);
+            }, 900),
+          );
+        }
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+      retryTimers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [loading, location.state, playerId]);
+
+  const roundEventCandidateMatches = React.useMemo(() => {
+    if (!roundEventKind) return [];
+    const analyticsByMatch = new Map(
+      filteredAnalyticsList.map((analytics) => [
+        analytics.match_id ?? analytics.id,
+        analytics,
+      ]),
+    );
+    const metricKey = roundEventKind === "ace" ? "multi_5k" : "first_kills";
+
+    return sortedFilteredMatches.filter((match) => {
+      const analytics = analyticsByMatch.get(match.id);
+      if (!analytics) return false;
+      const overviewCount = Number(analytics.overview?.[metricKey] ?? 0);
+      return overviewCount > 0;
+    });
+  }, [filteredAnalyticsList, roundEventKind, sortedFilteredMatches]);
+
+  const openRoundEventPlayback = React.useCallback(
+    (event: RoundHistoryEvent) => {
+      setRoundPlaybackTarget({
+        matchId: event.match.id,
+        roundNum: event.roundNum,
+      });
+      setSelectedMatchId(event.match.id);
+    },
+    [setSelectedMatchId],
+  );
 
   React.useLayoutEffect(() => {
     if (!floatingTooltip?.visible) return;
@@ -710,11 +825,14 @@ export default function Estadisticas() {
 
   const openWeaponDetail = React.useCallback(
     (weaponId: string) => {
+      if (mostPlayedWeapons.find((weapon) => weapon.id === weaponId)?.isAbility) {
+        return;
+      }
       requestAnimationFrame(() => {
         setSelectedWeaponId(weaponId);
       });
     },
-    [setSelectedWeaponId],
+    [mostPlayedWeapons, setSelectedWeaponId],
   );
 
   const openMapDetail = React.useCallback((mapName: string) => {
@@ -767,6 +885,7 @@ export default function Estadisticas() {
       const queryString = params.toString();
       navigate(
         `/estadisticas/${playerId}/heatmap${queryString ? `?${queryString}` : ""}`,
+        { state: { profileScrollY: window.scrollY } },
       );
     },
     [navigate, playerId, setHeatmapOpen],
@@ -1276,7 +1395,7 @@ export default function Estadisticas() {
 
                   <div className="player-rank-text">
                     <span className="player-rank-label">
-                      Rango de referencia
+                      Rango Actual
                     </span>
                     <strong>{displayedRankName}</strong>
                   </div>
@@ -1372,16 +1491,7 @@ export default function Estadisticas() {
             <button
               type="button"
               className="no-stats-reset-btn"
-              onClick={() =>
-                setFilters({
-                  actId: ACT_FILTER_CURRENT,
-                  agentId: AGENT_FILTER_ALL,
-                  map: MAP_FILTER_ALL,
-                  side: "all",
-                  partySize: "all",
-                  queueId: QUEUE_FILTER_COMPETITIVE,
-                })
-              }
+              onClick={resetFilters}
             >
               Restablecer filtros
             </button>
@@ -1578,6 +1688,7 @@ export default function Estadisticas() {
                       key={match.id}
                       match={match}
                       agentMediaMap={dashboard.agentMediaMap}
+                      mapMediaMap={dashboard.mapMediaMap}
                       rankIconUrl={playerRankIcon}
                       onClick={() => setSelectedMatchId(match.id)}
                     />
@@ -1627,6 +1738,7 @@ export default function Estadisticas() {
                       key={match.id}
                       match={match}
                       agentMediaMap={dashboard.agentMediaMap}
+                      mapMediaMap={dashboard.mapMediaMap}
                       rankIconUrl={playerRankIcon}
                       onClick={() => setSelectedMatchId(match.id)}
                     />
@@ -1734,6 +1846,12 @@ export default function Estadisticas() {
 
                 <div className="round-milestones">
                   <article className="round-milestone round-milestone-firstblood">
+                    <button
+                      type="button"
+                      className="round-milestone-action"
+                      onClick={() => setRoundEventKind("firstBlood")}
+                      aria-label="Ver todas las primeras sangres"
+                    />
                     <div className="round-milestone-chip-row">
                       <span className="round-milestone-chip">
                         PRIMERAS SANGRES
@@ -1747,9 +1865,18 @@ export default function Estadisticas() {
                       {formatNumber(roundImpactSummary.firstBloods)} ·{" "}
                       {formatPercent(firstBloodPerRoundPct, 1)}
                     </strong>
+                    <span className="round-milestone-open">
+                      Ver rondas <ChevronRight aria-hidden="true" />
+                    </span>
                   </article>
 
                   <article className="round-milestone round-milestone-ace">
+                    <button
+                      type="button"
+                      className="round-milestone-action"
+                      onClick={() => setRoundEventKind("ace")}
+                      aria-label="Ver todos los ACE"
+                    />
                     <div className="round-milestone-chip-row">
                       <span className="round-milestone-chip">ACE</span>
                       <MetricInfo
@@ -1761,6 +1888,9 @@ export default function Estadisticas() {
                       {formatNumber(roundImpactSummary.aces)} ·{" "}
                       {formatPercent(acePerRoundPct, 1)}
                     </strong>
+                    <span className="round-milestone-open">
+                      Ver rondas <ChevronRight aria-hidden="true" />
+                    </span>
                   </article>
                 </div>
 
@@ -2876,7 +3006,13 @@ export default function Estadisticas() {
                       <button
                         key={weapon.id}
                         type="button"
-                        className="side-panel-mini"
+                        className={`side-panel-mini${weapon.isAbility ? " side-panel-mini--ability" : ""}`}
+                        disabled={weapon.isAbility}
+                        title={
+                          weapon.isAbility
+                            ? "Las habilidades no tienen detalle en el apartado de armas"
+                            : `Ver detalle de ${weapon.name}`
+                        }
                         onClick={() => openWeaponDetail(weapon.id)}
                       >
                         {weapon.image ? (
@@ -2984,7 +3120,7 @@ export default function Estadisticas() {
                 className="floating-filters-close"
                 onClick={() => setFiltersOpen(false)}
               >
-                ✕
+                <X aria-hidden="true" />
               </button>
             </div>
 
@@ -3107,6 +3243,14 @@ export default function Estadisticas() {
                 </button>
               ))}
             </div>
+
+            <button
+              type="button"
+              className="floating-filters-reset"
+              onClick={resetFilters}
+            >
+              Restablecer filtros
+            </button>
           </div>
         )}
 
@@ -3148,7 +3292,7 @@ export default function Estadisticas() {
                 className="list-modal-close"
                 onClick={() => setHistoryModalOpen(false)}
               >
-                ✕
+                <X aria-hidden="true" />
               </button>
             </div>
 
@@ -3166,6 +3310,7 @@ export default function Estadisticas() {
                         key={match.id}
                         match={match}
                         agentMediaMap={dashboard.agentMediaMap}
+                        mapMediaMap={dashboard.mapMediaMap}
                         rankIconUrl={playerRankIcon}
                         onClick={() => {
                           setHistoryModalOpen(false);
@@ -3220,7 +3365,7 @@ export default function Estadisticas() {
       {/* ── AGENTS LIST MODAL ── */}
       {agentsModalOpen && (
         <div
-          className="list-modal-overlay"
+          className="list-modal-overlay list-modal-overlay--external-close"
           onClick={() => setAgentsModalOpen(false)}
         >
           <div
@@ -3235,10 +3380,11 @@ export default function Estadisticas() {
               </h3>
               <button
                 type="button"
-                className="list-modal-close"
+                className="list-modal-close list-modal-close--external"
                 onClick={() => setAgentsModalOpen(false)}
+                aria-label="Cerrar modal"
               >
-                ✕
+                <X aria-hidden="true" />
               </button>
             </div>
             <div className="list-modal-body">
@@ -3320,7 +3466,7 @@ export default function Estadisticas() {
       {/* ── WEAPONS LIST MODAL ── */}
       {weaponsModalOpen && (
         <div
-          className="list-modal-overlay"
+          className="list-modal-overlay list-modal-overlay--external-close"
           onClick={() => setWeaponsModalOpen(false)}
         >
           <div
@@ -3331,10 +3477,11 @@ export default function Estadisticas() {
               <h3>Armas utilizadas</h3>
               <button
                 type="button"
-                className="list-modal-close"
+                className="list-modal-close list-modal-close--external"
                 onClick={() => setWeaponsModalOpen(false)}
+                aria-label="Cerrar modal"
               >
-                ✕
+                <X aria-hidden="true" />
               </button>
             </div>
             <div className="list-modal-body">
@@ -3346,7 +3493,13 @@ export default function Estadisticas() {
                     <button
                       key={weapon.id}
                       type="button"
-                      className="list-modal-item"
+                      className={`list-modal-item${weapon.isAbility ? " list-modal-item--ability" : ""}`}
+                      disabled={weapon.isAbility}
+                      title={
+                        weapon.isAbility
+                          ? "Las habilidades no tienen detalle en el apartado de armas"
+                          : `Ver detalle de ${weapon.name}`
+                      }
                       onClick={() => {
                         setWeaponsModalOpen(false);
                         openWeaponDetail(weapon.id);
@@ -3383,7 +3536,7 @@ export default function Estadisticas() {
       {/* ── MAPS LIST MODAL ── */}
       {mapsModalOpen && (
         <div
-          className="list-modal-overlay"
+          className="list-modal-overlay list-modal-overlay--external-close"
           onClick={() => setMapsModalOpen(false)}
         >
           <div
@@ -3394,10 +3547,11 @@ export default function Estadisticas() {
               <h3>Mapas</h3>
               <button
                 type="button"
-                className="list-modal-close"
+                className="list-modal-close list-modal-close--external"
                 onClick={() => setMapsModalOpen(false)}
+                aria-label="Cerrar modal"
               >
-                ✕
+                <X aria-hidden="true" />
               </button>
             </div>
             <div className="list-modal-body">
@@ -3441,9 +3595,11 @@ export default function Estadisticas() {
                     <strong>{selectedMapForModal.map}</strong>
                     <small>
                       {formatPercent(selectedMapForModal.winRate, 1)} WR ·{" "}
-                      {formatNumber(selectedMapForModal.matches)} partidas ·{" "}
-                      {formatNumber(selectedMapForModal.wins)}-
-                      {formatNumber(selectedMapForModal.losses)} W-L
+                      {formatNumber(selectedMapForModal.matches)} partidas
+                    </small>
+                    <small className="map-modal-summary-record">
+                      {formatNumber(selectedMapForModal.wins)}W -{" "}
+                      {formatNumber(selectedMapForModal.losses)}L
                     </small>
                   </div>
                   <div className="map-modal-summary-actions">
@@ -3476,13 +3632,37 @@ export default function Estadisticas() {
       )}
 
       <React.Suspense fallback={<LoadingModal placement="overlay" />}>
+      {roundEventKind && (
+        <RoundEventHistoryModal
+          kind={roundEventKind}
+          matches={roundEventCandidateMatches}
+          playerId={playerId ?? ""}
+          side={filters.side}
+          agentMediaMap={dashboard.agentMediaMap}
+          mapMediaMap={dashboard.mapMediaMap}
+          obscured={Boolean(selectedMatchId)}
+          onSelect={openRoundEventPlayback}
+          onClose={() => setRoundEventKind(null)}
+        />
+      )}
+
       {selectedMatchId && (
         <MatchDetailModal
-          key={selectedMatchId}
+          key={`${selectedMatchId}-${roundPlaybackTarget?.roundNum ?? "detail"}`}
           matchId={selectedMatchId}
           playerId={playerId ?? ""}
           agentNameMap={dashboard.agentNameMap}
-          onClose={() => setSelectedMatchId(null)}
+          initialRoundNum={
+            roundPlaybackTarget?.matchId === selectedMatchId
+              ? roundPlaybackTarget.roundNum
+              : undefined
+          }
+          autoplayInitialRound={roundPlaybackTarget?.matchId === selectedMatchId}
+          closeOnPlaybackExit={roundPlaybackTarget?.matchId === selectedMatchId}
+          onClose={() => {
+            setSelectedMatchId(null);
+            setRoundPlaybackTarget(null);
+          }}
         />
       )}
 

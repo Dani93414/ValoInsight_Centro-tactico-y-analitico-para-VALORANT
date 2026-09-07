@@ -18,5 +18,9 @@ describe("PageLoadingScreen", () => {
     expect(markup).toContain('playsInline=""');
     expect(markup).toContain('preload="auto"');
     expect(markup).not.toContain("controls=");
+    expect(markup).toContain('class="page-loading-screen__track-base"');
+    expect(markup).toContain('class="page-loading-screen__track-reveal"');
+    expect(markup).toContain('class="page-loading-screen__track-texture"');
+    expect(markup).toMatch(/--loading-progress:[4-8](?:\.\d+)?/);
   });
 });

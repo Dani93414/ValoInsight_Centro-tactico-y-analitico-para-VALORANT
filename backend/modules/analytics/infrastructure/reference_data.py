@@ -180,10 +180,22 @@ def find_ability(value: Any, *, agent_id: str | None = None) -> Dict[str, Any] |
     if not raw:
         return None
     ability_map = abilities_by_uuid()
-    candidate_keys = [raw]
+    candidate_keys: list[str] = []
     normalized = _normalize_lookup(raw)
     agent_key = str(agent_id or "").strip()
     weapon_slot = _ABILITY_WEAPON_SLOT_ALIASES.get((agent_key, raw.lower()))
+    if not weapon_slot and not agent_key:
+        weapon_alias = next(
+            (
+                (alias_agent_id, alias_slot)
+                for (alias_agent_id, alias_weapon_id), alias_slot
+                in _ABILITY_WEAPON_SLOT_ALIASES.items()
+                if alias_weapon_id == raw.lower()
+            ),
+            None,
+        )
+        if weapon_alias:
+            agent_key, weapon_slot = weapon_alias
     slot_alias = _ABILITY_SLOT_ALIASES.get(normalized)
     if weapon_slot:
         candidate_keys.append(f"{agent_key}:{weapon_slot}")
@@ -191,15 +203,24 @@ def find_ability(value: Any, *, agent_id: str | None = None) -> Dict[str, Any] |
     elif slot_alias and agent_key:
         candidate_keys.append(f"{agent_key}:{slot_alias}")
         normalized = slot_alias
+    elif slot_alias:
+        # Slot names such as "Ultimate" are shared by every agent. Without
+        # the killer agent there is no safe way to choose one of them.
+        return None
     if agent_key:
         candidate_keys.extend([f"{agent_key}:{raw}", f"{agent_key}:{normalized}"])
+    candidate_keys.append(raw)
     for key in candidate_keys:
         item = ability_map.get(key)
-        if item:
+        if item and (
+            not agent_key
+            or not item.get("agentUuid")
+            or item.get("agentUuid") == agent_key
+        ):
             return item
 
     for item in ability_map.values():
-        if agent_id and item.get("agentUuid") != agent_id:
+        if agent_key and item.get("agentUuid") != agent_key:
             continue
         if normalized in {
             _normalize_lookup(item.get("displayName")),
@@ -210,8 +231,6 @@ def find_ability(value: Any, *, agent_id: str | None = None) -> Dict[str, Any] |
             _normalize_lookup(item.get("rawName")),
         }:
             return item
-    if agent_id:
-        return find_ability(raw)
     return None
 
 

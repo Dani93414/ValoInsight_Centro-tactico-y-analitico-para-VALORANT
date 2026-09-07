@@ -46,6 +46,7 @@ from shared.weapon_attribution import (
     compute_precise_weapon_stats_core,
     merge_precise_weapon_core_stats,
 )
+from shared.damage_attribution import can_source_produce_kill, resolve_damage_source
 
 
 def _coerce_positive_int(value: Any) -> int | None:
@@ -1465,6 +1466,7 @@ def _load_weapon_usage_summary(
             "$project": {
                 "_id": 0,
                 "won_match": "$players.analytics.won_match",
+                "agent_id": "$players.characterId",
                 "ws": {"$objectToArray": {"$ifNull": ["$players.analytics.overview.weapon_stats", {}]}},
             }
         },
@@ -1472,6 +1474,7 @@ def _load_weapon_usage_summary(
         {
             "$project": {
                 "weapon_id": "$ws.k",
+                "agent_id": 1,
                 "weapon_name": {"$ifNull": ["$ws.v.weapon_name", "Arma desconocida"]},
                 "source_id": {"$ifNull": ["$ws.v.source_id", "$ws.k"]},
                 "source_name": {
@@ -1511,8 +1514,19 @@ def _load_weapon_usage_summary(
             }
         },
         {
+            "$match": {
+                "kills": {"$gt": 0},
+                "source_type": {"$in": ["weapon", "ability", "melee"]},
+            }
+        },
+        {
             "$group": {
-                "_id": "$source_id",
+                "_id": {
+                    "source_id": "$source_id",
+                    "agent_id": {
+                        "$cond": ["$is_ability", "$agent_id", None]
+                    },
+                },
                 "name": {"$first": "$source_name"},
                 "type": {"$first": "$source_type"},
                 "icon": {"$first": "$source_icon"},
@@ -1563,6 +1577,105 @@ def _build_match_card_id(doc: dict[str, Any]) -> str:
     return f"{timestamp}-{season_id}-{map_name}-{agent_id}"
 
 
+def _compact_weapon_entry(
+    weapon: dict[str, Any],
+    fields: tuple[str, ...],
+    agent_id: str | None = None,
+) -> dict[str, Any]:
+    compact = {field: weapon.get(field) for field in fields if field in weapon}
+    if int(weapon.get("kills") or 0) <= 0 or weapon.get("is_armor"):
+        return compact
+
+    source_id = str(
+        weapon.get("source_id")
+        or weapon.get("weapon_id")
+        or weapon.get("key")
+        or "unknown"
+    )
+    source_type = str(weapon.get("source_type") or "weapon")
+    damage_type = {
+        "ability": "Ability",
+        "melee": "Melee",
+        "fall": "Fall",
+        "bomb": "Bomb",
+    }.get(source_type, "Weapon")
+    resolved = resolve_damage_source(
+        {
+            "finishingDamage": {
+                "damageType": damage_type,
+                "damageItem": source_id,
+            }
+        },
+        killer_agent_id=agent_id,
+    )
+    if not can_source_produce_kill(resolved):
+        compact["kills"] = 0
+        return compact
+    if resolved.get("source_type") == "unknown":
+        return compact
+
+    compact["source_id"] = resolved.get("source_id") or source_id
+    compact["source_name"] = (
+        resolved.get("source_name")
+        or weapon.get("source_name")
+        or weapon.get("weapon_name")
+    )
+    compact["source_type"] = resolved.get("source_type") or source_type
+    compact["source_icon"] = resolved.get("icon") or weapon.get("source_icon")
+    compact["is_ability"] = bool(
+        resolved.get("is_ability") or weapon.get("is_ability")
+    )
+    return compact
+
+
+def _weapon_stats_need_precise_repair(
+    weapon_stats: dict[str, dict[str, Any]] | list[dict[str, Any]] | None,
+    agent_id: str | None,
+) -> bool:
+    """Repair legacy ability buckets without rebuilding ordinary matches."""
+    for weapon in _normalize_weapon_stats(weapon_stats):
+        if int(weapon.get("kills") or 0) <= 0 or weapon.get("is_armor"):
+            continue
+        source_id = str(
+            weapon.get("source_id")
+            or weapon.get("weapon_id")
+            or weapon.get("key")
+            or "unknown"
+        )
+        source_type = str(weapon.get("source_type") or "weapon")
+        damage_type = {
+            "ability": "Ability",
+            "melee": "Melee",
+            "fall": "Fall",
+            "bomb": "Bomb",
+        }.get(source_type, "Weapon")
+        resolved = resolve_damage_source(
+            {
+                "finishingDamage": {
+                    "damageType": damage_type,
+                    "damageItem": source_id,
+                }
+            },
+            killer_agent_id=agent_id,
+        )
+        if not can_source_produce_kill(resolved):
+            return True
+        if resolved.get("is_ability"):
+            resolved_id = str(resolved.get("source_id") or "").lower()
+            resolved_name = str(resolved.get("source_name") or "").lower()
+            stored_name = str(
+                weapon.get("source_name") or weapon.get("weapon_name") or ""
+            ).lower()
+            if (
+                not weapon.get("is_ability")
+                or source_type != "ability"
+                or (resolved_id and resolved_id != source_id.lower())
+                or (resolved_name and resolved_name != stored_name)
+            ):
+                return True
+    return False
+
+
 def _build_light_analytics_list(
     analytics_docs: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -1578,13 +1691,15 @@ def _build_light_analytics_list(
             "rounds_equipped", "wins", "kills", "deaths", "assists",
             "damage_dealt", "damage_received", "survival_rounds",
             "loadout_value_total", "headshots", "bodyshots", "legshots",
+            "source_id", "source_name", "source_type", "source_icon",
+            "is_ability",
         )
         compact_weapons = [
-            {
-                field: weapon.get(field)
-                for field in compact_weapon_fields
-                if field in weapon
-            }
+            _compact_weapon_entry(
+                weapon,
+                compact_weapon_fields,
+                str(doc.get("agent_id") or "") or None,
+            )
             for weapon in _normalize_weapon_stats(overview.get("weapon_stats"))
             if isinstance(weapon, dict)
         ]
@@ -1833,8 +1948,13 @@ def _map_analytics_to_match_card(
         "legshots": legshots,
         "weaponStats": [
             {
-                "weaponId": item.get("weapon_id") or item.get("key") or "unknown",
-                "weaponName": item.get("weapon_name") or "Arma desconocida",
+                "weaponId": item.get("source_id") or item.get("weapon_id") or item.get("key") or "unknown",
+                "weaponName": item.get("source_name") or item.get("weapon_name") or "Arma desconocida",
+                "sourceId": item.get("source_id") or item.get("weapon_id") or item.get("key") or "unknown",
+                "sourceName": item.get("source_name") or item.get("weapon_name") or "Arma desconocida",
+                "sourceType": item.get("source_type") or "weapon",
+                "sourceIcon": item.get("source_icon"),
+                "isAbility": bool(item.get("is_ability")),
                 "rounds": int(float(item.get("rounds") or 0)),
                 "kills": int(float(item.get("kills") or 0)),
                 "deaths": int(float(item.get("deaths") or 0)),
@@ -2742,35 +2862,87 @@ def build_player_dashboard(
     )
 
     most_played_weapons: list[dict[str, Any]] = []
+    lethal_weapon_summary_rows: list[dict[str, Any]] = []
+    resolved_weapon_by_summary_key: dict[tuple[str, str], dict[str, Any]] = {}
     for row in usage_sorted_weapon_rows:
-        name = str(row.get("name") or "Arma desconocida")
-        source_type = str(row.get("type") or "weapon")
-        source_icon = row.get("icon")
+        group_id = row.get("_id") or {}
+        source_id = str(
+            group_id.get("source_id")
+            if isinstance(group_id, dict)
+            else group_id or "unknown"
+        )
+        agent_id = (
+            str(group_id.get("agent_id") or "")
+            if isinstance(group_id, dict)
+            else ""
+        )
+        stored_name = str(row.get("name") or "").strip()
+        stored_type = str(row.get("type") or "weapon")
+        damage_type = {
+            "ability": "Ability",
+            "melee": "Melee",
+            "fall": "Fall",
+            "bomb": "Bomb",
+        }.get(stored_type, "Weapon")
+        resolved_source = resolve_damage_source(
+            {
+                "finishingDamage": {
+                    "damageType": damage_type,
+                    "damageItem": source_id,
+                }
+            },
+            killer_agent_id=agent_id or None,
+        )
+        if not can_source_produce_kill(resolved_source):
+            continue
+        lethal_weapon_summary_rows.append(row)
+        resolved_name = str(resolved_source.get("source_name") or "").strip()
+        resolved_type = str(resolved_source.get("source_type") or "unknown")
+        has_resolved_reference = resolved_type != "unknown" and bool(resolved_name)
+        name = resolved_name if has_resolved_reference else stored_name or "Arma desconocida"
+        source_type = resolved_type if has_resolved_reference else stored_type
+        source_icon = resolved_source.get("icon") or row.get("icon")
         most_played_weapons.append(
             {
-                "id": str(row.get("_id") or "unknown"),
+                "id": str(resolved_source.get("source_id") or source_id),
                 "name": name,
                 "type": source_type,
-                "isAbility": bool(row.get("isAbility")),
+                "isAbility": bool(resolved_source.get("is_ability") or row.get("isAbility")),
                 "rounds": int(row.get("rounds") or 0),
                 "kills": int(row.get("kills") or 0),
                 "matches": int(row.get("matches") or 0),
                 "image": source_icon or weapon_icon_by_name.get(_normalize_rank_label(name)),
             }
         )
+        resolved_weapon_by_summary_key[(source_id, agent_id)] = most_played_weapons[-1]
 
     best_weapon: dict[str, Any] | None = None
-    if weapon_summary_rows:
+    if lethal_weapon_summary_rows:
         top = max(
-            weapon_summary_rows,
+            lethal_weapon_summary_rows,
             key=lambda row: (
                 int(row.get("kills") or 0),
                 int(row.get("rounds") or 0),
                 int(row.get("matches") or 0),
             ),
         )
+        top_group_id = top.get("_id") or {}
+        top_source_id = str(
+            top_group_id.get("source_id")
+            if isinstance(top_group_id, dict)
+            else top_group_id or "unknown"
+        )
+        top_agent_id = (
+            str(top_group_id.get("agent_id") or "")
+            if isinstance(top_group_id, dict)
+            else ""
+        )
+        resolved_top = resolved_weapon_by_summary_key.get(
+            (top_source_id, top_agent_id)
+        )
         best_weapon = {
-            "name": str(top.get("name") or "Arma desconocida"),
+            "name": (resolved_top or {}).get("name") or str(top.get("name") or "Arma desconocida"),
+            "image": (resolved_top or {}).get("image"),
             "matches": int(top.get("matches") or 0),
             "wins": int(top.get("wins") or 0),
             "kills": int(top.get("kills") or 0),
@@ -2804,7 +2976,9 @@ def build_player_dashboard(
     best_map_name = (best_map or {}).get("map")
     best_weapon_name = (best_weapon or {}).get("name")
     best_map_image = map_icon_by_name.get(_normalize_rank_label(best_map_name))
-    best_weapon_image = weapon_icon_by_name.get(_normalize_rank_label(best_weapon_name))
+    best_weapon_image = (best_weapon or {}).get("image") or weapon_icon_by_name.get(
+        _normalize_rank_label(best_weapon_name)
+    )
     header_showcase = [
         {
             "title": (top_agent or {}).get("name") or "Agente",
@@ -2989,13 +3163,25 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
                 )
                 if round_overview:
                     overview.update(round_overview)
-            if not overview.get("weapon_stats"):
+            weapon_stats = overview.get("weapon_stats")
+            if not weapon_stats or _weapon_stats_need_precise_repair(
+                weapon_stats,
+                str(player.get("characterId") or "") or None,
+            ):
                 overview["weapon_stats"] = merge_precise_weapon_core_stats(
-                    overview.get("weapon_stats"),
+                    weapon_stats,
                     compute_precise_weapon_stats_core(
                         match_obj.get("roundResults") or [],
                         puuid,
                         build_team_lookup(match_obj.get("players") or []),
+                        {
+                            str(match_player.get("puuid")): str(
+                                match_player.get("characterId")
+                            )
+                            for match_player in (match_obj.get("players") or [])
+                            if match_player.get("puuid")
+                            and match_player.get("characterId")
+                        },
                     ),
                 )
             player_team_id = str(player.get("teamId") or "").lower()

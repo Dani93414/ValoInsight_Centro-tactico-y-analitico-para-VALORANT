@@ -85,9 +85,10 @@ export function AppTopbar() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPlayerSearchOpen, setIsPlayerSearchOpen] = useState(false);
   const [isAuthActionLoading, setIsAuthActionLoading] = useState(false);
-  const [moreMenuMode, setMoreMenuMode] = useState<"default" | "open" | "closed">(
-    "default",
-  );
+  const [isMoreMenuHovered, setIsMoreMenuHovered] = useState(false);
+  const [isMoreMenuPinned, setIsMoreMenuPinned] = useState(false);
+  const [isMoreMenuHoverSuppressed, setIsMoreMenuHoverSuppressed] =
+    useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const currentPage = useMemo(
@@ -118,7 +119,9 @@ export function AppTopbar() {
   );
 
   const handleNavigate = (path: string) => {
-    setMoreMenuMode("default");
+    setIsMoreMenuHovered(false);
+    setIsMoreMenuPinned(false);
+    setIsMoreMenuHoverSuppressed(false);
     navigate(path);
   };
 
@@ -136,8 +139,12 @@ export function AppTopbar() {
   };
 
   const handleToggleMoreMenu = () => {
-    setMoreMenuMode((current) => (current === "open" ? "closed" : "open"));
+    setIsMoreMenuPinned(!isMoreMenuPinned);
+    setIsMoreMenuHoverSuppressed(isMoreMenuPinned);
   };
+
+  const isMoreMenuOpen =
+    isMoreMenuPinned || (isMoreMenuHovered && !isMoreMenuHoverSuppressed);
 
   return (
     <>
@@ -173,9 +180,13 @@ export function AppTopbar() {
           })}
 
           <div
-            className={`app-topbar__more app-topbar__more--${moreMenuMode}`}
+            className={`app-topbar__more${
+              isMoreMenuOpen ? " app-topbar__more--open" : ""
+            }`}
+            onMouseEnter={() => setIsMoreMenuHovered(true)}
             onMouseLeave={() => {
-              if (moreMenuMode === "closed") setMoreMenuMode("default");
+              setIsMoreMenuHovered(false);
+              setIsMoreMenuHoverSuppressed(false);
             }}
           >
             <button
@@ -184,7 +195,7 @@ export function AppTopbar() {
               }`}
               type="button"
               aria-haspopup="menu"
-              aria-expanded={moreMenuMode === "open"}
+              aria-expanded={isMoreMenuOpen}
               onClick={handleToggleMoreMenu}
             >
               Más

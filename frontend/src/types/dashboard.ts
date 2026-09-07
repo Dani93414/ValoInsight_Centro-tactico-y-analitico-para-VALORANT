@@ -24,6 +24,11 @@ export type PlayerStats = {
 export type WeaponStat = {
   weaponId: string;
   weaponName: string;
+  sourceId?: string;
+  sourceName?: string;
+  sourceType?: "weapon" | "ability" | "melee" | "fall" | "bomb" | "unknown";
+  sourceIcon?: string | null;
+  isAbility?: boolean;
   rounds?: number;
   kills: number;
   deaths: number;

@@ -1,0 +1,799 @@
+{
+  "version": "player-buy-v2-two-rounds-defuse-team-300",
+  "available": true,
+  "rows": 482740,
+  "usable_rows": 479280,
+  "matches": 2261,
+  "features": [
+    "credits_before_buy",
+    "team_credits_mean",
+    "enemy_credits_mean",
+    "round_number",
+    "score_diff",
+    "loss_streak",
+    "prior_rank",
+    "weapon_value",
+    "armor_value",
+    "history_player_rounds",
+    "history_player_win_rate",
+    "history_player_kills_per_round",
+    "history_player_damage_per_round",
+    "history_agent_rounds",
+    "history_agent_win_rate",
+    "history_agent_kills_per_round",
+    "history_agent_damage_per_round",
+    "history_weapon_rounds",
+    "history_weapon_win_rate",
+    "history_weapon_kills_per_round",
+    "history_weapon_damage_per_round",
+    "history_agent_weapon_rounds",
+    "history_agent_weapon_win_rate",
+    "history_agent_weapon_kills_per_round",
+    "history_agent_weapon_damage_per_round",
+    "map_id",
+    "side",
+    "agent_id",
+    "phase",
+    "weapon_id",
+    "armor_id"
+  ],
+  "selected_parameters": {
+    "kind": "boosting",
+    "learning_rate": 0.05,
+    "max_leaf_nodes": 15,
+    "l2_regularization": 1
+  },
+  "trials": [
+    {
+      "params": {
+        "kind": "logistic",
+        "C": 0.1
+      },
+      "validation": {
+        "log_loss": 0.6686288160340347,
+        "brier": 0.23807718075951062,
+        "roc_auc": 0.6216789648949125
+      }
+    },
+    {
+      "params": {
+        "kind": "logistic",
+        "C": 1
+      },
+      "validation": {
+        "log_loss": 0.6686185765352308,
+        "brier": 0.23807339441796638,
+        "roc_auc": 0.6216698442403228
+      }
+    },
+    {
+      "params": {
+        "kind": "boosting",
+        "learning_rate": 0.05,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1
+      },
+      "validation": {
+        "log_loss": 0.6516566752092876,
+        "brier": 0.2305270854244706,
+        "roc_auc": 0.6475358258397756
+      }
+    },
+    {
+      "params": {
+        "kind": "boosting",
+        "learning_rate": 0.1,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 10
+      },
+      "validation": {
+        "log_loss": 0.6518630486547882,
+        "brier": 0.2306176038738041,
+        "roc_auc": 0.6478473613635026
+      }
+    },
+    {
+      "params": {
+        "kind": "boosting",
+        "learning_rate": 0.05,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 10
+      },
+      "validation": {
+        "log_loss": 0.6517302180949757,
+        "brier": 0.23056683562421765,
+        "roc_auc": 0.6469086275193632
+      }
+    },
+    {
+      "params": {
+        "kind": "boosting",
+        "learning_rate": 0.1,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 1
+      },
+      "validation": {
+        "log_loss": 0.6529716871164019,
+        "brier": 0.23107248945829106,
+        "roc_auc": 0.6457646581972367
+      }
+    }
+  ],
+  "baseline_validation": {
+    "log_loss": 0.6931460817710601,
+    "brier": 0.24999945060575773,
+    "roc_auc": 0.5
+  },
+  "test": {
+    "log_loss": 0.6448085025167121,
+    "brier": 0.22740416425084875,
+    "roc_auc": 0.6617510607095587
+  },
+  "history_ablations_validation": {
+    "without_personal_history": {
+      "log_loss": 0.6517709268094013,
+      "brier": 0.23057949275460587,
+      "roc_auc": 0.6471159944546727
+    },
+    "without_agent_specific_history": {
+      "log_loss": 0.6516014656080494,
+      "brier": 0.23051190568133195,
+      "roc_auc": 0.6474292794871773
+    }
+  },
+  "test_segments": {
+    "weapon_id": {
+      "1baa85b4-4c70-1284-64bb-6481dfc3bb4e": {
+        "rows": 3381,
+        "matches": 340,
+        "log_loss": 0.6701151348494486,
+        "brier": 0.23934153367426952,
+        "roc_auc": 0.5845375272500779
+      },
+      "29a0cfab-485b-f5d5-779a-b59f85e204a8": {
+        "rows": 7816,
+        "matches": 340,
+        "log_loss": 0.5830235293696083,
+        "brier": 0.19985937009976826,
+        "roc_auc": 0.7095335899096358
+      },
+      "410b2e0b-4ceb-1321-1727-20858f7f3477": {
+        "rows": 1263,
+        "matches": 303,
+        "log_loss": 0.5971542845018443,
+        "brier": 0.2056865800211955,
+        "roc_auc": 0.7186943232581834
+      },
+      "42da8ccc-40d5-affc-beec-15aa47b42eda": {
+        "rows": 165,
+        "matches": 106,
+        "log_loss": 0.6301992709865037,
+        "brier": 0.22086932726846809,
+        "roc_auc": 0.5996694214876034
+      },
+      "44d4e95c-4157-0037-81b2-17841bf2e8e3": {
+        "rows": 255,
+        "matches": 125,
+        "log_loss": 0.5619115310330206,
+        "brier": 0.18986640741463676,
+        "roc_auc": 0.735207100591716
+      },
+      "462080d1-4035-2937-7c09-27aa2a5c27a7": {
+        "rows": 2005,
+        "matches": 318,
+        "log_loss": 0.5547727902633197,
+        "brier": 0.18681908011286705,
+        "roc_auc": 0.7526986149037117
+      },
+      "4ade7faa-4cf1-8376-95ef-39884480959b": {
+        "rows": 2100,
+        "matches": 327,
+        "log_loss": 0.6240141875945975,
+        "brier": 0.21758159835334925,
+        "roc_auc": 0.6842969868988107
+      },
+      "55d8a0f4-4274-ca67-fe2c-06ab45efdf58": {
+        "rows": 81,
+        "matches": 42,
+        "log_loss": 0.6302310619348307,
+        "brier": 0.22049024387123498,
+        "roc_auc": 0.6864197530864198
+      },
+      "5f0aaf7a-4289-3998-d5ff-eb9a5cf7ef5c": {
+        "rows": 693,
+        "matches": 230,
+        "log_loss": 0.56063865610994,
+        "brier": 0.18890153437462712,
+        "roc_auc": 0.7539795185052103
+      },
+      "63e6c2b6-4a8e-869c-3d4c-e38355226584": {
+        "rows": 748,
+        "matches": 150,
+        "log_loss": 0.6771695414738873,
+        "brier": 0.24260303380463424,
+        "roc_auc": 0.5658146803791086
+      },
+      "910be174-449b-c412-ab22-d0873436b21b": {
+        "rows": 388,
+        "matches": 202,
+        "log_loss": 0.6444967275865379,
+        "brier": 0.2264401439769005,
+        "roc_auc": 0.6158766923098133
+      },
+      "9c82e19d-4575-0200-1a81-3eacf00cf872": {
+        "rows": 29166,
+        "matches": 340,
+        "log_loss": 0.6745100861826048,
+        "brier": 0.2409438653609321,
+        "roc_auc": 0.5980611225716973
+      },
+      "a03b24d3-4319-996d-0f8c-94bbfba1dfc7": {
+        "rows": 2598,
+        "matches": 316,
+        "log_loss": 0.6776502177461905,
+        "brier": 0.2424204149762535,
+        "roc_auc": 0.5756657756657756
+      },
+      "ae3de142-4d85-2547-dd26-4e90bed35cf7": {
+        "rows": 1355,
+        "matches": 302,
+        "log_loss": 0.5743165072385885,
+        "brier": 0.19529426568691527,
+        "roc_auc": 0.754132932190399
+      },
+      "c4883e50-4494-202c-3ec3-6b8a9284f00b": {
+        "rows": 734,
+        "matches": 260,
+        "log_loss": 0.5088135851004872,
+        "brier": 0.1650915474997813,
+        "roc_auc": 0.8191180314402001
+      },
+      "e336c6b8-418d-9340-d77f-7a9e4cfe0702": {
+        "rows": 5622,
+        "matches": 340,
+        "log_loss": 0.5946312827003009,
+        "brier": 0.20362713342728164,
+        "roc_auc": 0.6814197246819241
+      },
+      "ec845bf4-4f79-ddda-a3da-0db3774b2794": {
+        "rows": 679,
+        "matches": 221,
+        "log_loss": 0.6667993986561643,
+        "brier": 0.23748824460105383,
+        "roc_auc": 0.6148602915654287
+      },
+      "ee8e8d15-496b-07ac-e5f6-8fae5d4c7b1a": {
+        "rows": 12270,
+        "matches": 340,
+        "log_loss": 0.6701562476750967,
+        "brier": 0.23892775245179976,
+        "roc_auc": 0.5986906813769433
+      },
+      "f7e1b454-4ad4-1063-ec0a-159e56b58941": {
+        "rows": 1059,
+        "matches": 276,
+        "log_loss": 0.5887052376672224,
+        "brier": 0.20098853480120665,
+        "roc_auc": 0.7140711293432095
+      }
+    },
+    "agent_id": {
+      "0e38b510-41a8-5780-5e8f-568b2a4f2d6c": {
+        "rows": 593,
+        "matches": 27,
+        "log_loss": 0.653314806241107,
+        "brier": 0.23112922935930477,
+        "roc_auc": 0.6454183951777406
+      },
+      "117ed9e3-49f3-6512-3ccf-0cada7e3823b": {
+        "rows": 3638,
+        "matches": 148,
+        "log_loss": 0.6460561390896156,
+        "brier": 0.2279795874210334,
+        "roc_auc": 0.6605378766927656
+      },
+      "1dbf2edd-4729-0984-3115-daa5eed44993": {
+        "rows": 5788,
+        "matches": 213,
+        "log_loss": 0.6477754907949224,
+        "brier": 0.22874581719723827,
+        "roc_auc": 0.6550541124959468
+      },
+      "1e58de9c-4950-5125-93e9-a0aee9f98746": {
+        "rows": 2085,
+        "matches": 90,
+        "log_loss": 0.641571210530242,
+        "brier": 0.22615528228214088,
+        "roc_auc": 0.6622916889073768
+      },
+      "22697a3d-45bf-8dd7-4fec-84a9e28c69d7": {
+        "rows": 7756,
+        "matches": 260,
+        "log_loss": 0.6432447397423939,
+        "brier": 0.22665674963046323,
+        "roc_auc": 0.6660306068131363
+      },
+      "320b2a48-4d9b-a075-30f1-1f93a9b638fa": {
+        "rows": 5185,
+        "matches": 167,
+        "log_loss": 0.6456561798259527,
+        "brier": 0.22778106805628925,
+        "roc_auc": 0.6611066964285714
+      },
+      "41fb69c1-4189-7b37-f117-bcaf1e96f1bf": {
+        "rows": 489,
+        "matches": 24,
+        "log_loss": 0.6501485626147223,
+        "brier": 0.2299755575753668,
+        "roc_auc": 0.6561977249916361
+      },
+      "569fdd95-4d10-43ab-ca70-79becc718b46": {
+        "rows": 1616,
+        "matches": 66,
+        "log_loss": 0.6506748885219369,
+        "brier": 0.230332386934727,
+        "roc_auc": 0.6403893619647044
+      },
+      "5f8d3a7f-467b-97f3-062c-13acf203c006": {
+        "rows": 1449,
+        "matches": 61,
+        "log_loss": 0.6395569424321715,
+        "brier": 0.22500163841533458,
+        "roc_auc": 0.6711490464305447
+      },
+      "601dbbe7-43ce-be57-2a40-4abd24953621": {
+        "rows": 782,
+        "matches": 35,
+        "log_loss": 0.6500483423815809,
+        "brier": 0.22985163388250726,
+        "roc_auc": 0.6454616818761651
+      },
+      "6f2a04ca-43e0-be17-7f36-b3908627744d": {
+        "rows": 2104,
+        "matches": 91,
+        "log_loss": 0.6586270348001227,
+        "brier": 0.23377464719796417,
+        "roc_auc": 0.6354548157144031
+      },
+      "707eab51-4836-f488-046a-cda6bf494859": {
+        "rows": 1369,
+        "matches": 48,
+        "log_loss": 0.64048163505412,
+        "brier": 0.22593539941266624,
+        "roc_auc": 0.6559257172371695
+      },
+      "7c8a4701-4de6-9355-b254-e09bc2a34b72": {
+        "rows": 1321,
+        "matches": 58,
+        "log_loss": 0.6405483918293577,
+        "brier": 0.22577918378237813,
+        "roc_auc": 0.659575809832186
+      },
+      "7f94d92c-4234-0a36-9646-3a87eb8b5c89": {
+        "rows": 396,
+        "matches": 18,
+        "log_loss": 0.6383796154974783,
+        "brier": 0.2245355072004777,
+        "roc_auc": 0.6742591263330598
+      },
+      "8e253930-4c05-31dd-1b6c-968525494517": {
+        "rows": 3447,
+        "matches": 142,
+        "log_loss": 0.647000660416077,
+        "brier": 0.22831675606664795,
+        "roc_auc": 0.6587050529582406
+      },
+      "92eeef5d-43b5-1d4a-8d03-b3927a09034b": {
+        "rows": 318,
+        "matches": 15,
+        "log_loss": 0.6411401583787179,
+        "brier": 0.22553621660606438,
+        "roc_auc": 0.6741764333227748
+      },
+      "95b78ed7-4637-86d9-7e41-71ba8c293152": {
+        "rows": 634,
+        "matches": 29,
+        "log_loss": 0.6349053240664831,
+        "brier": 0.2229554524835441,
+        "roc_auc": 0.6680984245639419
+      },
+      "9f0d8ba9-4140-b941-57d3-a7ad57c6b417": {
+        "rows": 2105,
+        "matches": 94,
+        "log_loss": 0.6361848351981294,
+        "brier": 0.2233594398325148,
+        "roc_auc": 0.679149599891496
+      },
+      "a3bfb853-43b2-7238-a4f1-ad90e9e46bcc": {
+        "rows": 4498,
+        "matches": 178,
+        "log_loss": 0.6457548431945502,
+        "brier": 0.22778346521753035,
+        "roc_auc": 0.6625910245521134
+      },
+      "add6443a-41bd-e414-f6ad-e58d267f4e95": {
+        "rows": 9657,
+        "matches": 294,
+        "log_loss": 0.6470492449142522,
+        "brier": 0.22846732196523695,
+        "roc_auc": 0.6572423238230205
+      },
+      "b444168c-4e35-8076-db47-ef9bf368f384": {
+        "rows": 876,
+        "matches": 39,
+        "log_loss": 0.6375331719503676,
+        "brier": 0.2237568647064519,
+        "roc_auc": 0.6849062604270938
+      },
+      "bb2a4828-46eb-8cd1-e765-15848195d751": {
+        "rows": 1806,
+        "matches": 74,
+        "log_loss": 0.6425249843534789,
+        "brier": 0.22629007355152883,
+        "roc_auc": 0.6630288745277659
+      },
+      "cc8b64c8-4b25-4ff9-6e7f-37b4da43d235": {
+        "rows": 600,
+        "matches": 28,
+        "log_loss": 0.6430461024555884,
+        "brier": 0.22638214118491806,
+        "roc_auc": 0.6713963488483206
+      },
+      "dade69b4-4f5a-8528-247b-219e5a1facd6": {
+        "rows": 2707,
+        "matches": 113,
+        "log_loss": 0.6377567246190703,
+        "brier": 0.22393805958734878,
+        "roc_auc": 0.6783657810665428
+      },
+      "df1cb487-4902-002e-5c17-d28e83e78588": {
+        "rows": 652,
+        "matches": 31,
+        "log_loss": 0.6401068760703182,
+        "brier": 0.2251045826551191,
+        "roc_auc": 0.680680652417389
+      },
+      "e370fa57-4757-3604-3648-499e1f642d3f": {
+        "rows": 1456,
+        "matches": 59,
+        "log_loss": 0.6412877039456968,
+        "brier": 0.2258763761058404,
+        "roc_auc": 0.6628298533228091
+      },
+      "eb93336a-449b-9c1b-0a54-a891f7921d69": {
+        "rows": 5069,
+        "matches": 192,
+        "log_loss": 0.6418229649951046,
+        "brier": 0.22598743551394587,
+        "roc_auc": 0.6692771770806869
+      },
+      "efba5359-4016-a1e5-7626-b1ae76895940": {
+        "rows": 759,
+        "matches": 30,
+        "log_loss": 0.6454026999884921,
+        "brier": 0.22722986446878002,
+        "roc_auc": 0.6686676295360173
+      },
+      "f94c3b30-42be-e959-889c-5aa313dba261": {
+        "rows": 3223,
+        "matches": 125,
+        "log_loss": 0.6478599198583486,
+        "brier": 0.22892354720883606,
+        "roc_auc": 0.6519922346737692
+      }
+    },
+    "phase": {
+      "last_half": {
+        "rows": 4298,
+        "matches": 338,
+        "log_loss": 0.6805499832237131,
+        "brier": 0.2437637092967312,
+        "roc_auc": 0.5920814129360344
+      },
+      "normal": {
+        "rows": 59900,
+        "matches": 340,
+        "log_loss": 0.6356085099409429,
+        "brier": 0.223128599796082,
+        "roc_auc": 0.6807315810103758
+      },
+      "overtime": {
+        "rows": 1439,
+        "matches": 46,
+        "log_loss": 0.6942898126915662,
+        "brier": 0.2505673716275753,
+        "roc_auc": 0.5130891670530057
+      },
+      "pistol": {
+        "rows": 6741,
+        "matches": 340,
+        "log_loss": 0.6932077112199113,
+        "brier": 0.2500211544330495,
+        "roc_auc": 0.5237146398315529
+      }
+    },
+    "has_personal_history": {
+      "False": {
+        "rows": 42345,
+        "matches": 340,
+        "log_loss": 0.6437760983393762,
+        "brier": 0.22695028458729208,
+        "roc_auc": 0.6636210785670043
+      },
+      "True": {
+        "rows": 30033,
+        "matches": 340,
+        "log_loss": 0.6462641398119968,
+        "brier": 0.22804411145403547,
+        "roc_auc": 0.6590676263995128
+      }
+    }
+  },
+  "dataset_sha256": "7971b3e6ca560943a1318bdacc592c26529d77599438d9d2822ea4bfcb98d56f",
+  "baseline_test": {
+    "log_loss": 0.6931467015964158,
+    "brier": 0.24999976051819417,
+    "roc_auc": 0.5
+  },
+  "test_match_mean_log_loss_ci95": [
+    0.6375793037795952,
+    0.6476517102757767
+  ],
+  "splits": {
+    "fit": {
+      "matches": 1243,
+      "rows": 262962
+    },
+    "calibration": {
+      "matches": 339,
+      "rows": 71795
+    },
+    "validation": {
+      "matches": 339,
+      "rows": 72145
+    },
+    "test": {
+      "matches": 340,
+      "rows": 72378
+    }
+  },
+  "history_coverage": {
+    "player": 0.3399366118407424,
+    "agent": 0.23002651530844762,
+    "weapon": 0.3167812901354767,
+    "agent_weapon": 0.2195964701495629
+  },
+  "money_sources": {
+    "calculated_rules": 428006,
+    "fixed_reset": 54400,
+    "inconsistent": 277,
+    "incomplete": 57
+  },
+  "missing_rates": {
+    "credits_before_buy": 0.00011807598293077018,
+    "team_credits_mean": 0.0001305050337655881,
+    "enemy_credits_mean": 0.0001346480507105274,
+    "round_number": 0.0,
+    "score_diff": 0.0,
+    "loss_streak": 0.0,
+    "prior_rank": 0.6600633881592576,
+    "weapon_value": 0.006593611467870904,
+    "armor_value": 0.0,
+    "history_player_rounds": 0.0,
+    "history_player_win_rate": 0.0,
+    "history_player_kills_per_round": 0.0,
+    "history_player_damage_per_round": 0.0,
+    "history_agent_rounds": 0.0,
+    "history_agent_win_rate": 0.0,
+    "history_agent_kills_per_round": 0.0,
+    "history_agent_damage_per_round": 0.0,
+    "history_weapon_rounds": 0.0,
+    "history_weapon_win_rate": 0.0,
+    "history_weapon_kills_per_round": 0.0,
+    "history_weapon_damage_per_round": 0.0,
+    "history_agent_weapon_rounds": 0.0,
+    "history_agent_weapon_win_rate": 0.0,
+    "history_agent_weapon_kills_per_round": 0.0,
+    "history_agent_weapon_damage_per_round": 0.0
+  },
+  "grade": "round(100 * observed_two_round_value / best_supported_two_round_value)",
+  "planning_horizon": 2,
+  "limitations": [
+    "Evaluación observacional, no demuestra mejora causal por cambiar la compra.",
+    "Daño histórico por arma asociado al equipamiento inicial, no atribución balística.",
+    "Habilidades y origen exacto de las compras no observables; presupuesto conservador.",
+    "Catálogo de precios congelado; no reconstruye cambios históricos de precio.",
+    "300 por defensor al desactivar es una regla configurada por el usuario.",
+    "Las primeras partidas no tienen modelo temporal anterior para puntuarlas."
+  ],
+  "continuation_models": [
+    {
+      "available": true,
+      "fit_transitions": 81175,
+      "calibration_transitions": 20244,
+      "trials": [
+        {
+          "leaves": 15,
+          "l2": 10,
+          "calibration_target_mse": 0.01012124326390416
+        },
+        {
+          "leaves": 31,
+          "l2": 10,
+          "calibration_target_mse": 0.01011344109250061
+        },
+        {
+          "leaves": 15,
+          "l2": 50,
+          "calibration_target_mse": 0.010132414104849786
+        }
+      ],
+      "target_mse": 0.01011344109250061,
+      "constant_target_mse": 0.012669111770284788,
+      "target": "max supported one-round model value at observed next state",
+      "features": [
+        "credits_before_buy",
+        "team_credits_mean",
+        "enemy_credits_mean",
+        "round_number",
+        "score_diff",
+        "loss_streak",
+        "prior_rank",
+        "weapon_value",
+        "armor_value",
+        "history_player_rounds",
+        "history_player_win_rate",
+        "history_player_kills_per_round",
+        "history_player_damage_per_round",
+        "history_agent_rounds",
+        "history_agent_win_rate",
+        "history_agent_kills_per_round",
+        "history_agent_damage_per_round",
+        "history_weapon_rounds",
+        "history_weapon_win_rate",
+        "history_weapon_kills_per_round",
+        "history_weapon_damage_per_round",
+        "history_agent_weapon_rounds",
+        "history_agent_weapon_win_rate",
+        "history_agent_weapon_kills_per_round",
+        "history_agent_weapon_damage_per_round",
+        "candidate_remaining",
+        "team_score_before",
+        "enemy_score_before",
+        "map_id",
+        "side",
+        "agent_id",
+        "phase",
+        "weapon_id",
+        "armor_id"
+      ],
+      "limitation": "Fitted value from observational transitions; no causal guarantee or logged exploration propensities."
+    },
+    {
+      "available": true,
+      "fit_transitions": 146571,
+      "calibration_transitions": 37532,
+      "trials": [
+        {
+          "leaves": 15,
+          "l2": 10,
+          "calibration_target_mse": 0.011077992659016062
+        },
+        {
+          "leaves": 31,
+          "l2": 10,
+          "calibration_target_mse": 0.011082617125139128
+        },
+        {
+          "leaves": 15,
+          "l2": 50,
+          "calibration_target_mse": 0.011077983610017134
+        }
+      ],
+      "target_mse": 0.011077983610017134,
+      "constant_target_mse": 0.014397045164893933,
+      "target": "max supported one-round model value at observed next state",
+      "features": [
+        "credits_before_buy",
+        "team_credits_mean",
+        "enemy_credits_mean",
+        "round_number",
+        "score_diff",
+        "loss_streak",
+        "prior_rank",
+        "weapon_value",
+        "armor_value",
+        "history_player_rounds",
+        "history_player_win_rate",
+        "history_player_kills_per_round",
+        "history_player_damage_per_round",
+        "history_agent_rounds",
+        "history_agent_win_rate",
+        "history_agent_kills_per_round",
+        "history_agent_damage_per_round",
+        "history_weapon_rounds",
+        "history_weapon_win_rate",
+        "history_weapon_kills_per_round",
+        "history_weapon_damage_per_round",
+        "history_agent_weapon_rounds",
+        "history_agent_weapon_win_rate",
+        "history_agent_weapon_kills_per_round",
+        "history_agent_weapon_damage_per_round",
+        "candidate_remaining",
+        "team_score_before",
+        "enemy_score_before",
+        "map_id",
+        "side",
+        "agent_id",
+        "phase",
+        "weapon_id",
+        "armor_id"
+      ],
+      "limitation": "Fitted value from observational transitions; no causal guarantee or logged exploration propensities."
+    },
+    {
+      "available": true,
+      "fit_transitions": 224730,
+      "calibration_transitions": 61283,
+      "trials": [
+        {
+          "leaves": 15,
+          "l2": 10,
+          "calibration_target_mse": 0.011920066059058347
+        },
+        {
+          "leaves": 31,
+          "l2": 10,
+          "calibration_target_mse": 0.011947871958799212
+        },
+        {
+          "leaves": 15,
+          "l2": 50,
+          "calibration_target_mse": 0.011921410328347572
+        }
+      ],
+      "target_mse": 0.011920066059058347,
+      "constant_target_mse": 0.014993829267430465,
+      "target": "max supported one-round model value at observed next state",
+      "features": [
+        "credits_before_buy",
+        "team_credits_mean",
+        "enemy_credits_mean",
+        "round_number",
+        "score_diff",
+        "loss_streak",
+        "prior_rank",
+        "weapon_value",
+        "armor_value",
+        "history_player_rounds",
+        "history_player_win_rate",
+        "history_player_kills_per_round",
+        "history_player_damage_per_round",
+        "history_agent_rounds",
+        "history_agent_win_rate",
+        "history_agent_kills_per_round",
+        "history_agent_damage_per_round",
+        "history_weapon_rounds",
+        "history_weapon_win_rate",
+        "history_weapon_kills_per_round",
+        "history_weapon_damage_per_round",
+        "history_agent_weapon_rounds",
+        "history_agent_weapon_win_rate",
+        "history_agent_weapon_kills_per_round",
+        "history_agent_weapon_damage_per_round",
+        "candidate_remaining",
+        "team_score_before",
+        "enemy_score_before",
+        "map_id",
+        "side",
+        "agent_id",
+        "phase",
+        "weapon_id",
+        "armor_id"
+      ],
+      "limitation": "Fitted value from observational transitions; no causal guarantee or logged exploration propensities."
+    }
+  ],
+  "planning_method": "fitted_two_step_value_from_real_transitions",
+  "recommendation_min_value_gap": 0.03
+}

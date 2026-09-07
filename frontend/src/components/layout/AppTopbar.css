@@ -177,8 +177,6 @@
   transition: transform var(--app-topbar-ease);
 }
 
-.app-topbar__more:hover > .app-topbar__nav-button svg,
-.app-topbar__more:focus-within > .app-topbar__nav-button svg,
 .app-topbar__more--open > .app-topbar__nav-button svg {
   transform: rotate(180deg);
 }
@@ -219,26 +217,11 @@
   height: 12px;
 }
 
-.app-topbar__more:hover .app-topbar__more-menu,
-.app-topbar__more:focus-within .app-topbar__more-menu,
 .app-topbar__more--open .app-topbar__more-menu {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0) scale(1);
   visibility: visible;
-}
-
-.app-topbar__more--closed:hover .app-topbar__more-menu,
-.app-topbar__more--closed:focus-within .app-topbar__more-menu {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-6px) scale(0.98);
-  visibility: hidden;
-}
-
-.app-topbar__more--closed:hover > .app-topbar__nav-button svg,
-.app-topbar__more--closed:focus-within > .app-topbar__nav-button svg {
-  transform: none;
 }
 
 .app-topbar__more-menu .app-topbar__nav-button {
