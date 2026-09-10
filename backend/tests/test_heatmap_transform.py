@@ -5,6 +5,7 @@ from modules.analytics.domain.heatmap_transformer import build_transform_meta, t
 
 class HeatmapTransformTest(unittest.TestCase):
     def test_fracture_bridge_reference_matches_official_transform(self):
+        """Comprueba la transformación de coordenadas con una referencia del puente de Fracture."""
         tf = {
             "x_mult": 7.8e-05,
             "x_add": 0.556952,
@@ -21,6 +22,7 @@ class HeatmapTransformTest(unittest.TestCase):
         self.assertLess(abs(ny - 0.2615), 0.001)
 
     def test_transform_keeps_axis_swap(self):
+        """Conserva el intercambio de ejes al transformar coordenadas."""
         tf = {
             "x_mult": 2.0,
             "x_add": 10.0,
@@ -34,6 +36,7 @@ class HeatmapTransformTest(unittest.TestCase):
         self.assertEqual(ny, -7.0)  # y <- game_x * y_mult + y_add
 
     def test_route_meta_exposes_transform_without_inversion(self):
+        """Expone la transformación en los metadatos de la ruta sin invertirla."""
         tf = {
             "x_mult": 0.1,
             "x_add": 0.2,

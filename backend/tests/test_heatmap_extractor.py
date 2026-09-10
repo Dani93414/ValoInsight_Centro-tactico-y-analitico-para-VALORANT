@@ -21,6 +21,7 @@ class HeatmapExtractorTest(unittest.TestCase):
         }
 
     def test_kill_and_first_blood_use_killer_position(self):
+        """Ubica las bajas y la primera sangre en la posición del atacante."""
         puuid = "killer-1"
         victim = "victim-1"
 
@@ -73,6 +74,7 @@ class HeatmapExtractorTest(unittest.TestCase):
         self.assertAlmostEqual(first_blood_event["y"], 0.1, places=6)
 
     def test_kill_event_is_skipped_when_killer_position_missing(self):
+        """Omite el evento de baja si falta la posición del atacante."""
         puuid = "killer-1"
         victim = "victim-1"
 
@@ -116,6 +118,7 @@ class HeatmapExtractorTest(unittest.TestCase):
         self.assertEqual(events, [])
 
     def test_kill_enemy_position_uses_victim_location(self):
+        """Usa la posición de la víctima para representar al enemigo abatido."""
         puuid = "killer-1"
         victim = "victim-1"
 
@@ -164,6 +167,7 @@ class HeatmapExtractorTest(unittest.TestCase):
         self.assertAlmostEqual(event["y"], 0.9, places=6)
 
     def test_overtime_side_alternates_every_round(self):
+        """Alterna el lado en cada ronda de prórroga."""
         self.assertEqual(_determine_side("Red", 24, 26), "attack")
         self.assertEqual(_determine_side("Red", 25, 26), "defense")
         self.assertEqual(_determine_side("Red", 26, 28), "attack")
@@ -171,6 +175,7 @@ class HeatmapExtractorTest(unittest.TestCase):
         self.assertEqual(_determine_side("Blue", 25, 26), "attack")
 
     def test_objective_events_keep_temporal_round_phase(self):
+        """Conserva la fase temporal de la ronda en los eventos de objetivos."""
         puuid = "planter-1"
 
         match = {

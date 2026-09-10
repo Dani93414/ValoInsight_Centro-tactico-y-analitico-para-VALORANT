@@ -84,7 +84,7 @@ export default function CosmeticosSprays() {
       return matchesSearch && matchesAnimation;
     });
   }, [animationFilter, search, sprays]);
-  const progressive = useProgressiveList(
+  const { visibleItems: progressiveVisibleItems, visibleCount: progressiveVisibleCount, hasMore: progressiveHasMore, sentinelRef: progressiveSentinelRef, showMore: progressiveShowMore } = useProgressiveList(
     filteredSprays,
     `${search}:${animationFilter}:${filteredSprays.length}`,
   );
@@ -263,7 +263,7 @@ export default function CosmeticosSprays() {
           ) : (
             <>
               <div className="content-grid csprays-grid" ref={gridRef}>
-              {progressive.visibleItems.map((item, index) => {
+              {progressiveVisibleItems.map((item, index) => {
                 const itemKey = item.uuid ?? item.displayName;
                 const active = selectedKey === itemKey;
                 const image = getSprayPreview(item);
@@ -303,10 +303,10 @@ export default function CosmeticosSprays() {
                 );
               })}
               </div>
-              {progressive.hasMore && (
-                <div ref={progressive.sentinelRef} className="content-load-more">
-                  <button type="button" onClick={progressive.showMore}>
-                    Mostrar más ({filteredSprays.length - progressive.visibleCount})
+              {progressiveHasMore && (
+                <div ref={progressiveSentinelRef} className="content-load-more">
+                  <button type="button" onClick={progressiveShowMore}>
+                    Mostrar más ({filteredSprays.length - progressiveVisibleCount})
                   </button>
                 </div>
               )}

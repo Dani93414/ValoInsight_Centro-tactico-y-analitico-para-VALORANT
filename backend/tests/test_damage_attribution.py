@@ -13,6 +13,7 @@ class DamageAttributionTest(unittest.TestCase):
         weapons_mock,
         weapon_name_mock,
     ):
+        """Identifica como arma una fuente de daño que contiene un arma."""
         weapons_mock.return_value = {"weapon-1": {"displayIcon": "/vandal.png"}}
         weapon_name_mock.return_value = "Vandal"
 
@@ -36,6 +37,7 @@ class DamageAttributionTest(unittest.TestCase):
         weapons_mock,
         ability_mock,
     ):
+        """Resuelve el nombre y el icono de una habilidad causante de daño."""
         weapons_mock.return_value = {}
         ability_mock.return_value = {
             "uuid": "sova:ShockBolt",
@@ -65,6 +67,7 @@ class DamageAttributionTest(unittest.TestCase):
         weapons_mock,
         ability_mock,
     ):
+        """Incluye las categorías de habilidades en las estadísticas de armas."""
         weapons_mock.return_value = {}
         ability_mock.return_value = {
             "uuid": "sova:ShockBolt",
@@ -111,6 +114,7 @@ class DamageAttributionTest(unittest.TestCase):
         self.assertNotIn("legshot_kills", bucket)
 
     def test_thrash_is_explicitly_non_lethal(self):
+        """Identifica Thrash como habilidad no letal."""
         self.assertFalse(
             can_source_produce_kill(
                 {
@@ -122,6 +126,7 @@ class DamageAttributionTest(unittest.TestCase):
         )
 
     def test_provider_only_non_lethal_ability_attributions_are_rejected(self):
+        """Rechaza atribuciones letales a habilidades no letales indicadas solo por el proveedor."""
         for source_id, source_name in (
             ("1dbf2edd-4729-0984-3115-daa5eed44993:Ultimate", "No me voy"),
             ("eb93336a-449b-9c1b-0a54-a891f7921d69:Ability2", "Bola curva"),
@@ -144,6 +149,7 @@ class DamageAttributionTest(unittest.TestCase):
         weapons_mock,
         ability_mock,
     ):
+        """Resuelve una ranura genérica de habilidad usando el agente del atacante."""
         weapons_mock.return_value = {}
         ability_mock.return_value = {
             "uuid": "killjoy:GrenadeAbility",
@@ -172,6 +178,7 @@ class DamageAttributionTest(unittest.TestCase):
         weapons_mock,
         abilities_mock,
     ):
+        """Asocia una definitiva genérica con el agente del atacante."""
         weapons_mock.return_value = {}
         abilities_mock.return_value = {
             "Ultimate": {
@@ -208,6 +215,7 @@ class DamageAttributionTest(unittest.TestCase):
         weapons_mock,
         abilities_mock,
     ):
+        """Resuelve cada ranura genérica dentro del agente del atacante."""
         weapons_mock.return_value = {}
         abilities = {}
         for agent_id in ("agent-a", "agent-b"):
@@ -252,6 +260,7 @@ class DamageAttributionTest(unittest.TestCase):
         weapons_mock,
         abilities_mock,
     ):
+        """No inventa una habilidad cuando falta el agente de una ranura genérica."""
         weapons_mock.return_value = {}
         abilities_mock.return_value = {
             "Ultimate": {
@@ -281,6 +290,7 @@ class DamageAttributionTest(unittest.TestCase):
         weapons_mock,
         agents_mock,
     ):
+        """Resuelve el identificador de un arma de habilidad como habilidad del catálogo local."""
         weapons_mock.return_value = {}
         agents_mock.return_value = {
             "other-agent": {

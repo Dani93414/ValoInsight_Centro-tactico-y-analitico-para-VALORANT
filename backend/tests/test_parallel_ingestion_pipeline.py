@@ -17,6 +17,7 @@ for path in (str(PROJECT_ROOT), str(BACKEND_ROOT)):
 
 class ParallelIngestionPipelineTests(unittest.TestCase):
     def test_thread_safe_rate_limiter_respects_global_interval(self):
+        """El limitador compartido entre hilos respeta el intervalo global."""
         fake_requests = types.ModuleType("requests")
         fake_requests.Session = lambda: types.SimpleNamespace(headers={})
         fake_requests.Timeout = TimeoutError
@@ -56,6 +57,7 @@ class ParallelIngestionPipelineTests(unittest.TestCase):
         self.assertGreaterEqual(elapsed, limiter.min_interval * 0.8)
 
     def test_insert_match_only_statuses(self):
+        """Comprueba los estados devueltos al insertar una partida."""
         calls = []
 
         fake_repo = types.ModuleType("modules.matches.infrastructure.mongo_match_repo")
@@ -123,6 +125,7 @@ class ParallelIngestionPipelineTests(unittest.TestCase):
                     sys.modules[name] = module
 
     def test_convert_one_match_file_creates_output_and_skips_existing(self):
+        """Genera el archivo convertido y omite una salida que ya existe."""
         from scripts.descarga_formateo_partidas import build_output_name, convert_one_match_file
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -172,6 +175,7 @@ class ParallelIngestionPipelineTests(unittest.TestCase):
             self.assertFalse(raw_path.exists())
 
     def test_upload_one_file_deletion_rules(self):
+        """Respeta las condiciones de eliminación del archivo tras procesarlo."""
         fake_mongo_client = types.ModuleType("backend.infrastructure.mongo_client")
         fake_mongo_client.ensure_indexes = lambda: None
 

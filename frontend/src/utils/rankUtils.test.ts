@@ -10,19 +10,19 @@ const tiers = [
 ];
 
 describe("resolveCompetitiveTierIcon", () => {
-  it("uses the exact rank icon when available", () => {
+  it("muestra el icono exacto del rango cuando está disponible", () => {
     expect(resolveCompetitiveTierIcon(12, null, tiers)).toBe("/content/ranks/gold.png");
   });
 
-  it("uses the catalog unranked symbol when tier is missing", () => {
+  it("usa el icono sin rango del catálogo cuando falta el rango", () => {
     expect(resolveCompetitiveTierIcon(null, null, tiers)).toBe("/content/ranks/unranked.png");
   });
 
-  it("uses the built-in unranked symbol when catalog assets are missing", () => {
+  it("usa el icono sin rango de reserva cuando faltan imágenes en el catálogo", () => {
     expect(resolveCompetitiveTierIcon(null, null, [])).toBe(UNRANKED_RANK_ICON_FALLBACK);
   });
 
-  it("falls back to unranked when a known tier has no usable image", () => {
+  it("usa el icono sin rango si el rango conocido no tiene una imagen utilizable", () => {
     expect(resolveCompetitiveTierIcon(18, null, tiers)).toBe("/content/ranks/unranked.png");
   });
 });

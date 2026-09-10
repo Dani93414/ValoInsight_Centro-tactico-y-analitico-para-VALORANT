@@ -46,6 +46,7 @@ def _doc(season_id: str, tier, timestamp: int) -> dict:
 
 class RankResolutionTest(unittest.TestCase):
     def test_current_act_unranked_matches_show_unranked(self):
+        """Muestra sin rango cuando las partidas del acto actual no tienen rango."""
         rank = resolve_current_visual_rank(
             current_act_docs=[_doc("act-new", 0, 2000)],
             mapped_matches=[
@@ -63,6 +64,7 @@ class RankResolutionTest(unittest.TestCase):
         self.assertEqual(rank["image"], "/unranked.png")
 
     def test_no_current_act_matches_can_fallback_to_latest_global_rank(self):
+        """Permite usar el último rango global si no hay partidas del acto actual."""
         rank = resolve_current_visual_rank(
             current_act_docs=[],
             mapped_matches=[
@@ -86,6 +88,7 @@ class RankResolutionTest(unittest.TestCase):
         weapon_mock,
         comparison_mock,
     ):
+        """No muestra el rango anterior en el panel cuando el acto actual figura sin rango."""
         content_mock.return_value = CONTENT_DOC
         weapon_mock.return_value = []
         comparison_mock.return_value = {}

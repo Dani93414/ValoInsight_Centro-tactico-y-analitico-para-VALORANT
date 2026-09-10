@@ -1,31 +1,16 @@
+import { purchaseAssessment, recommendationOrigin } from "./economyAssessment";
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ShieldOff, UserRound } from "lucide-react";
 import { useArmas, useGear } from "../../api/useContentQueries";
 import { normalizeArrayResponse } from "../../utils/formatters";
 import type { AgentContent } from "../../types/agents";
-import type { EconomyMlPlayerRecommendation, EconomyMlResponse, EconomyMlRoundRecommendation } from "../../types/matches";
+import type { EconomyMlResponse } from "../../types/matches";
 import "./EconomyRoundTable.css";
 
 type CatalogItem = { uuid?: string | null; displayName?: string | null; displayIcon?: string | null; shopImage?: string | null };
 const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
 const credits = (value: unknown) => number(value)?.toLocaleString("es-ES") ?? "—";
 const reference = (value: unknown) => String(value ?? "").toLocaleLowerCase("es-ES").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-
-export function purchaseAssessment(player?: EconomyMlPlayerRecommendation) {
-  if (number(player?.purchase_score) === null) return { label: "Sin evaluación", tone: "neutral", alternative: false };
-  if (player?.recommendation_equivalent_to_actual) return { label: "Sin mejora clara", tone: "good", alternative: false };
-  if (player?.ambiguity_reason || (player?.score_range && player.score_range[0] !== player.score_range[1])) {
-    return { label: "Valoración incierta", tone: "neutral", alternative: false };
-  }
-  const alternative = (number(player?.individual_value_gap) ?? 0) > 0;
-  return { label: alternative ? "Revisar compra" : "Sin mejora clara", tone: alternative ? "review" : "good", alternative };
-}
-
-export function recommendationOrigin(round: Pick<EconomyMlRoundRecommendation, "recommendation_source">) {
-  if (round.recommendation_source === "ml_guided_solver") return "ML + reglas";
-  if (round.recommendation_source === "deterministic_solver") return "Reglas";
-  return "Origen no disponible";
-}
 
 function teamActionLabel(action?: string | null) {
   const labels: Record<string, string> = {

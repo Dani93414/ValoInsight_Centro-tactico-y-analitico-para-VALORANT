@@ -28,6 +28,7 @@ def _kill(
 
 class TradeKillLogicTest(unittest.TestCase):
     def test_trade_conversion_counts_within_5_seconds_window(self):
+        """Cuenta la conversión de un intercambio dentro de la ventana de cinco segundos."""
         kills = [
             _kill(
                 1000,
@@ -56,6 +57,7 @@ class TradeKillLogicTest(unittest.TestCase):
         self.assertEqual(traded_deaths, 0)
 
     def test_realistic_trade_opportunity_counts_as_missed_when_player_is_nearby(self):
+        """Cuenta una oportunidad fallida de intercambio cuando el jugador estaba cerca."""
         kills = [
             _kill(
                 1000,
@@ -81,6 +83,7 @@ class TradeKillLogicTest(unittest.TestCase):
         self.assertEqual(metrics["traded_deaths"], 0)
 
     def test_far_away_teammate_death_does_not_count_as_missed_trade_opportunity(self):
+        """No considera oportunidad fallida la muerte de un compañero demasiado lejano."""
         kills = [
             _kill(
                 1000,
@@ -105,6 +108,7 @@ class TradeKillLogicTest(unittest.TestCase):
         self.assertEqual(metrics["missed_trade_opportunities"], 0)
 
     def test_raw_trade_kill_still_counts_even_when_initial_position_was_not_realistic(self):
+        """Conserva la baja de intercambio aunque la posición inicial no fuese realista."""
         kills = [
             _kill(
                 1000,
@@ -137,6 +141,7 @@ class TradeKillLogicTest(unittest.TestCase):
         self.assertEqual(metrics["trade_conversion_rate"], 100.0)
 
     def test_raw_trade_kill_still_counts_when_conversion_location_is_outside_threshold(self):
+        """Conserva la baja de intercambio aunque termine fuera del umbral espacial."""
         kills = [
             _kill(
                 1000,
@@ -169,6 +174,7 @@ class TradeKillLogicTest(unittest.TestCase):
         self.assertEqual(metrics["trade_conversion_rate"], 100.0)
 
     def test_trade_opportunity_converts_once_and_closes(self):
+        """Convierte cada oportunidad de intercambio una sola vez y después la cierra."""
         kills = [
             _kill(
                 1000,

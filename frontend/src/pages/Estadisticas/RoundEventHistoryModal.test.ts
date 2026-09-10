@@ -43,7 +43,7 @@ describe("extractRoundHistoryEvents", () => {
     expect(extractRoundHistoryEvents(detail, match, "player", "ace", "all").map((event) => event.roundNum)).toEqual([1, 4]);
   });
 
-  it("solo cuenta como primera sangre la primera kill válida", () => {
+  it("solo cuenta como primera sangre la primera baja válida", () => {
     const detail: RawMatchDetail = {
       players,
       roundResults: [

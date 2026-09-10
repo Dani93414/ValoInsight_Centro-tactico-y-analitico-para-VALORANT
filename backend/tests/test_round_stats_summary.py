@@ -33,6 +33,7 @@ def _pstat(puuid: str, kills: list[dict] | None = None) -> dict:
 
 class RoundStatsSummaryTest(unittest.TestCase):
     def test_round_overview_classifies_rounds_and_summary_is_consistent(self):
+        """Clasifica las rondas y mantiene coherente su resumen."""
         puuid = "P1"
 
         match_obj = {
@@ -188,6 +189,7 @@ class RoundStatsSummaryTest(unittest.TestCase):
         self.assertAlmostEqual(summary["distribution_none_pct"], 11.1111, places=4)
 
     def test_round_summary_handles_zero_rounds(self):
+        """Maneja un resumen sin rondas."""
         summary = _compute_rounds_panel_summary(
             [
                 {"overview": {"rounds": 0}},
@@ -227,6 +229,7 @@ class RoundStatsSummaryTest(unittest.TestCase):
         self.assertEqual(summary["distribution_combined_or_none_pct"], 0.0)
 
     def test_round_overview_counts_plant_and_defuse_opportunities_only_when_alive(self):
+        """Solo cuenta oportunidades de plantar y desactivar mientras el jugador está vivo."""
         puuid = "P1"
         teammate = "P2"
         enemy = "E1"
@@ -306,6 +309,7 @@ class RoundStatsSummaryTest(unittest.TestCase):
         self.assertEqual(summary["defuses_per_opportunity_pct"], 50.0)
 
     def test_round_overview_includes_realistic_trade_opportunities_and_conversion_rate(self):
+        """Incluye oportunidades realistas de intercambio y su tasa de conversión."""
         puuid = "P1"
         teammate = "P2"
 
@@ -390,6 +394,7 @@ class RoundStatsSummaryTest(unittest.TestCase):
         self.assertEqual(round_overview["trade_conversion_rate"], 50.0)
 
     def test_round_overview_keeps_raw_trade_kill_when_trade_happens_outside_spatial_threshold(self):
+        """Conserva la baja de intercambio aunque ocurra fuera del umbral espacial."""
         puuid = "P1"
         teammate = "P2"
 
@@ -450,6 +455,7 @@ class RoundStatsSummaryTest(unittest.TestCase):
         self.assertEqual(round_overview["trade_conversion_rate"], 100.0)
 
     def test_round_overview_counts_trade_only_round_as_kast(self):
+        """Una ronda con solo muerte intercambiada cuenta para KAST."""
         puuid = "P1"
         teammate = "P2"
         enemy = "E1"

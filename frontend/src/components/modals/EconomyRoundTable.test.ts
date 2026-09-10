@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import EconomyRoundTable, { purchaseAssessment, recommendationOrigin } from "./EconomyRoundTable";
+import EconomyRoundTable from "./EconomyRoundTable";
+import { purchaseAssessment, recommendationOrigin } from "./economyAssessment";
 import type { EconomyMlPlayerRecommendation, EconomyMlResponse } from "../../types/matches";
 
 describe("lectura de la economía v12", () => {

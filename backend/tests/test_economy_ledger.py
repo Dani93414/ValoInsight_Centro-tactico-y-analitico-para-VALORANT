@@ -54,17 +54,20 @@ def _match(rounds):
 
 class EconomyLedgerTests(unittest.TestCase):
     def test_round_1_reset(self):
+        """Reinicia los créditos en la primera ronda."""
         match = _match([{"roundNum": 0, "winningTeam": "A", "winningTeamRole": "attack", "playerStats": _stats()}])
         ledger = build_player_round_ledger(match=match, round_index=0, team_id="A", puuid="A0", previous_player_state=None)
         self.assertEqual(ledger["credits_before_buy_estimated"], 800)
 
     def test_round_13_reset(self):
+        """Reinicia los créditos al cambiar de mitad en la ronda 13."""
         match = _match([{"roundNum": 13, "winningTeam": "A", "winningTeamRole": "attack", "playerStats": _stats()}])
         ledger = build_player_round_ledger(match=match, round_index=0, team_id="A", puuid="A0", previous_player_state=None)
         self.assertEqual(ledger["round_number"], 13)
         self.assertEqual(ledger["credits_before_buy_estimated"], 800)
 
     def test_victory_kill_and_plant_income(self):
+        """Calcula los ingresos de victoria, bajas y plantado del caso de prueba."""
         stats = _stats(remaining=300, spent=500)
         stats[0]["kills"] = [{"victim": "B0"}]
         match = _match([{"roundNum": 0, "winningTeam": "A", "bombPlanter": "A0", "playerStats": stats}])
@@ -72,12 +75,14 @@ class EconomyLedgerTests(unittest.TestCase):
         self.assertEqual(ledger["expected_next_round_credits"], 300 + 3000 + 200 + 300)
 
     def test_consecutive_loss_rewards(self):
+        """Calcula las recompensas de derrotas consecutivas."""
         self.assertEqual(round_result_income(team_won=False, loss_streak_after_round=1, save_penalty_applies=False), 1900)
         self.assertEqual(round_result_income(team_won=False, loss_streak_after_round=2, save_penalty_applies=False), 2400)
         self.assertEqual(round_result_income(team_won=False, loss_streak_after_round=3, save_penalty_applies=False), 2900)
         self.assertEqual(round_result_income(team_won=False, loss_streak_after_round=4, save_penalty_applies=False), 2900)
 
     def test_save_penalty_attacker(self):
+        """Aplica la penalización por conservar equipamiento en el caso atacante."""
         self.assertTrue(save_penalty_applies(
             side="attack",
             team_won=False,
@@ -89,6 +94,7 @@ class EconomyLedgerTests(unittest.TestCase):
         self.assertEqual(round_result_income(team_won=False, loss_streak_after_round=1, save_penalty_applies=True), 1000)
 
     def test_save_penalty_defender(self):
+        """Aplica la penalización por conservar equipamiento en el caso defensor."""
         self.assertTrue(save_penalty_applies(
             side="defense",
             team_won=False,
@@ -100,6 +106,7 @@ class EconomyLedgerTests(unittest.TestCase):
         self.assertEqual(round_result_income(team_won=False, loss_streak_after_round=1, save_penalty_applies=True), 1000)
 
     def test_dead_player_does_not_receive_save_penalty(self):
+        """No aplica la penalización por conservar equipamiento a un jugador muerto."""
         self.assertFalse(save_penalty_applies(
             side="attack",
             team_won=False,
@@ -111,6 +118,7 @@ class EconomyLedgerTests(unittest.TestCase):
         self.assertEqual(round_result_income(team_won=False, loss_streak_after_round=1, save_penalty_applies=False), 1900)
 
     def test_kill_bonus(self):
+        """Calcula el ingreso adicional por baja."""
         stats = _stats()
         stats[0]["kills"] = [{"victim": "B0"}, {"victim": "B1"}, {"victim": "B2"}]
         match = _match([{"roundNum": 0, "winningTeam": "A", "winningTeamRole": "attack", "playerStats": stats}])
@@ -118,23 +126,27 @@ class EconomyLedgerTests(unittest.TestCase):
         self.assertEqual(ledger["kill_income"], 600)
 
     def test_plant_bonus_for_attack_team(self):
+        """Calcula el ingreso por plantado para el equipo atacante."""
         match = _match([{"roundNum": 0, "winningTeam": "A", "bombPlanter": "A0", "playerStats": _stats()}])
         ledger = build_player_round_ledger(match=match, round_index=0, team_id="A", puuid="A1", previous_player_state=None)
         self.assertEqual(ledger["plant_income"], 300)
 
     def test_max_credits(self):
+        """Respeta el límite máximo de créditos."""
         stats = _stats(remaining=8900, spent=0)
         match = _match([{"roundNum": 1, "winningTeam": "A", "winningTeamRole": "attack", "playerStats": stats}])
         ledger = build_player_round_ledger(match=match, round_index=0, team_id="A", puuid="A0", previous_player_state=None)
         self.assertEqual(ledger["expected_next_round_credits"], 9000)
 
     def test_overtime(self):
+        """Aplica los créditos de la prórroga."""
         match = _match([{"roundNum": 25, "winningTeam": "A", "winningTeamRole": "attack", "playerStats": _stats()}])
         ledger = build_player_round_ledger(match=match, round_index=0, team_id="A", puuid="A0", previous_player_state=None)
         self.assertEqual(ledger["round_number"], 25)
         self.assertEqual(ledger["credits_before_buy_estimated"], 5000)
 
     def test_free_light_armor_exception(self):
+        """Reconoce la excepción de escudo ligero gratuito."""
         stats = _stats(remaining=0, spent=800, loadout=1200, weapon="Sheriff", armor="Light")
         for stat in stats:
             stat["economy"]["totalOutlay"] = 800
@@ -143,10 +155,12 @@ class EconomyLedgerTests(unittest.TestCase):
         self.assertIn("free_light_armor_exception", ledger["flags"])
 
     def test_reconciliation_matched(self):
+        """Reconcilia el saldo calculado con el observado cuando coinciden."""
         result = reconcile_expected_vs_observed(3900, 3910)
         self.assertEqual(result["status"], "matched")
 
     def test_possible_afk_bonus_reconciliation(self):
+        """Contempla una posible bonificación por ausencia de un compañero al reconciliar el saldo."""
         round1 = {"roundNum": 1, "winningTeam": "A", "winningTeamRole": "attack", "playerStats": _stats(remaining=900, spent=0)}
         round2_stats = _stats(remaining=4500, spent=0)
         for stat in round2_stats:
@@ -159,6 +173,7 @@ class EconomyLedgerTests(unittest.TestCase):
         self.assertEqual(afk["most_likely_bonus"], 600)
 
     def test_state_extractor_includes_ledger_features(self):
+        """Incluye las variables del registro económico en el estado del modelo."""
         round1 = {"roundNum": 0, "winningTeam": "A", "bombPlanter": "A0", "playerStats": _stats()}
         round2 = {"roundNum": 1, "winningTeam": "B", "winningTeamRole": "attack", "playerStats": _stats(remaining=3900, spent=0)}
         states = extract_match_round_states(_match([round1, round2]))

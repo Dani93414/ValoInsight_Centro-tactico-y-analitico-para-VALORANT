@@ -7,6 +7,7 @@ from modules.matches.infrastructure.mongo_match_repo import _has_round_economy
 
 class MongoMatchRepositoryTests(unittest.TestCase):
     def test_detects_economy_inside_nested_round_player_arrays(self):
+        """Detecta datos económicos dentro de listas anidadas de jugadores por ronda."""
         match = {
             "roundResults": [{
                 "playerStats": [{"puuid": "p1", "economy": {"remaining": 800}}],
@@ -15,6 +16,7 @@ class MongoMatchRepositoryTests(unittest.TestCase):
         self.assertTrue(_has_round_economy(match))
 
     def test_rejects_missing_or_empty_economy(self):
+        """Rechaza datos económicos ausentes o vacíos."""
         self.assertFalse(_has_round_economy({"roundResults": []}))
         self.assertFalse(_has_round_economy({
             "roundResults": [{"playerStats": [{"economy": {}}]}],

@@ -87,17 +87,20 @@ def _match():
 
 class EconomyMlTests(unittest.TestCase):
     def test_rank_mapping(self):
+        """Convierte los rangos al formato usado por el modelo."""
         self.assertEqual(get_rank_name(13), "Gold 2")
         self.assertEqual(get_rank_group(27), "Immortal+")
         self.assertIsNone(normalize_rank_tier("bad"))
 
     def test_buy_classifier_is_granular(self):
+        """Distingue las categorías detalladas de compra."""
         economies = [{"weapon": "Sheriff", "armor": None, "loadoutValue": 800, "spent": 800}] * 5
         self.assertEqual(classify_team_buy_action(economies), "ECO_SHERIFF_STACK")
         self.assertTrue(is_operator("a03b24d3-4319-996d-0f8c-94bbfba1dfc7"))
         self.assertTrue(is_heavy_armor("822bcab2-40a2-324e-c137-e09195ad7692"))
 
     def test_buy_classifier_distinguishes_sheriff_counts(self):
+        """Diferencia las compras según la cantidad de Sheriff."""
         sheriff = {"weapon": "Sheriff", "armor": None, "loadoutValue": 800, "spent": 800}
         classic = {"weapon": "Classic", "armor": None, "loadoutValue": 0, "spent": 0}
         self.assertEqual(classify_team_buy_action([sheriff] + [classic] * 4), "ECO_ONE_SHERIFF")
@@ -105,6 +108,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(classify_team_buy_action([sheriff] * 3 + [classic] * 2), "ECO_SHERIFF_STACK")
 
     def test_buy_classifier_handles_non_rifle_weapon_families(self):
+        """Clasifica también familias de armas distintas de los rifles."""
         bucky_buy = [
             {"weapon": "910be174-449b-c412-ab22-d0873436b21b", "armor": "Light", "loadoutValue": 2500, "spent": 2500}
         ] * 5
@@ -115,6 +119,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(classify_team_buy_action(odin_buy), "FULL_RIFLES")
 
     def test_agent_utility_classification_uses_role_and_abilities(self):
+        """Clasifica las habilidades según el rol y las habilidades del agente."""
         omen = {
             "uuid": "agent-omen",
             "displayName": "Omen",
@@ -130,11 +135,13 @@ class EconomyMlTests(unittest.TestCase):
         self.assertGreaterEqual(result["base_utility_score"], 0.5)
 
     def test_agent_utility_unknown_fallback_is_neutral(self):
+        """Usa un valor neutro si se desconoce el perfil de habilidades del agente."""
         result = classify_agent_utility_profile({"uuid": "x", "displayName": "Mystery"})
         self.assertEqual(result["utility_profiles"], ["unknown"])
         self.assertEqual(result["base_utility_score"], 0.5)
 
     def test_data_contract_blocks_post_round_leakage(self):
+        """Impide usar información posterior a la ronda como entrada del modelo."""
         report = build_data_contract_report()
         self.assertIn("kills", report["forbidden_pre_round"])
         leakage = validate_feature_contract(["round_number", "kills", "round_won"])
@@ -142,11 +149,13 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("round_won", leakage["forbidden_features"])
 
     def test_ability_profiles_do_not_require_costs(self):
+        """Permite construir perfiles de habilidades sin conocer sus costes."""
         ability = {"displayName": "Dark Cover", "description": "Lanza una smoke que bloquea vision."}
         profiles = classify_ability_profiles(ability, "Controller")
         self.assertIn("smoke", profiles)
 
     def test_manual_seed_astra_costs_and_round_start_smoke(self):
+        """Comprueba los costes manuales de Astra y el humo inicial."""
         astra = get_agent_ability_catalog("Astra")
         self.assertIsNotNone(astra)
         abilities = astra["abilities"]
@@ -164,6 +173,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(by_name["gravity well"]["cost_credits"], 150.0)
 
     def test_ultimates_have_points_not_credit_cost(self):
+        """Trata las definitivas como puntos y no como costes en créditos."""
         validation = validate_ability_catalog()
         self.assertTrue(validation["valid"])
         for agent_name in ("Astra", "Sova", "Chamber"):
@@ -175,6 +185,7 @@ class EconomyMlTests(unittest.TestCase):
                 self.assertIsNotNone(ultimate.get("ultimate_points"))
 
     def test_ability_catalog_report_counts_manual_costs_and_review(self):
+        """Cuenta los costes manuales y los casos por revisar en el informe del catálogo."""
         report = build_ability_catalog_report()
         self.assertGreaterEqual(report["agents_loaded"], 29)
         self.assertGreater(report["abilities_with_cost"], 0)
@@ -183,6 +194,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertGreaterEqual(report["needs_review_count"], 1)
 
     def test_utility_budget_uses_manual_seed_costs(self):
+        """Calcula el presupuesto de habilidades con los costes manuales."""
         payload = estimate_player_utility_budget("Astra", "attack", 800, "FULLBUY")
         self.assertFalse(payload["ability_budget_unknown"])
         self.assertTrue(payload["ability_cost_available"])
@@ -191,6 +203,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertGreater(payload["minimum_key_utility_budget"], 0)
 
     def test_ability_cost_source_is_manual_catalog_not_database(self):
+        """Obtiene los costes de habilidades del catálogo manual, no de la base de datos."""
         report = build_data_availability_report()
         self.assertTrue(report["summary"]["ability_cost_available"])
         self.assertFalse(report["summary"]["content_ability_cost_available"])
@@ -200,6 +213,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(cost_field["usable_as"], "pre_round_plan_feature")
 
     def test_economy_case_distinguishes_stabilization(self):
+        """Distingue el escenario económico de estabilización."""
         case = classify_economy_case({
             "team_estimated_credits_before_buy": 12000,
             "team_players_can_full_buy_estimate": 1,
@@ -208,6 +222,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(case["macro_buy_case"], "STABILIZATION")
 
     def test_plan_coherence_penalizes_eco_with_expensive_weapons(self):
+        """Penaliza la incoherencia de proponer ahorro con armas caras."""
         result = evaluate_plan_coherence({
             "macro_case": "ECO",
             "estimated_weapon_spend": 8000,
@@ -219,12 +234,14 @@ class EconomyMlTests(unittest.TestCase):
         self.assertTrue(result["warnings"])
 
     def test_ultimate_inference_is_estimated_not_asserted(self):
+        """Presenta la disponibilidad inferida de definitiva como estimación."""
         match = _match()
         result = infer_ultimate_state(match, "A0", "Jett", 1)
         self.assertEqual(result["availability_certainty"], "estimated_not_observed")
         self.assertIn("estimated_ult_available_probability", result)
 
     def test_state_is_pre_round_and_estimates_credits(self):
+        """Construye el estado previo a la ronda y estima sus créditos."""
         rows = extract_match_round_states(_match())
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["team_score_before"], 0)
@@ -241,6 +258,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("team_total_utility_score", PREBUY_NUMERIC_FEATURES)
 
     def test_pistol_round_ignores_observed_credit_anomalies(self):
+        """Ignora anomalías de créditos observados en la ronda de pistolas."""
         match = _match()
         economies = [
             {"remaining": 700, "spent": 0, "loadoutValue": 0, "weapon": "Classic"},
@@ -256,6 +274,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(set(state["team_player_credit_estimates"].values()), {800.0})
 
     def test_pistol_round_never_recommends_sheriff_light_without_free_exception(self):
+        """No recomienda Sheriff y escudo ligero en pistolas sin la excepción gratuita."""
         match = _match()
         state = {
             **extract_match_round_states(match)[0],
@@ -274,6 +293,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertLessEqual(sheriff_player["total_cost"], 800)
 
     def test_pistol_free_light_exception_allows_free_light_armor(self):
+        """Permite el escudo ligero gratuito cuando corresponde la excepción."""
         economy = {"weapon": "Sheriff", "armor": "Light", "totalOutlay": 800, "loadoutValue": 1200}
         self.assertTrue(infer_pistol_free_light_armor_from_economy(1, economy))
         match = _match()
@@ -292,6 +312,7 @@ class EconomyMlTests(unittest.TestCase):
             self.assertIn("gratuito", " ".join(sheriff_player["reasons"]))
 
     def test_eco_one_sheriff_allocates_only_one_sheriff(self):
+        """Asigna exactamente un Sheriff al plan de ahorro con un Sheriff."""
         match = _match()
         recommendations = build_player_recommendations(
             match,
@@ -302,6 +323,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(sheriff_count, 1)
 
     def test_player_loadout_never_exceeds_estimated_credits(self):
+        """No supera los créditos estimados al equipar a un jugador."""
         match = _match()
         base_state = extract_match_round_states(match)[0]
         high_credit_state = {
@@ -324,6 +346,7 @@ class EconomyMlTests(unittest.TestCase):
                 self.assertLessEqual(player["total_cost"], player["estimated_credits"])
 
     def test_new_credit_features_exist_in_state(self):
+        """Incluye las nuevas variables de créditos en el estado."""
         state = extract_match_round_states(_match())[0]
         expected = [
             "team_credit_min", "team_credit_max", "team_credit_mean",
@@ -345,13 +368,16 @@ class EconomyMlTests(unittest.TestCase):
         self.assertNotIn("team_player_credit_estimates", PREBUY_NUMERIC_FEATURES)
 
     def test_schema_version_12(self):
+        """Comprueba que el esquema económico es la versión 12."""
         self.assertEqual(SCHEMA_VERSION, 12)
 
     def test_content_taxonomy_knows_bandit_and_regen_shield(self):
+        """Reconoce Bandit y el escudo regenerativo en el catálogo."""
         self.assertEqual(weapon_role({"displayName": "Bandit"}), "sidearm")
         self.assertEqual(armor_role({"displayName": "Regen Shield"}), "regen")
 
     def test_weapon_taxonomy_keeps_snipers_out_of_rifles(self):
+        """No clasifica los francotiradores como rifles."""
         for name in ("Operator", "Outlaw", "Marshal"):
             self.assertFalse(is_rifle(name), name)
             self.assertFalse(weapon_has_profile(name, "rifle_default"), name)
@@ -362,6 +388,7 @@ class EconomyMlTests(unittest.TestCase):
             self.assertTrue(is_rifle(name), name)
 
     def test_state_includes_target_loadout_and_cashflow_cases(self):
+        """Incluye el equipamiento objetivo y los escenarios de flujo de créditos."""
         state = extract_match_round_states(_match())[0]
         self.assertIn("target_loadout_case", state)
         self.assertIn("cashflow_case", state)
@@ -377,6 +404,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("team_possible_drop_credit_gap", MODEL_FEATURES)
 
     def test_pistol_selected_credits_use_rules_when_observed_is_inconsistent(self):
+        """Usa créditos calculados por reglas cuando los observados en pistolas son incoherentes."""
         match = _match()
         match["roundResults"][0]["playerStats"][0]["economy"]["remaining"] = 9000
         state = extract_match_round_states(match)[0]
@@ -387,6 +415,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(state["credit_estimate_quality"], "rules_only")
 
     def test_rules_credits_do_not_copy_current_observed_prebuy(self):
+        """No copia el saldo previo observado de la ronda actual al cálculo por reglas."""
         match = _match()
         first = match["roundResults"][0]
         second_stats = []
@@ -405,6 +434,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(round_two["prebuy_credits_selected"], round_two["prebuy_credits_rules"])
 
     def test_regen_shield_features_and_plan_penalty(self):
+        """Incluye las variables del escudo regenerativo y su penalización en el plan."""
         economies = [
             {"weapon": "Vandal", "armor": "Regen Shield", "loadoutValue": 3550, "spent": 3550}
             for _ in range(5)
@@ -420,6 +450,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("estimated_regen_armor_spend", plan)
 
     def test_team_plan_uses_planned_cashflow_not_observed_cashflow(self):
+        """Evalúa el flujo de créditos del plan propuesto, no el observado."""
         state = {
             **extract_match_round_states(_match())[0],
             "cashflow_case": "LOW_TOPUP",
@@ -436,6 +467,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertNotEqual(plan["planned_cashflow_case"], "LOW_TOPUP")
 
     def test_skipped_round_still_advances_score_and_streak(self):
+        """Actualiza marcador y racha aunque una ronda se omita del análisis."""
         match = _match()
         valid_round = match["roundResults"][0]
         match["roundResults"] = [
@@ -448,6 +480,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(team_a["win_streak"], 1)
 
     def test_counterfactual_profiles_are_coherent_and_distinct(self):
+        """Genera perfiles de compras alternativas coherentes y distintos."""
         state = extract_match_round_states(_match())[0]
         eco = simulate_action_features(state, "ECO_CLASSIC")
         full = simulate_action_features({**state, "team_estimated_credits_before_buy": 25000}, "FULL_RIFLES")
@@ -457,6 +490,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(full["action_heavy_armor_count"], 5)
 
     def test_sheriff_eco_profiles_are_distinct(self):
+        """Distingue los perfiles de ahorro con diferentes cantidades de Sheriff."""
         state = {**extract_match_round_states(_match())[0], "team_estimated_credits_before_buy": 8000}
         one = simulate_action_features(state, "ECO_ONE_SHERIFF")
         two = simulate_action_features(state, "ECO_TWO_SHERIFFS")
@@ -468,6 +502,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertLess(two["action_total_spent"], stack["action_total_spent"])
 
     def test_learned_action_profile_preserves_utility_and_component_sum(self):
+        """Conserva las habilidades y la suma de componentes del perfil aprendido."""
         row = {
             "real_buy_action": "FULL_RIFLES", "action_weapon_value": 14500,
             "action_armor_value": 5000, "action_utility_value": 3200,
@@ -493,10 +528,12 @@ class EconomyMlTests(unittest.TestCase):
         )
 
     def test_context_key_detects_eco(self):
+        """Detecta un contexto de ahorro mediante su clave."""
         state = {"is_match_point": 0, "is_overtime": 0, "is_pistol_round": 0}
         self.assertEqual(context_key(state, {"macro_case": "ECO"}), "eco")
 
     def test_team_plan_evaluates_collective_costs_and_future_economy(self):
+        """Evalúa costes colectivos y economía futura del plan de equipo."""
         state = {
             **extract_match_round_states(_match())[0],
             "team_estimated_credits_before_buy": 25000,
@@ -515,6 +552,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(plan["ability_purchase_certainty"], "estimated_plan_not_observed")
 
     def test_dataset_save_and_missing_model_fallback(self):
+        """Guarda el dataset y gestiona la ausencia de un modelo."""
         frame = build_economy_dataset_from_matches([_match()])
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "dataset.parquet"
@@ -527,12 +565,14 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("No hay modelo", result["reason"])
 
     def test_player_dataset_includes_agent_utility_features(self):
+        """Incluye las variables de habilidades del agente en el dataset individual."""
         frame = build_player_economy_dataset_from_matches([_match()])
         self.assertFalse(frame.empty)
         self.assertIn("agent_base_utility_score", frame.columns)
         self.assertIn("agent_weapon_dependency_score", frame.columns)
 
     def test_player_recommendations_use_state_prebuy_credits(self):
+        """Usa los créditos previos a la compra del estado para recomendar al jugador."""
         match = _match()
         match["roundResults"][0]["playerStats"][0]["economy"] = {
             "remaining": 700,
@@ -549,6 +589,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(player["real_loadout_value"], 700)
 
     def test_policy_generates_alternatives_and_rejects_impossible_full_buy(self):
+        """Genera alternativas y descarta una compra completa imposible de financiar."""
         class FakePipeline:
             seen = {}
 
@@ -577,6 +618,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertFalse(full_buy["is_available"])
 
     def test_policy_blocks_sheriff_stack_in_normal_eco(self):
+        """Bloquea una acumulación de Sheriff en el escenario normal de ahorro probado."""
         class FakePipeline:
             def predict_proba(self, frame):
                 action = frame.iloc[0]["buy_action"]
@@ -609,6 +651,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("Stack de Sheriffs bloqueado", blocked["reason_if_unavailable"])
 
     def test_policy_blocks_multi_sheriff_in_pistol(self):
+        """Bloquea varios Sheriff en el escenario de pistolas probado."""
         class FakePipeline:
             def predict_proba(self, frame):
                 action = frame.iloc[0]["buy_action"]
@@ -640,6 +683,7 @@ class EconomyMlTests(unittest.TestCase):
             self.assertIn("pistol round", blocked["reason_if_unavailable"])
 
     def test_pistol_sheriff_requires_high_margin(self):
+        """Exige suficiente margen para recomendar Sheriff en pistolas."""
         class FakePipeline:
             def predict_proba(self, _frame):
                 return np.array([[0.4, 0.6]])
@@ -671,6 +715,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("margen alto", " ".join(result["explanation"]))
 
     def test_policy_blocks_multi_sheriff_when_credits_are_low(self):
+        """Bloquea varios Sheriff cuando los créditos del caso son insuficientes."""
         class FakePipeline:
             def predict_proba(self, frame):
                 action = frame.iloc[0]["buy_action"]
@@ -702,6 +747,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("creditos bajos", blocked["reason_if_unavailable"])
 
     def test_policy_marks_small_margin_as_low_strength(self):
+        """Marca una recomendación con margen pequeño como débil."""
         class FakePipeline:
             def predict_proba(self, _frame):
                 return np.array([[0.5, 0.5]])
@@ -744,6 +790,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("Margen insuficiente", result["low_confidence_reason"])
 
     def test_policy_abstains_outside_selected_action_scope(self):
+        """Se abstiene si la acción queda fuera del ámbito seleccionado."""
         class FakePipeline:
             def predict_proba(self, _frame):
                 return np.array([[0.2, 0.8]])
@@ -773,6 +820,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("abstiene", result["low_confidence_reason"])
 
     def test_experimental_policy_override_is_explicit_and_bypasses_only_ope_gate(self):
+        """La activación experimental es explícita y solo omite el filtro de evaluación de política."""
         bundle = {
             "deployment_policy_enabled": True,
             "experimental_policy_override": True,
@@ -789,6 +837,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("confianza estadistica", reason)
 
     def test_policy_downgrades_inconsistent_credit_quality(self):
+        """Reduce la valoración de confianza cuando los créditos son incoherentes."""
         class FakePipeline:
             def predict_proba(self, frame):
                 action = frame.iloc[0]["buy_action"]
@@ -819,6 +868,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("Calidad de creditos inconsistente", result["low_confidence_reason"])
 
     def test_policy_rejects_action_without_historical_support(self):
+        """Rechaza acciones que no tienen respaldo histórico."""
         state = {**extract_match_round_states(_match())[0], "team_estimated_credits_before_buy": 25000}
         with patch(
             "modules.economy_ml.policy.load_model_candidates",
@@ -832,6 +882,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("soporte histórico", result["reason"])
 
     def test_policy_falls_back_when_exact_scope_has_no_support(self):
+        """Recurre a la alternativa prevista cuando el ámbito exacto carece de respaldo."""
         class FakePipeline:
             def predict_proba(self, _frame):
                 return np.array([[0.4, 0.6]])
@@ -851,6 +902,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(result["model_scope"], "rank_group")
 
     def test_registry_rejects_partial_or_old_artifacts(self):
+        """Rechaza artefactos incompletos o de versiones antiguas."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             joblib.dump({"schema_version": 1}, root / "global_model.joblib")
@@ -861,6 +913,7 @@ class EconomyMlTests(unittest.TestCase):
                 self.assertFalse(model_registry.status()["available"])
 
     def test_failed_training_preserves_previous_artifacts(self):
+        """Conserva los artefactos anteriores cuando falla el entrenamiento."""
         frame = build_economy_dataset_from_matches([_match()])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -880,6 +933,7 @@ class EconomyMlTests(unittest.TestCase):
                 self.assertTrue(model_registry.status()["available"])
 
     def test_similar_rounds_excludes_same_match(self):
+        """Excluye la misma partida al buscar rondas históricas similares."""
         state = extract_match_round_states(_match())[0]
         dataset = pd.DataFrame([
             {**state, "match_id": state["match_id"]},
@@ -889,6 +943,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual([row["match_id"] for row in similar], ["other-match"])
 
     def test_recommendation_audit_counts_sheriff_share(self):
+        """Cuenta la proporción de Sheriff en la auditoría de recomendaciones."""
         summary = summarize_recommendation_distribution([
             {"recommended_action": "ECO_CLASSIC", "real_buy_action": "ECO_CLASSIC"},
             {"recommended_action": "ECO_ONE_SHERIFF", "real_buy_action": "ECO_PISTOL_UPGRADE"},
@@ -900,6 +955,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertEqual(summary["sheriff_share_within_eco_recommendations"], 0.5)
 
     def test_pistol_recommendation_audit_counts_impossible_sheriff_light(self):
+        """Cuenta recomendaciones imposibles de Sheriff con escudo ligero en pistolas."""
         summary = summarize_pistol_recommendation_safety([
             {
                 "round_number": 1,
@@ -926,6 +982,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertGreaterEqual(summary["pistol_impossible_player_recommendations"], 1)
 
     def test_player_recommendation_validation_rejects_total_cost_over_budget(self):
+        """Rechaza recomendaciones individuales cuyo coste supera el presupuesto."""
         valid, reasons = validate_player_recommendation_budget(
             {"weapon_cost": 2900, "armor_cost": 1000, "ability_cost": 600},
             estimated_credits=3900,
@@ -934,6 +991,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertIn("supera", reasons[0])
 
     def test_macro_composition_validation_is_centralized(self):
+        """Centraliza la validación de la composición del plan de equipo."""
         invalid_full = validate_macro_composition("FULL_RIFLES", {
             "players": [
                 {"weapon": {"displayName": "Operator"}, "armor": {"armor_level": "heavy"}},
@@ -967,6 +1025,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertFalse(invalid_sheriff["valid"])
 
     def test_ability_planner_recommends_controller_smoke_when_affordable(self):
+        """Recomienda humo para un controlador cuando el presupuesto lo permite."""
         result = recommend_ability_purchase(
             agent_name="Omen",
             agent_id=None,
@@ -981,6 +1040,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertTrue({"smoke", "vision_denial"}.intersection(types))
 
     def test_full_rifle_controller_prefers_light_plus_smokes_over_illegal_heavy(self):
+        """Prefiere rifle con escudo ligero y humos a una compra pesada inviable para el controlador."""
         match = _match()
         for player in match["players"]:
             if player["teamId"] == "A":
@@ -1010,6 +1070,7 @@ class EconomyMlTests(unittest.TestCase):
         self.assertTrue(any((player.get("armor") or {}).get("armor_level") in {"light", "regen"} for player in rifle_players))
 
     def test_player_recommendations_include_abilities_without_breaking_budget(self):
+        """Incluye habilidades en la recomendación individual sin superar el presupuesto."""
         match = _match()
         for player in match["players"]:
             if player["teamId"] == "A":
@@ -1029,6 +1090,7 @@ class EconomyMlTests(unittest.TestCase):
             self.assertTrue(item["budget_valid"])
 
     def test_backtest_reports_zero_invalid_when_budgets_hold(self):
+        """El informe retrospectivo no registra compras inválidas cuando se respetan los presupuestos."""
         summary = summarize_recommendation_backtest([
             {
                 "recommended_action": "FULL_RIFLES",

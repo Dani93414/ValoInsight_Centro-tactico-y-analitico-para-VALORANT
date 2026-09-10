@@ -392,6 +392,11 @@ export default function Actos() {
   const [leaderboardTag, setLeaderboardTag] = useState("");
   const [debouncedLeaderboardSearch, setDebouncedLeaderboardSearch] = useState("");
   const [debouncedLeaderboardTag, setDebouncedLeaderboardTag] = useState("");
+  const searchIsValid = canSearchPlayer(leaderboardSearch.trim(), leaderboardTag.trim());
+  if (!searchIsValid && (debouncedLeaderboardSearch || debouncedLeaderboardTag)) {
+    setDebouncedLeaderboardSearch("");
+    setDebouncedLeaderboardTag("");
+  }
   const [highlightedPlayerKey, setHighlightedPlayerKey] = useState<string | null>(null);
   const [displayLeaderboardData, setDisplayLeaderboardData] = useState<LeaderboardContent | null>(null);
   const [pageInput, setPageInput] = useState("1");
@@ -458,15 +463,7 @@ export default function Actos() {
     const trimmedGameName = leaderboardSearch.trim();
     const trimmedTagLine = leaderboardTag.trim();
 
-    if (!trimmedGameName && !trimmedTagLine) {
-      setDebouncedLeaderboardSearch("");
-      setDebouncedLeaderboardTag("");
-      return;
-    }
-
     if (!canSearchPlayer(trimmedGameName, trimmedTagLine)) {
-      setDebouncedLeaderboardSearch("");
-      setDebouncedLeaderboardTag("");
       return;
     }
 

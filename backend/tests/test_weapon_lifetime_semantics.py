@@ -25,6 +25,7 @@ def _pstat(puuid: str, weapon: str, kills: list[dict] | None = None) -> dict:
 
 class WeaponLifetimeSemanticsTest(unittest.TestCase):
     def test_deaths_follow_player_held_weapon_and_best_weapon_updates(self):
+        """Asigna las muertes al arma que llevaba el jugador y actualiza su mejor arma."""
         puuid = "P1"
 
         match_obj = {
@@ -72,6 +73,7 @@ class WeaponLifetimeSemanticsTest(unittest.TestCase):
         self.assertEqual(best_weapon["weaponId"], "Vandal")
 
     def test_kills_use_finishing_weapon_and_deaths_fall_back_to_last_known_or_purchased_weapon(self):
+        """Asigna las bajas al arma del golpe final y las muertes a la última conocida o comprada."""
         puuid = "P1"
 
         match_obj = {

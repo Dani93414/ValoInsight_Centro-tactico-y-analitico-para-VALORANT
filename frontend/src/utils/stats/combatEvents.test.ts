@@ -13,7 +13,7 @@ const teams = new Map([
 ]);
 
 describe("combatEvents", () => {
-  it("solo acepta kills entre jugadores distintos y equipos rivales", () => {
+  it("solo acepta bajas entre jugadores distintos de equipos rivales", () => {
     expect(isValidKill({ killer: "p1", victim: "e1" }, teams)).toBe(true);
     expect(isValidKill({ killer: "p1", victim: "p1" }, teams)).toBe(false);
     expect(isValidKill({ killer: "p1", victim: "p2" }, teams)).toBe(false);
@@ -32,7 +32,7 @@ describe("combatEvents", () => {
     );
   });
 
-  it("solo conserva asistentes válidos de una kill competitiva", () => {
+  it("solo conserva asistentes válidos de una baja competitiva", () => {
     expect(
       validAssistants(
         {
@@ -51,7 +51,7 @@ describe("combatEvents", () => {
     ).toEqual([]);
   });
 
-  it("deduplica la misma kill repetida en playerStats", () => {
+  it("cuenta una sola vez una baja repetida en las estadísticas de jugadores", () => {
     const kill = {
       killer: "p1",
       victim: "e1",

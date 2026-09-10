@@ -5,6 +5,7 @@ from modules.analytics.domain.extractor import _finalize_stats_block, new_scope_
 
 class HeadshotCalculationTest(unittest.TestCase):
     def test_headshot_pct_uses_hit_distribution(self):
+        """Calcula el porcentaje de cabeza a partir de la distribución de impactos."""
         stats = new_scope_stats()
         stats["rounds"] = 10
         stats["kills"] = 30
@@ -17,6 +18,7 @@ class HeadshotCalculationTest(unittest.TestCase):
         self.assertAlmostEqual(finalized["headshot_pct"], 30.0, places=4)
 
     def test_headshot_pct_zero_when_no_shots(self):
+        """Devuelve cero en el porcentaje de cabeza cuando no hay impactos."""
         stats = new_scope_stats()
         stats["rounds"] = 8
         stats["kills"] = 25
@@ -29,6 +31,7 @@ class HeadshotCalculationTest(unittest.TestCase):
         self.assertEqual(finalized["headshot_pct"], 0.0)
 
     def test_kast_uses_exact_round_count_when_available(self):
+        """Usa el número exacto de rondas para KAST cuando está disponible."""
         stats = new_scope_stats()
         stats["rounds"] = 4
         stats["rounds_with_kast"] = 3
@@ -45,6 +48,7 @@ class HeadshotCalculationTest(unittest.TestCase):
         )
 
     def test_weapon_scope_contains_trade_opportunity_counters(self):
+        """Incluye contadores de oportunidades de intercambio en las estadísticas de armas."""
         stats = new_scope_stats()
         stats["rounds"] = 1
         stats["trade_kills"] = 1

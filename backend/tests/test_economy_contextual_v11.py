@@ -39,6 +39,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         return result["confidence"]
 
     def test_v11_confidence_uses_ml_and_context_availability(self):
+        """Ajusta la confianza según la disponibilidad del modelo y del contexto."""
         without_ml = self._explained_confidence(ml_available=False)
         with_ml = self._explained_confidence(ml_available=True)
         degraded = self._explained_confidence(ml_available=False, unavailable_contexts=3)
@@ -47,6 +48,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertTrue(all(0 <= value <= 1 for value in (without_ml, with_ml, degraded)))
     @patch("modules.economy_ml.ultimate_state.agent_abilities")
     def test_ultimate_uses_catalog_ultimate_points(self, abilities):
+        """Usa los puntos de definitiva definidos en el catálogo."""
         abilities.return_value = [{"ability_kind": "ultimate", "ultimate_points": 8, "max_charges": 1}]
         ready = build_ultimate_state({"playerStats": [{"puuid": "p", "ultimatePoints": 8}]},
                                      puuid="p", agent="Chamber", round_number=6)
@@ -59,6 +61,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertIn("ultimate_cost_unavailable", unknown_cost.warnings)
     @patch("modules.economy_ml.map_context.load_map_catalog")
     def test_map_context_available_and_missing_fallback(self, catalog):
+        """Maneja tanto el contexto del mapa disponible como su ausencia."""
         catalog.return_value = {"map-1": {"displayName": "Breeze", "mapUrl": "/Game/Breeze"}}
         available = build_map_context({"matchInfo": {"mapId": "map-1"}}, round_number=5, side="attack")
         self.assertTrue(available.available)
@@ -69,6 +72,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertIn("map_context_unavailable", missing.warnings)
 
     def test_site_tendencies_use_only_prior_rounds(self):
+        """Calcula tendencias de zonas usando únicamente rondas anteriores."""
         match = {"roundResults": [
             {"plantSite": "A", "winningTeam": "A"},
             {"plantSite": "A", "winningTeam": "A"},
@@ -82,6 +86,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertFalse(build_site_tendencies({"roundResults": [{}]}, round_number=2).available)
 
     def test_site_scoring_requires_sample_and_confidence(self):
+        """Exige suficientes muestras y confianza para puntuar tendencias de zonas."""
         base = {"team_plan_value": .5, "team_plan_score": .5, "round_win_probability": .5,
                 "weapon_value": 1600, "armor_value": 400, "utility_value": 300,
                 "synchronization": .5, "rule_penalty": 0, "data_confidence": .7,
@@ -98,6 +103,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertGreater(score(3, .5), 0)
 
     def test_player_profile_is_prior_round_only_and_confidence_gated(self):
+        """Construye el perfil del jugador con rondas previas y controla su confianza."""
         rounds = []
         for weapon, kills in [("Operator", 2), ("Operator", 1), ("Operator", 2), ("Vandal", 0)]:
             rounds.append({"playerStats": [{"puuid": "p", "kills": kills,
@@ -111,6 +117,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertFalse(build_player_profile({"roundResults": rounds}, "p", round_number=2).available)
 
     def test_player_profile_accepts_real_kill_and_damage_event_lists(self):
+        """Acepta listas reales de eventos de bajas y daño en el perfil del jugador."""
         rounds = [{"playerStats": [{"puuid": "p", "kills": [{}, {}],
                                     "damage": [{"damage": 140}],
                                     "economy": {"weapon": "Vandal"}}]} for _ in range(3)]
@@ -120,6 +127,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertEqual(profile.weapon_damage_efficiency["Vandal"], 140.0)
 
     def test_contextual_adjustments_do_not_penalize_weapon_name(self):
+        """Evita penalizar un arma solo por su nombre en los ajustes contextuales."""
         base = {"team_plan_value": .6, "team_plan_score": .6, "round_win_probability": .5,
                 "weapon_value": 3200, "armor_value": 0, "utility_value": 0,
                 "synchronization": .5, "rule_penalty": 0, "data_confidence": .7,
@@ -138,6 +146,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertLess(apply_contextual_adjustments(base, [weak], full)["enemy_adjustment"], 0)
 
     def test_long_range_map_has_small_positive_sniper_adjustment(self):
+        """Aplica un pequeño ajuste favorable a francotiradores en un mapa de larga distancia."""
         base = {"team_plan_value": .5, "team_plan_score": .5, "round_win_probability": .5,
                 "weapon_value": 4700, "armor_value": 1000, "utility_value": 0,
                 "synchronization": .5, "rule_penalty": 0, "data_confidence": .7,
@@ -151,6 +160,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertLess(result["map_adjustment"], .05)
 
     def test_operator_fit_and_ready_chamber_ultimate_adjust_score(self):
+        """Ajusta la puntuación según la adecuación del Operator y la definitiva disponible de Chamber."""
         base = {"team_plan_value": .6, "team_plan_score": .6, "round_win_probability": .5,
                 "weapon_value": 4700, "armor_value": 1000, "utility_value": 0,
                 "synchronization": .5, "rule_penalty": 0, "data_confidence": .7,
@@ -173,6 +183,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertLess(jett["ultimate_adjustment"], 0)
 
     def test_armor_and_ability_state_fallbacks(self):
+        """Maneja la ausencia de información sobre escudos y habilidades."""
         intact = build_armor_durability_state({}, puuid="p", round_number=4,
                                               armor_name="Heavy Shield", survived=True)
         self.assertTrue(intact.available)
@@ -188,6 +199,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertFalse(build_ability_usage_state({}, puuid="p", agent="Sova", round_number=4).available)
 
     def test_enemy_economy_and_round_model_fallback(self):
+        """Maneja la falta de economía enemiga y del modelo de victoria por ronda."""
         enemy = build_enemy_economy_context({"team_id": "B", "team_player_credit_estimates": {"x": 500, "y": 1000}})
         self.assertTrue(enemy.available)
         self.assertEqual(enemy.enemy_buy_recommendation, "ENEMY_ECO")
@@ -222,6 +234,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertEqual(prediction["round_win_probability"], .8)
 
     def test_contextual_model_receives_enemy_projected_values(self):
+        """Entrega al modelo contextual los valores proyectados del enemigo."""
         class SpyModel:
             def __init__(self): self.features = None
             def predict_round_win(self, features):
@@ -243,6 +256,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertEqual(spy.features["enemy_projected_utility_value"], 1800)
 
     def test_enemy_distribution_and_bonus_are_not_average_only(self):
+        """Considera la distribución económica enemiga y las armas conservadas, además de la media."""
         mixed = build_enemy_economy_context({"team_id": "B", "team_player_credit_estimates": {
             "a": 9000, "b": 9000, "c": 500, "d": 500, "e": 500,
         }})
@@ -255,6 +269,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.legal_purchase.agent_abilities")
     def test_carried_ability_charge_is_not_rebought(self, abilities):
+        """No vuelve a comprar una carga de habilidad que el jugador conserva."""
         abilities.return_value = [{"name": "Shock Bolt", "canonical_name": "Shock Bolt", "slot": "Q",
                                    "max_charges": 2, "purchasable_charges": 2,
                                    "cost_per_charge": 150, "is_purchasable": True}]
@@ -269,6 +284,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
     @patch("modules.economy_ml.legal_purchase.load_gear_catalog")
     @patch("modules.economy_ml.legal_purchase.find_gear")
     def test_damaged_carried_armor_exposes_effective_value(self, find_gear, gear_catalog):
+        """Expone el valor efectivo de un escudo conservado que está dañado."""
         heavy = {"displayName": "Heavy Shield", "cost": 1000}
         find_gear.return_value = heavy
         gear_catalog.return_value = {"heavy": heavy}
@@ -284,6 +300,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertGreater(refreshed["armor_value"], carried["armor_effective_value"])
 
     def test_endpoint_exposes_optional_context_with_v12_compatibility(self):
+        """Mantiene la compatibilidad del contrato v12 al incluir contexto opcional en la respuesta."""
         result = recommend_match_economy(_match())
         self.assertEqual(result["engine"], "player_first_v12_decision_grade")
         self.assertEqual(result["compatibility_engine"], "player_first_v10")
@@ -296,6 +313,7 @@ class ContextualEconomyV11Tests(unittest.TestCase):
         self.assertIn("ml_prediction", advanced)
 
     def test_site_reason_requires_sample_confidence_and_adjustment(self):
+        """Exige muestras, confianza y un ajuste real para justificar una recomendación por zona."""
         purchase = {"puuid": "p", "weapon": None, "armor": None, "abilities": [],
                     "keep_weapon": False, "keep_armor": False, "weapon_source": "none",
                     "self_cost": 0, "expected_remaining": 1000, "warnings": []}

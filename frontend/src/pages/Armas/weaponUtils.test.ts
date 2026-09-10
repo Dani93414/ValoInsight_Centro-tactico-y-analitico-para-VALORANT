@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateGlobalWeaponHeadshotPct, formatWeaponValue, getWeaponProfileTags } from "./weaponUtils";
 
-describe("weaponUtils translations", () => {
+describe("Traducciones de las características de armas", () => {
   it.each([
     ["ROFIncrease", "Cadencia progresiva: aumenta al mantener el disparo."],
     ["ADS", "Mira: permite apuntar para mejorar el control y la precisión."],
@@ -9,11 +9,11 @@ describe("weaponUtils translations", () => {
     ["AirBurst", "Explosión aérea: detona en el aire o por tiempo."],
     ["Silenced", "Silenciador: reduce traza sonora y visual de disparo."],
     ["Shotgun", "Disparo de escopeta: lanza varios perdigones."],
-  ])("translates %s", (source, expected) => {
+  ])("traduce %s al español: %s", (source, expected) => {
     expect(formatWeaponValue(source)).toBe(expected);
   });
 
-  it("uses Spanish wording for weapons with aim-down-sights data", () => {
+  it("describe en español las armas que permiten apuntar con mira", () => {
     expect(getWeaponProfileTags({
       displayName: "Vandal",
       category: "Rifle",
@@ -22,8 +22,8 @@ describe("weaponUtils translations", () => {
   });
 });
 
-describe("global weapon headshot percentage", () => {
-  it("uses every filtered impact as the denominator", () => {
+describe("Porcentaje global de impactos en la cabeza por arma", () => {
+  it("usa todos los impactos filtrados como denominador del porcentaje de cabeza", () => {
     expect(calculateGlobalWeaponHeadshotPct({
       headshots: 30,
       bodyshots: 50,
@@ -31,11 +31,11 @@ describe("global weapon headshot percentage", () => {
     })).toBe(30);
   });
 
-  it("does not invent a percentage for incomplete historical distributions", () => {
+  it("no inventa un porcentaje cuando faltan datos históricos de impactos", () => {
     expect(calculateGlobalWeaponHeadshotPct({ headshots: 12 })).toBeUndefined();
   });
 
-  it("recovers the impact denominator from historical regional aggregates", () => {
+  it("recupera el denominador de impactos a partir de los agregados históricos regionales", () => {
     expect(calculateGlobalWeaponHeadshotPct({
       headshots: 111464,
       headshot_pct: 28.0468,

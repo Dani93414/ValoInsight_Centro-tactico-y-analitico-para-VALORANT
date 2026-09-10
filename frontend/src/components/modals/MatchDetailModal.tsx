@@ -1,4 +1,5 @@
-﻿import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import type { LegacyEconomyResponse } from "../../types/legacyEconomy";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronLeft,
@@ -820,23 +821,24 @@ function EconomyOptimalPanel({
   }
   // LEGACY read-only fallback for saved responses. Production routes only emit player_first_v10.
   if (ml?.available && ml.rounds.length > 0) {
-    const different = ml.rounds.filter(
+    const legacyMl = ml as unknown as LegacyEconomyResponse;
+    const different = legacyMl.rounds.filter(
       (round) => round.real_buy_action !== round.recommended_action,
     );
-    const validDeltas = ml.rounds
+    const validDeltas = legacyMl.rounds
       .map((round) => round.delta_team_plan_value)
       .filter((value): value is number => typeof value === "number");
     const averageConfidence = safeDivide(
-      ml.rounds.reduce((sum, round) => sum + round.confidence, 0),
-      ml.rounds.length,
+      legacyMl.rounds.reduce((sum, round) => sum + round.confidence, 0),
+      legacyMl.rounds.length,
     );
-    const similarRounds = ml.rounds.reduce(
+    const similarRounds = legacyMl.rounds.reduce(
       (sum, round) => sum + round.similar_rounds_summary.similar_rounds_found,
       0,
     );
-    const scopes = [...new Set(ml.rounds.map((round) => round.model_scope))].join(", ");
-    const ranks = [...new Set(ml.rounds.map((round) => round.rank_name))].join(", ");
-    const metadata = ml.model_metadata;
+    const scopes = [...new Set(legacyMl.rounds.map((round) => round.model_scope))].join(", ");
+    const ranks = [...new Set(legacyMl.rounds.map((round) => round.rank_name))].join(", ");
+    const metadata = legacyMl.model_metadata;
     const modelCounts = metadata?.model_counts;
     const globalMetrics = metadata?.global_metrics;
     const trainedAt = metadata?.created_at
@@ -893,7 +895,7 @@ function EconomyOptimalPanel({
               <th>Δ prob. partida</th><th>Confianza</th><th>Motivo</th>
             </tr></thead>
             <tbody>
-              {ml.rounds.map((round) => (
+              {legacyMl.rounds.map((round) => (
                 <tr key={`${round.round_number}-${round.team_id}`}>
                   <td>{round.round_number}</td>
                   <td>{teamLabel(round.team_id)}</td>
@@ -1020,7 +1022,7 @@ function EconomyOptimalPanel({
                               </tr>
                             </thead>
                             <tbody>
-                              {round.player_recommendations?.map((player: any) => (
+                              {round.player_recommendations?.map((player) => (
                                 <tr key={player.puuid}>
                                   <td>
                                     <strong className="match-economy-player-name">{player.player_name}</strong>

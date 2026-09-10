@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import LoadingModal from "./LoadingModal";
 
 describe("LoadingModal", () => {
-  it("keeps the same accessible card and label in every placement", () => {
+  it("mantiene la tarjeta y su etiqueta accesible en todas las ubicaciones", () => {
     for (const placement of ["section", "overlay"] as const) {
       const markup = renderToStaticMarkup(
         <LoadingModal placement={placement} />,

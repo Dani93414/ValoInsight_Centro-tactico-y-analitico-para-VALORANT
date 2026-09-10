@@ -19,14 +19,17 @@ from modules.economy_ml.match_economy_simulator import simulate_match_value
 
 class EconomyV12ContractTests(unittest.TestCase):
     def test_small_value_gap_cannot_become_catastrophic_grade(self):
+        """Una diferencia pequeña de valor no produce una nota de compra desproporcionadamente baja."""
         self.assertEqual(_score(0.495, 0.5, 0.49), 95.0)
 
     def test_pure_coordination_regret_is_fully_attributed(self):
+        """Atribuye por completo la pérdida de valor causada solo por coordinación."""
         attribution = _shapley_regret({str(index): 0 for index in range(5)}, .02)
         self.assertAlmostEqual(sum(attribution.values()), .02, places=6)
         self.assertTrue(all(value == .004 for value in attribution.values()))
 
     def test_slice_reliability_requires_calibration_and_discrimination(self):
+        """Exige calibración y discriminación suficientes para considerar fiable un segmento."""
         weak = reliability_report({
             "samples": 500, "expected_calibration_error": 0.08,
             "roc_auc": 0.52, "calibration_slope": 0.2,
@@ -39,17 +42,20 @@ class EconomyV12ContractTests(unittest.TestCase):
         })
         self.assertTrue(strong["reliable"])
     def test_legacy_spent_is_quarantined_at_ingestion(self):
+        """Comprueba en el código de ingesta el tratamiento separado del gasto heredado inválido."""
         source = inspect.getsource(format_matches)
         self.assertIn("legacy_invalid_loadout_minus_remaining", source)
         self.assertIn('"observedFields": ["loadoutValue", "weapon", "armor", "remaining"]', source)
 
     def test_schema_forbids_legacy_spent_features(self):
+        """Excluye las variables de gasto heredadas del esquema de entrada del modelo."""
         self.assertEqual(SCHEMA_VERSION, 12)
         self.assertIn("spent", FORBIDDEN_FEATURES)
         self.assertIn("econ_spent", FORBIDDEN_FEATURES)
         self.assertTrue({"spent", "econ_spent", "player_spent"}.isdisjoint(MODEL_FEATURES))
 
     def test_ledger_ignores_fabricated_spent(self):
+        """Ignora un gasto inventado al reconstruir el registro económico."""
         match = _match()
         first = match["roundResults"][0]["playerStats"][0]["economy"]
         first["remaining"] = 300
@@ -67,6 +73,7 @@ class EconomyV12ContractTests(unittest.TestCase):
         self.assertIn("legacy_spent_ignored", ledger["flags"])
 
     def test_v12_grade_is_prebuy_and_outcome_independent(self):
+        """Calcula la nota v12 con información previa a comprar e independiente del resultado."""
         original = _match()
         changed = copy.deepcopy(original)
         changed["roundResults"][0]["winningTeam"] = "B"
@@ -78,6 +85,7 @@ class EconomyV12ContractTests(unittest.TestCase):
         self.assertTrue(first["actual_outcome"]["excluded_from_purchase_grade"])
 
     def test_individual_counterfactual_uses_real_scoreboard_not_purchase_grade(self):
+        """Usa el marcador real, no la nota de compra, al evaluar alternativas individuales."""
         with patch(
             "modules.economy_ml.decision_grade.simulate_match_value",
             wraps=simulate_match_value,
@@ -92,6 +100,7 @@ class EconomyV12ContractTests(unittest.TestCase):
         self.assertTrue(all(0 <= value <= 13 for value in scoreboard_values))
 
     def test_round_contract_contains_provenance_plans_and_player_grades(self):
+        """Incluye procedencia, planes y notas individuales en el contrato de cada ronda."""
         response = recommend_match_economy(_match())
         self.assertEqual(response["engine"], "player_first_v12_decision_grade")
         row = response["rounds"][0]
@@ -108,6 +117,7 @@ class EconomyV12ContractTests(unittest.TestCase):
                 self.assertEqual(player["individual_value_gap"], 0)
 
     def test_backtest_understands_player_first_v12(self):
+        """El informe retrospectivo interpreta las recomendaciones individuales de v12."""
         rows = recommend_match_economy(_match())["rounds"]
         summary = summarize_recommendation_backtest(rows)
         self.assertGreater(summary["total_player_recommendations"], 0)
@@ -120,6 +130,7 @@ class EconomyV12ContractTests(unittest.TestCase):
         self.assertTrue(all(not action.startswith("{") for action in distribution["real_buy_action_counts"]))
 
     def test_doubly_robust_evaluation_reports_clustered_interval(self):
+        """La evaluación doblemente robusta informa de un intervalo agrupado por partida."""
         result = doubly_robust_policy_value(
             outcomes=np.array([1, 0, 1, 0], dtype=float),
             observed_actions=np.array(["A", "B", "A", "B"]),
@@ -135,6 +146,7 @@ class EconomyV12ContractTests(unittest.TestCase):
         self.assertEqual(len(result["confidence_interval_95"]), 2)
 
     def test_doubly_robust_evaluation_compares_with_rules_baseline(self):
+        """La evaluación doblemente robusta compara la política con la referencia de reglas."""
         result = doubly_robust_policy_value(
             outcomes=np.array([1, 0, 1, 0], dtype=float),
             observed_actions=np.array(["A", "B", "A", "B"]),

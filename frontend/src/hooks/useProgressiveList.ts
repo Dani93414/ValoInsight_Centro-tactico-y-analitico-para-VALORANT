@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const DEFAULT_BATCH_SIZE = 72;
 
@@ -11,15 +11,18 @@ export function useProgressiveList<T>(
   resetKey: unknown,
   batchSize = DEFAULT_BATCH_SIZE,
 ) {
-  const [visibleCount, setVisibleCount] = useState(batchSize);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [windowState, setWindowState] = useState({ resetKey, batchSize, count: batchSize });
+  const [target, setTarget] = useState<HTMLDivElement | null>(null);
+  const sentinelRef = useCallback((node: HTMLDivElement | null) => setTarget(node), []);
+  if (!Object.is(windowState.resetKey, resetKey) || windowState.batchSize !== batchSize) {
+    setWindowState({ resetKey, batchSize, count: batchSize });
+  }
+  const visibleCount = windowState.count;
+  const setVisibleCount = useCallback((update: (count: number) => number) => {
+    setWindowState((current) => ({ ...current, count: update(current.count) }));
+  }, []);
 
   useEffect(() => {
-    setVisibleCount(batchSize);
-  }, [batchSize, resetKey]);
-
-  useEffect(() => {
-    const target = sentinelRef.current;
     if (!target || visibleCount >= items.length) return;
     if (typeof IntersectionObserver === "undefined") return;
 
@@ -35,7 +38,7 @@ export function useProgressiveList<T>(
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [batchSize, items.length, visibleCount]);
+  }, [batchSize, items.length, visibleCount, target, setVisibleCount]);
 
   const visibleItems = useMemo(
     () => items.slice(0, visibleCount),
@@ -46,14 +49,14 @@ export function useProgressiveList<T>(
       setVisibleCount((current) =>
         Math.min(items.length, current + batchSize),
       ),
-    [batchSize, items.length],
+    [batchSize, items.length, setVisibleCount],
   );
   const revealThrough = useCallback(
     (index: number) =>
       setVisibleCount((current) =>
         Math.max(current, Math.min(items.length, index + 1)),
       ),
-    [items.length],
+    [items.length, setVisibleCount],
   );
 
   return {

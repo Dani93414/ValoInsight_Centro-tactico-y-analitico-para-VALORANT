@@ -283,7 +283,7 @@ export type EconomyProjection = {
 };
 
 export type TeamPlanAlternative = {
-  [key: string]: any;
+  [key: string]: unknown;
   plan_kind: string;
   team_plan_score: number;
   team_plan_value?: number;
@@ -385,7 +385,8 @@ export type EconomyAdvancedContext = {
 };
 
 export type EconomyMlRoundRecommendation = {
-  [key: string]: any;
+  [key: string]: unknown;
+  coordination_only_improvement?: boolean;
   recommendation_source?: "ml_guided_solver" | "deterministic_solver";
   recommendation_is_experimental?: boolean;
   round_number: number;
@@ -433,7 +434,7 @@ export type EconomyMlRoundRecommendation = {
 };
 
 export type EconomyMlResponse = {
-  [key: string]: any;
+  [key: string]: unknown;
   available: boolean;
   economy_contract_version?: 12;
   engine: "player_first_v10" | "player_first_v12_decision_grade";

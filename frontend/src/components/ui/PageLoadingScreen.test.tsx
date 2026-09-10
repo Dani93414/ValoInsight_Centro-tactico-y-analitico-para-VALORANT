@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import PageLoadingScreen from "./PageLoadingScreen";
 
 describe("PageLoadingScreen", () => {
-  it("renders an accessible, full-page loading state", () => {
+  it("muestra una pantalla completa de carga con estado accesible", () => {
     const markup = renderToStaticMarkup(<PageLoadingScreen />);
 
     expect(markup).toContain('class="page-loading-screen"');

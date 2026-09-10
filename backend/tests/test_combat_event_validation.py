@@ -24,12 +24,14 @@ TEAMS = {
 
 class CombatEventValidationTest(unittest.TestCase):
     def test_valid_kill_requires_distinct_opposing_players(self):
+        """Solo acepta bajas entre jugadores distintos de equipos rivales."""
         self.assertTrue(is_valid_kill({"killer": "P1", "victim": "E1"}, TEAMS))
         self.assertFalse(is_valid_kill({"killer": "P1", "victim": "P1"}, TEAMS))
         self.assertFalse(is_valid_kill({"killer": "P1", "victim": "P2"}, TEAMS))
         self.assertFalse(is_valid_kill({"killer": "", "victim": "E1"}, TEAMS))
 
     def test_suicide_is_death_but_not_kill_assist_or_first_kill_candidate(self):
+        """Cuenta el suicidio como muerte, pero no como baja, asistencia ni primera sangre."""
         suicide = {"killer": "P1", "victim": "P1", "assistants": ["P2"]}
         normal = {"killer": "E1", "victim": "P2", "assistants": ["E2"]}
         all_kills = [suicide, normal]
@@ -41,6 +43,7 @@ class CombatEventValidationTest(unittest.TestCase):
         self.assertEqual(competitive, [normal])
 
     def test_enemy_damage_only_contributes_to_adr_and_hit_distribution(self):
+        """Solo incorpora daño enemigo al daño medio por ronda y a la distribución de impactos."""
         player_stat = {
             "damage": [
                 {
@@ -74,6 +77,7 @@ class CombatEventValidationTest(unittest.TestCase):
         self.assertFalse(is_enemy_damage("P1", "P2", TEAMS))
 
     def test_damage_received_only_counts_enemy_damage(self):
+        """Solo cuenta el daño recibido de enemigos."""
         round_obj = {
             "playerStats": [
                 {"puuid": "E1", "damage": [{"receiver": "P1", "damage": 90}]},
@@ -84,6 +88,7 @@ class CombatEventValidationTest(unittest.TestCase):
         self.assertEqual(_get_player_damage_received(round_obj, "P1", TEAMS), 90)
 
     def test_suicide_does_not_add_weapon_kill_but_keeps_weapon_death(self):
+        """El suicidio suma una muerte al arma, pero no una baja."""
         rounds = [
             {
                 "playerStats": [
@@ -107,6 +112,7 @@ class CombatEventValidationTest(unittest.TestCase):
         self.assertEqual(stats["rifle"]["deaths"], 1)
 
     def test_kast_counts_kill_assist_survival_and_traded_death_only(self):
+        """Calcula KAST con bajas, asistencias, supervivencia y muertes intercambiadas."""
         def player_stat(puuid, kills=None):
             return {"puuid": puuid, "kills": kills or []}
 

@@ -3,7 +3,7 @@ import type { RawMatchDetail } from "../../types/matches";
 import {
   buildScoreProgression,
   type ScoreProgressPlayer,
-} from "./MatchScoreProgressChart";
+} from "./scoreProgression";
 
 const players: ScoreProgressPlayer[] = [
   { id: "p1", name: "P1", agentName: "A1", teamId: "Red", color: "red", dataKey: "p1" },

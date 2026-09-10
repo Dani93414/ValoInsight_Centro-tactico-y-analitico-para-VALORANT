@@ -106,7 +106,7 @@ describe("calculateMatchMomentum", () => {
       .toBeCloseTo(round.momentumDiff, 2);
   });
 
-  it("modera FULL contra ECO y premia ECO contra FULL", () => {
+  it("modera el valor de ganar con compra completa contra ahorro y premia la situación inversa", () => {
     const expected = calculateMatchMomentum([
       baseRound(1, "A", 1, 0, { teamALoadout: 20_000, teamBLoadout: 5_000 }),
     ], teams).rounds[0];
@@ -166,7 +166,7 @@ describe("calculateMatchMomentum", () => {
     expect(result.globalDominantTeamId).toBeNull();
   });
 
-  it("no inventa clutch con killer muerto o tracking incompleto", () => {
+  it("no atribuye una victoria en solitario si el atacante está muerto o faltan eventos", () => {
     const playerTeams = Object.fromEntries(players.map((player) => [player.id, player.teamId]));
     const kills = [
       { killerId: "b1", victimId: "a1", timeMs: 1 },
@@ -183,8 +183,8 @@ describe("calculateMatchMomentum", () => {
   });
 });
 
-describe("advanced momentum", () => {
-  it("mantiene un ace perdido como highlight sin convertirlo en turning point", () => {
+describe("Cambios de dominio y momentos destacados de la partida", () => {
+  it("conserva un ACE en una ronda perdida como momento destacado, sin marcar un giro de la partida", () => {
     const rounds = Array.from({ length: 6 }, (_, index) =>
       advancedRound(index + 1, "B", index === 0
         ? {

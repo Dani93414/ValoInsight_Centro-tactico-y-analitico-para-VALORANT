@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { getImageDerivative } from "../pages/contentFormatters";
 
 describe("getImageDerivative", () => {
-  it("maps local raster content to the requested WebP variant", () => {
+  it("resuelve la variante WebP solicitada para una imagen local", () => {
     expect(
       getImageDerivative("/content/sprays/example/displayIcon.png", "thumb"),
     ).toBe("/content/sprays/example/displayIcon.thumb.webp");
   });
 
-  it("preserves query strings and already optimized variants", () => {
+  it("conserva los parámetros de la URL y las variantes ya optimizadas", () => {
     expect(
       getImageDerivative("/content/cards/card.jpg?v=2", "medium"),
     ).toBe("/content/cards/card.medium.webp?v=2");
@@ -17,7 +17,7 @@ describe("getImageDerivative", () => {
     ).toBe("/content/cards/card.thumb.webp");
   });
 
-  it("does not rewrite remote or unsupported assets", () => {
+  it("no modifica rutas de imágenes remotas ni formatos no compatibles", () => {
     expect(getImageDerivative("https://cdn.example/card.png", "thumb")).toBe(
       "https://cdn.example/card.png",
     );

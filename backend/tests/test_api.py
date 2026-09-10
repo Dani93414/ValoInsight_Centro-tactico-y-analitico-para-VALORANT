@@ -30,6 +30,7 @@ class RiotApiConnectivityTest(unittest.TestCase):
         "External Riot API test disabled. Set RUN_EXTERNAL_TESTS=1 to enable.",
     )
     def test_riot_account_lookup(self):
+        """Consulta una cuenta por nombre y etiqueta mediante la API externa de Riot."""
         response = _fetch_account()
         self.assertEqual(
             response.status_code,

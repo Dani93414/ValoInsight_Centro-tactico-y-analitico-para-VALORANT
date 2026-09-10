@@ -51,6 +51,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.catalogs.stop()
 
     def test_inventory_carries_weapon_after_survival(self):
+        """Conserva el arma en el inventario después de sobrevivir."""
         previous = PlayerInventoryState("p", 1000, weapon_after_buy="Vandal", armor_after_buy="Light Shield")
         current = advance_inventory(previous, puuid="p", credits_before_buy=3000,
                                     observed_weapon="Vandal", observed_armor="Light Shield", survived_previous_round=True)
@@ -59,12 +60,14 @@ class EconomyEngineV10Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.display_normalizer.find_weapon")
     def test_classic_uuid_is_normalized_for_display(self, find):
+        """Normaliza el identificador de Classic para mostrar su nombre."""
         find.return_value = {"uuid": "29a0cfab-485b-f5d5-779a-b59f85e204a8", "displayName": "Classic", "cost": 0}
         result = normalize_weapon_display("29a0cfab-485b-f5d5-779a-b59f85e204a8")
         self.assertEqual(result["displayName"], "Classic")
         self.assertTrue(result["known"])
 
     def test_placeholder_armor_becomes_no_shield(self):
+        """Interpreta el escudo de relleno como ausencia de escudo."""
         result = normalize_armor_display("string")
         self.assertEqual(result["displayName"], "Sin escudo")
         self.assertNotEqual(result["displayName"], "string")
@@ -73,6 +76,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(normalize_weapon_display("string")["displayName"], "Arma no observada")
 
     def test_death_loses_weapon(self):
+        """Elimina el arma conservada cuando el jugador muere."""
         previous = PlayerInventoryState("p", 1000, weapon_after_buy="Vandal")
         current = advance_inventory(previous, puuid="p", credits_before_buy=3000,
                                     observed_weapon="Classic", observed_armor=None, survived_previous_round=False)
@@ -81,6 +85,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.purchase_inference.find_weapon", lambda value: WEAPONS.get(str(value).lower()))
     def test_pickup_hypothesis_when_upgrade_has_insufficient_spend(self):
+        """Contempla un arma recogida cuando el gasto no explica la mejora observada."""
         state = PlayerInventoryState("p", 1200, weapon_before_buy="Classic", weapon_after_buy="Vandal",
                                      survived_previous_round=True)
         result = PurchaseInferenceEngine().infer(state, observed_spent=100)
@@ -89,6 +94,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.purchase_inference.find_weapon", lambda value: WEAPONS.get(str(value).lower()))
     def test_pistol_classic_is_default_spawn_not_purchase(self):
+        """Trata la Classic inicial como equipamiento gratuito, no como compra."""
         state = PlayerInventoryState("p", 800, weapon_after_buy="Classic")
         result = PurchaseInferenceEngine().infer(state, observed_spent=0, context={"is_pistol_round": True})
         self.assertEqual(result[0]["weapon_source"], "default_spawn_weapon")
@@ -97,6 +103,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.purchase_inference.find_weapon", lambda value: WEAPONS.get(str(value).lower()))
     def test_team_inference_can_mark_probable_drop_buyer(self):
+        """Identifica al posible comprador de un arma entregada a un compañero."""
         receiver = PlayerInventoryState("poor", 400, weapon_after_buy="Vandal", died_previous_round=True)
         donor = PlayerInventoryState("rich", 9000, weapon_before_buy="Vandal", weapon_after_buy="Vandal",
                                      survived_previous_round=True)
@@ -108,12 +115,14 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertIn("team_drop_inferred_not_observed", result["rich"][0]["warnings"])
 
     def test_armor_variants_are_generated_and_budgeted(self):
+        """Genera alternativas de escudo respetando el presupuesto."""
         plans = LegalPurchaseGenerator().generate(inv("p", 1000), limit=100)
         armor_names = {(p.get("armor") or {}).get("displayName") for p in plans}
         self.assertTrue({"Light Shield", "Regen Shield", "Heavy Shield"}.issubset(armor_names))
         self.assertTrue(all(p["self_cost"] <= 1000 for p in plans if not p.get("requires_weapon_drop")))
 
     def test_carried_vandal_costs_zero_but_keeps_tactical_value(self):
+        """Asigna coste cero a una Vandal conservada sin eliminar su valor táctico."""
         plans = LegalPurchaseGenerator().generate(inv("p", 2000, "Vandal", True), limit=200)
         kept = next(p for p in plans if p["keep_weapon"] and (p["weapon"] or {}).get("displayName") == "Vandal"
                     and p["armor"] is None and p["ability_cost"] == 0)
@@ -125,6 +134,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(kept["expected_remaining"], 2000)
 
     def test_carried_heavy_armor_has_zero_cost_and_full_value(self):
+        """Asigna coste cero y valor completo al escudo pesado conservado del caso de prueba."""
         state = PlayerInventoryState("p", 2000, weapon_before_buy="Vandal",
                                      armor_before_buy="Heavy Shield", survived_previous_round=True)
         plans = LegalPurchaseGenerator().generate(state, limit=300)
@@ -135,6 +145,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertIn("Heavy Shield conservada", normalize_purchase_for_display(kept)["armor_label"])
 
     def test_reset_round_discards_carried_weapon_and_armor(self):
+        """Descarta armas y escudos conservados al reiniciar la economía."""
         state = PlayerInventoryState("p", 800, weapon_before_buy="Vandal", armor_before_buy="Heavy Shield",
                                      survived_previous_round=True, weapon_after_buy="Classic")
         result = RoundEconomyRecommender().recommend(
@@ -148,6 +159,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertNotEqual(purchase["weapon_source"], "carried")
 
     def test_only_actual_spectre_is_marked_as_carried(self):
+        """Solo marca como conservada la Spectre presente en el inventario."""
         plans = LegalPurchaseGenerator().generate(inv("p", 2000, "Spectre", True), limit=200)
         kept = [p for p in plans if p["keep_weapon"]]
         self.assertTrue(kept)
@@ -159,6 +171,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.legal_purchase.agent_abilities")
     def test_omen_has_one_free_and_one_purchasable_smoke(self, abilities):
+        """Distingue el humo gratuito de Omen del humo que se puede comprar."""
         abilities.return_value = [{"name": "Dark Cover", "free_charges_at_round_start": 1,
                                    "max_charges": 2, "purchasable_charges": 1,
                                    "cost_per_charge": 150, "is_purchasable": True}]
@@ -168,6 +181,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.legal_purchase.agent_abilities")
     def test_killjoy_turret_is_free_but_has_inventory_value(self, abilities):
+        """Reconoce la torreta de Killjoy como gratuita, pero con valor de inventario."""
         abilities.return_value = [{"name": "Turret", "free_charges_at_round_start": 1,
                                    "max_charges": 1, "purchasable_charges": 0,
                                    "cost_per_charge": 0, "is_purchasable": False}]
@@ -179,6 +193,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.legal_purchase.agent_abilities")
     def test_multiple_abilities_and_charges_can_share_one_purchase(self, abilities):
+        """Permite agrupar varias habilidades y cargas en una compra."""
         abilities.return_value = [
             {"name": "Owl Drone", "max_charges": 1, "purchasable_charges": 1, "cost_per_charge": 400, "is_purchasable": True},
             {"name": "Shock Bolt", "max_charges": 2, "purchasable_charges": 2, "cost_per_charge": 150, "is_purchasable": True},
@@ -193,6 +208,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
 
     @patch("modules.economy_ml.legal_purchase.agent_abilities")
     def test_missing_ability_cost_warns_without_crashing(self, abilities):
+        """Avisa de costes de habilidades ausentes sin interrumpir el cálculo."""
         abilities.return_value = [{"name": "Unknown Utility", "max_charges": 1,
                                    "purchasable_charges": 1, "cost_per_charge": None,
                                    "cost_credits": None, "is_purchasable": True}]
@@ -200,6 +216,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertIn("missing_cost:Unknown Utility", options[0][2])
 
     def test_weapon_drop_can_fund_receiver_but_not_armor_or_abilities(self):
+        """Permite financiar un arma a un compañero, pero no sus escudos ni habilidades."""
         inventories = [inv("rich", 9000), inv("poor", 400)]
         plan = TeamBuySolver().solve(inventories, alternatives=2)
         self.assertTrue(plan["valid"])
@@ -210,6 +227,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
                 self.assertEqual(player["self_cost"], player["armor_cost"] + player["ability_cost"])
 
     def test_vandal_drop_requires_donor_to_keep_useful_loadout(self):
+        """Exige que quien entrega una Vandal conserve un equipamiento útil."""
         generator = LegalPurchaseGenerator()
         rich_plans = generator.generate(inv("rich", 9000), limit=200)
         poor_plans = generator.generate(inv("poor", 400), limit=200)
@@ -228,6 +246,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(donor["expected_remaining"], 2200)
 
     def test_no_buy_never_discards_carried_weapon_or_armor(self):
+        """Una decisión de no comprar conserva las armas y los escudos existentes."""
         state = PlayerInventoryState("p", 500, weapon_before_buy="Vandal",
                                      armor_before_buy="Heavy Shield", survived_previous_round=True)
         plans = LegalPurchaseGenerator().generate(state, limit=200)
@@ -238,11 +257,13 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(display["loadout_label"], "Vandal + Heavy Shield conservada")
 
     def test_validate_rejects_discarding_carried_inventory(self):
+        """Rechaza planes que descartan indebidamente el inventario conservado."""
         state = PlayerInventoryState("p", 1000, weapon_before_buy="Vandal", armor_before_buy="Heavy Shield")
         result = TeamBuySolver.validate([TeamBuySolver._zero_plan(inv("p", 1000))], [state])
         self.assertFalse(result["valid"])
 
     def test_free_classic_is_never_labeled_self_purchase(self):
+        """No presenta la Classic gratuita como una compra del jugador."""
         purchase = {"weapon": WEAPONS["classic"], "armor": GEAR["light"],
                     "weapon_source": "bought_self", "weapon_purchase_cost": 0,
                     "self_cost": 400}
@@ -251,6 +272,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(display["source_label"], "Arma inicial gratis")
 
     def test_match_point_taxonomy_distinguishes_closing_and_elimination(self):
+        """Distingue entre poder cerrar la partida y estar a una derrota de perder."""
         players = [TeamBuySolver._zero_plan(inv(str(i), 1000)) for i in range(5)]
         inventories = [inv(str(i), 1000) for i in range(5)]
         self.assertEqual(TeamBuySolver._summarize(players, inventories, {
@@ -268,6 +290,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         }), "ELIMINATION_BUY")
 
     def test_rich_weak_plan_is_underinvested_and_penalized(self):
+        """Penaliza un plan que invierte demasiado poco teniendo dinero disponible."""
         inventories = [inv(str(i), 6000) for i in range(5)]
         players = [TeamBuySolver._zero_plan(item) for item in inventories]
         context = {"round_number": 5, "team_player_credit_estimates": {str(i): 6000 for i in range(5)}}
@@ -277,6 +300,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(TeamBuySolver._summarize(players, inventories, context), "BROKEN_BUY")
 
     def test_coordinated_bulldog_force_is_not_mislabeled_as_broken(self):
+        """No clasifica una compra forzada coordinada de Bulldog como compra desorganizada."""
         inventories = [inv(str(i), 3600) for i in range(5)]
         players = [{
             **TeamBuySolver._zero_plan(inventory),
@@ -290,6 +314,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         )
 
     def test_guardian_team_is_a_full_buy(self):
+        """Clasifica un equipo equipado con Guardian como compra completa."""
         inventories = [inv(str(i), 4300) for i in range(5)]
         players = [{
             **TeamBuySolver._zero_plan(inventory),
@@ -304,6 +329,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         )
 
     def test_split_buy_with_funded_unarmed_player_is_dominated(self):
+        """Detecta como inferior un plan que deja sin arma a un jugador con dinero."""
         inventories = [inv(str(i), 4000) for i in range(5)]
         players = []
         for index, inventory in enumerate(inventories):
@@ -325,6 +351,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertTrue(TeamBuySolver._is_dominated_underinvestment(candidate, context))
 
     def test_bonus_does_not_preserve_classic_when_replacement_is_affordable(self):
+        """No conserva una Classic por ser ronda bonus si puede sustituirse."""
         players = [{
             **TeamBuySolver._zero_plan(inv(str(i), 5000)),
             "weapon": {"displayName": "Classic"}, "weapon_value": 0,
@@ -342,6 +369,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         ))
 
     def test_fragmented_expensive_low_value_plan_is_dominated(self):
+        """Detecta como inferior un plan caro, fragmentado y de bajo valor."""
         inventories = [inv(str(i), 3000) for i in range(5)]
         players = []
         for index, inventory in enumerate(inventories):
@@ -368,6 +396,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         ))
 
     def test_rich_player_low_weapon_loses_to_rifle_and_ultimate_reduces_penalty(self):
+        """Prefiere rifle para un jugador con dinero y modera la penalización si tiene definitiva."""
         def player(puuid, weapon, value):
             return {"puuid": puuid, "weapon": {"displayName": weapon}, "weapon_value": value,
                     "armor": GEAR["heavy"], "armor_value": 1000, "ability_cost": 0,
@@ -391,6 +420,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertLess(with_ult["rule_penalty"], weak_score["rule_penalty"])
 
     def test_bonus_carried_weak_weapon_avoids_rich_player_penalty(self):
+        """Evita penalizar como falta de inversión un arma débil conservada en una ronda bonus."""
         players = [{"puuid": str(i), "weapon": {"displayName": "Bandit"}, "weapon_value": 900,
                     "armor": GEAR["heavy"], "armor_value": 1000, "ability_cost": 0,
                     "self_cost": 0, "expected_remaining": 9000, "keep_weapon": True}
@@ -400,6 +430,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertNotIn("rich_player_low_weapon_full_buy_penalty", score["warnings"])
 
     def test_reduced_choices_keeps_carried_and_rifle_armor_anchors(self):
+        """Mantiene alternativas de arma conservada y de rifle con escudo al reducir candidatos."""
         plans = LegalPurchaseGenerator().generate(inv("p", 6000, "Spectre", True), limit=200)
         with patch("modules.economy_ml.team_buy_solver.MAX_CHOICES_PER_PLAYER", 4):
             choices = TeamBuySolver._reduced_choices(plans)
@@ -410,6 +441,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
                             for item in choices))
 
     def test_pistol_reduction_preserves_classic_ghost_and_armor_baselines(self):
+        """Mantiene las opciones básicas de Classic, Ghost y escudo al reducir compras de pistola."""
         pistol_catalog = {
             **WEAPONS,
             "ghost": {"displayName": "Ghost", "cost": 500},
@@ -431,6 +463,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertTrue({"Shorty", "Frenzy", "Sheriff"}.issubset(names))
 
     def test_pistol_sidearm_has_no_intrinsic_weapon_penalty(self):
+        """No penaliza una pistola solo por su nombre en la ronda de pistolas."""
         base = {
             "puuid": "p", "armor": None, "armor_value": 0,
             "abilities": [], "ability_cost": 0, "expected_remaining": 500,
@@ -444,6 +477,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertNotIn("pistol_shorty_without_close_range_support", shorty_score["warnings"])
 
     def test_reduced_choices_does_not_replace_self_buy_anchor_with_unfunded_operator(self):
+        """No sustituye una compra propia viable por un Operator sin financiación."""
         plans = LegalPurchaseGenerator().generate(inv("p", 3500), limit=200)
         with patch("modules.economy_ml.team_buy_solver.MAX_CHOICES_PER_PLAYER", 4):
             choices = TeamBuySolver._reduced_choices(plans)
@@ -453,12 +487,14 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertTrue(any(not p.get("requires_weapon_drop") for p in protected))
 
     def test_purchase_payload_does_not_repeat_raw_content_documents(self):
+        """Evita repetir documentos completos del catálogo en la respuesta de compra."""
         plans = LegalPurchaseGenerator().generate(inv("p", 6000), limit=200)
         self.assertTrue(plans)
         self.assertTrue(all("raw" not in (plan.get("weapon") or {}) for plan in plans))
         self.assertTrue(all("raw" not in (plan.get("armor") or {}) for plan in plans))
 
     def test_contextual_scoring_uses_bounded_shortlist(self):
+        """Limita la lista de candidatos usados para la puntuación contextual."""
         inventories = [inv(str(i), 6000) for i in range(5)]
         def passthrough(score, players, context, model, prediction=None):
             return {**score, "warnings": score.get("warnings", []),
@@ -470,6 +506,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertLessEqual(contextual.call_count, 16)
 
     def test_direct_combination_lookup_matches_cartesian_product_order(self):
+        """Comprueba que la búsqueda directa de combinaciones coincide con el producto cartesiano."""
         choices = [
             [{"id": "a0"}, {"id": "a1"}],
             [{"id": "b0"}, {"id": "b1"}, {"id": "b2"}],
@@ -483,6 +520,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(actual, expected)
 
     def test_round_win_model_is_reused_between_solver_calls(self):
+        """Reutiliza el modelo de victoria entre llamadas al optimizador."""
         inventories = [inv(str(i), 6000) for i in range(5)]
 
         def passthrough(score, players, context, model, prediction=None):
@@ -503,6 +541,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         model_type.assert_called_once_with()
 
     def test_early_heavy_weapon_has_no_intrinsic_penalty(self):
+        """No penaliza un arma pesada únicamente por aparecer en una ronda temprana."""
         operator = {"puuid": "p", "weapon": {"displayName": "Operator"}, "weapon_value": 4700,
                     "armor": GEAR["heavy"], "armor_value": 1000, "ability_cost": 0,
                     "self_cost": 5700, "expected_remaining": 1000, "keep_weapon": False}
@@ -519,6 +558,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(late["rule_penalty"], early["rule_penalty"])
 
     def test_one_drop_per_donor_and_no_cheap_drop(self):
+        """Limita las entregas de armas por donante y descarta las demasiado baratas."""
         donor = {"puuid": "rich", "weapon": WEAPONS["vandal"], "weapon_value": 2900,
                  "armor": GEAR["heavy"], "armor_value": 1000, "keep_weapon": False,
                  "self_cost": 3900, "expected_remaining": 5100, "buys_for": None}
@@ -534,12 +574,14 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(len(donor["buys_for"]), 1)
 
     def test_non_weapon_drop_is_rejected(self):
+        """Rechaza entregas de objetos que no sean armas."""
         players = [{"puuid": "poor", "self_cost": 0, "expected_remaining": 400, "bought_by": "rich",
                     "weapon_cost": 0, "armor_cost": 400, "ability_cost": 0, "requires_weapon_drop": False}]
         result = TeamBuySolver.validate(players, [inv("poor", 400)])
         self.assertFalse(result["valid"])
 
     def test_operator_stack_has_no_weapon_name_penalty(self):
+        """No penaliza varios Operator únicamente por el nombre del arma."""
         operator = {"displayName": "Operator", "cost": 4700}
         rifle = {"displayName": "Vandal", "cost": 2900}
         base = {"armor": GEAR["heavy"], "abilities": [], "ability_cost": 0,
@@ -552,6 +594,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertNotIn("too_many_snipers", stacked_score["warnings"])
 
     def test_post_pistol_odin_without_armor_loses_to_protected_spectre(self):
+        """Prefiere una Spectre con protección frente a una Odin sin escudo tras pistolas."""
         odin = {"puuid": "p", "weapon": {"displayName": "Odin", "cost": 3200}, "weapon_value": 3200,
                 "armor": None, "armor_value": 0, "ability_cost": 0, "self_cost": 3200,
                 "expected_remaining": 100, "keep_weapon": False}
@@ -564,6 +607,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertNotIn("heavy_weapon_early_penalty", scorer.score([odin], context)["debug_warnings"])
 
     def test_team_plan_score_is_capped_but_internal_value_is_preserved(self):
+        """Limita la nota visible del plan sin perder su valor interno."""
         loaded = [{"puuid": str(i), "weapon": {"displayName": "Vandal", "cost": 2900},
                    "weapon_value": 2900, "armor": GEAR["heavy"], "armor_value": 1000,
                    "abilities": [], "ability_cost": 500, "self_cost": 0,
@@ -573,6 +617,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertIn("team_plan_value", result)
 
     def test_future_economy_preserves_each_player_distribution(self):
+        """Conserva la distribución de dinero por jugador al proyectar la economía futura."""
         players = [
             {"puuid": "a", "weapon": None, "armor": None, "abilities": [], "ability_cost": 0,
              "self_cost": 0, "expected_remaining": 8000, "keep_weapon": False},
@@ -585,6 +630,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(by_id["b"]["credits_if_loss"], 2100)
 
     def test_carried_weapon_value_improves_score_without_increasing_spend(self):
+        """Reconoce el valor del arma conservada sin aumentar el gasto."""
         carried = {"puuid": "p", "weapon": {"displayName": "Vandal", "cost": 0, "weapon_value": 2900, "source": "carried"},
                    "weapon_value": 2900, "weapon_cost": 0, "weapon_purchase_cost": 0,
                    "armor": None, "abilities": [], "ability_cost": 0, "self_cost": 0,
@@ -599,6 +645,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(carried_score["team_spend"], 0)
 
     def test_overtime_underinvestment_is_penalized(self):
+        """Penaliza invertir demasiado poco en la prórroga."""
         players = [{"puuid": str(i), "weapon": None, "armor": None, "abilities": [],
                     "ability_cost": 0, "self_cost": 0, "expected_remaining": 5000, "keep_weapon": False}
                    for i in range(5)]
@@ -606,12 +653,14 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertIn("decisive_round_underinvestment", result["warnings"])
 
     def test_pistol_utility_plan_has_specific_label(self):
+        """Asigna una etiqueta específica al plan de habilidades de la ronda de pistolas."""
         players = [{"puuid": "p", "weapon": None, "weapon_value": 0, "self_cost": 700,
                     "ability_cost": 700, "armor_cost": 0, "keep_weapon": False}]
         label = TeamBuySolver._summarize(players, [inv("p", 800)], {"is_pistol_round": True})
         self.assertEqual(label, "PISTOL_UTILITY")
 
     def test_sova_localized_abilities_reuse_seed_costs_by_slot(self):
+        """Resuelve los costes de habilidades traducidas de Sova mediante su ranura."""
         clear_ability_catalog_cache()
         abilities = {item["slot"]: item for item in agent_abilities("Sova") if item["slot"] in {"C", "Q", "E"}}
         self.assertEqual(abilities["Q"]["cost_per_charge"], 150)
@@ -620,6 +669,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertIn("Shock Bolt", abilities["Q"]["aliases"])
 
     def test_warning_codes_are_deduplicated_and_humanized(self):
+        """Elimina avisos duplicados y los convierte en mensajes legibles."""
         result = normalize_warning_list([
             "missing_cost:Flecha explosiva", "missing_cost:Flecha explosiva",
             "missing_cost:Dron", "ability_purchase_not_observable",
@@ -630,14 +680,17 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertTrue(any("Compra de habilidades estimada" in item for item in result))
 
     def test_placeholder_warning_is_debug_only(self):
+        """Reserva los avisos sobre valores de relleno para depuración."""
         self.assertEqual(normalize_warning_list(["invalid_placeholder_value:string"]), [])
 
     def test_pistol_empty_purchase_has_classic_free_display(self):
+        """Muestra la Classic gratuita cuando no se compra nada en pistolas."""
         display = normalize_purchase_for_display({"weapon": None, "armor": None, "abilities": [], "self_cost": 0}, is_pistol_round=True)
         self.assertEqual(display["loadout_label"], "Classic gratis + Sin escudo")
         self.assertEqual(display["source_label"], "Arma inicial gratis")
 
     def test_free_signature_ability_is_not_labeled_as_a_purchase(self):
+        """No presenta la habilidad característica gratuita como una compra."""
         display = normalize_purchase_for_display({
             "weapon": None, "armor": None, "self_cost": 0,
             "abilities": [{
@@ -649,10 +702,12 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(display["included_ability_label"], "Paint Shells x1")
 
     def test_player_reason_uses_spanish_label_for_force_buy(self):
+        """Usa una etiqueta en español para explicar una compra forzada."""
         explanation = RecommendationExplainer._reason({}, {"plan_kind": "FORCE_BUY"})
         self.assertEqual(explanation, "Compra coherente con el plan compra forzada.")
 
     def test_match_response_exposes_normalized_observed_display_and_dynamic_model_status(self):
+        """Incluye equipamiento observado normalizado y estado dinámico del modelo en la respuesta."""
         result = recommend_match_economy(economy_match())
         self.assertEqual(len(result["limitations"]), 1)
         self.assertIn("reglas y solver player-first", result["limitations"][0])
@@ -664,6 +719,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertNotIn("ml_auxiliary_unavailable_rules_only", result["rounds"][0]["warnings"])
 
     def test_macro_model_guidance_adjusts_but_does_not_replace_rule_score(self):
+        """La orientación del modelo ajusta la puntuación de reglas sin sustituirla."""
         players = []
         for index in range(5):
             players.append({
@@ -691,6 +747,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertEqual(no_confidence["team_plan_value"], base["team_plan_value"])
 
     def test_bonus_keeps_real_inventory_instead_of_buying_five_shields(self):
+        """Conserva el inventario real en una ronda bonus en lugar de comprar cinco escudos."""
         inventories = [inv(str(i), 2000, "Spectre", True) for i in range(5)]
         plan = TeamBuySolver().solve(inventories, context={"is_bonus_candidate": True})
         self.assertEqual(plan["plan_kind"], "BONUS_KEEP_INVENTORY")
@@ -701,6 +758,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertTrue(all(p["self_cost"] == p["armor_cost"] + p["ability_cost"] for p in kept))
 
     def test_post_pistol_conversion_does_not_leave_rich_players_unarmed(self):
+        """No deja sin arma a jugadores con dinero en la conversión posterior a pistolas."""
         inventories = [inv(str(i), 3550) for i in range(5)]
         context = {
             "round_number": 2, "is_second_round": True, "is_post_pistol_conversion": True,
@@ -716,6 +774,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertNotIn("post_pistol_conversion_underinvestment", plan["warnings"])
 
     def test_post_pistol_sidearms_do_not_count_as_conversion_weapons(self):
+        """No cuenta pistolas como armas de conversión tras la ronda de pistolas."""
         inventories = [inv(str(i), 3550, "Ghost", True) for i in range(5)]
         context = {
             "round_number": 2, "is_second_round": True, "is_post_pistol_conversion": True,
@@ -728,6 +787,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertGreaterEqual(useful, 3)
 
     def test_bonus_replaces_dead_players_weapons_without_upgrading_survivors(self):
+        """Repone armas de jugadores muertos sin mejorar las de los supervivientes en una bonus."""
         inventories = [inv("alive1", 5000, "Spectre", True), inv("alive2", 5000, "Spectre", True)]
         inventories += [inv(f"dead{i}", 4500) for i in range(3)]
         credits = {item.puuid: item.credits_before_buy for item in inventories}
@@ -742,6 +802,7 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertNotIn("bonus_missing_replacement_weapon", plan["warnings"])
 
     def test_rich_team_vs_full_buy_rejects_low_weapon_when_supported(self):
+        """Rechaza armamento insuficiente frente a compra completa cuando existe una alternativa respaldada."""
         inventories = [inv(str(i), 4500) for i in range(5)]
         context = {
             "round_number": 3,
@@ -753,22 +814,26 @@ class EconomyEngineV10Tests(unittest.TestCase):
         self.assertTrue(all((p.get("weapon_value") or 0) >= 1600 for p in plan["players"]))
 
     def test_pistol_plan_never_exceeds_800_per_player(self):
+        """No supera 800 créditos por jugador en la ronda de pistolas."""
         inventories = [inv(str(i), 800) for i in range(5)]
         plan = TeamBuySolver().solve(inventories, context={"is_pistol_round": True})
         self.assertTrue(all(p["self_cost"] <= 800 for p in plan["players"]))
 
     def test_save_penalty_and_overtime_constants(self):
+        """Comprueba los valores configurados para ahorro con penalización y prórroga."""
         self.assertTrue(save_penalty_applies(side="attack", team_won=False, player_survived=True,
                                             spike_planted=False, round_result="RoundResult_TimeExpired", round_ceremony=None))
         self.assertEqual(fixed_round_start_credits(25), 5000)
 
     def test_no_observed_post_buy_labels_in_model_features(self):
+        """Excluye las etiquetas observadas después de comprar de las variables del modelo."""
         self.assertEqual(SCHEMA_VERSION, 12)
         leaked = {"target_loadout_case", "cashflow_case", "enemy_target_loadout_case", "enemy_cashflow_case"}
         self.assertTrue(leaked.issubset(FORBIDDEN_FEATURES))
         self.assertTrue(leaked.isdisjoint(MODEL_FEATURES))
 
     def test_explainer_plan_and_players_are_coherent(self):
+        """Mantiene coherencia entre la explicación, el plan y las recomendaciones individuales."""
         purchase = {"puuid": "p", "self_cost": 400, "expected_remaining": 400, "weapon": None,
                     "armor": GEAR["light"], "abilities": [], "warnings": []}
         result = RecommendationExplainer().explain(round_number=1, team_id="A", side="attack", score_before="0-0",

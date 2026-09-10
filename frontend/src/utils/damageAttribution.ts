@@ -85,7 +85,8 @@ function abilityIconPath(agentId: string, abilityName: string): string | null {
   if (!agentId || !abilityName) return null;
   const sanitized = abilityName
     .trim()
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+    .replace(/[<>:"/\\|?*]/g, "_")
+    .split("").map((character) => character.charCodeAt(0) < 32 ? "_" : character).join("")
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_")
     .replace(/^[._]+|[._]+$/g, "");

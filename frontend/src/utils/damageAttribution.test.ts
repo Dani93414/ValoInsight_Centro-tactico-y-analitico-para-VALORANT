@@ -27,7 +27,7 @@ const agents = new Map<string, AgentContent>([
 ]);
 
 describe("resolveKillDamageSource", () => {
-  it("resuelve kills de arma", () => {
+  it("identifica el arma que causó una baja", () => {
     const source = resolveKillDamageSource(
       { finishingDamage: { damageType: "Weapon", damageItem: "weapon-1" } },
       { characterId: "sova" },
@@ -40,7 +40,7 @@ describe("resolveKillDamageSource", () => {
     expect(source.name).toBe("Vandal");
   });
 
-  it("resuelve kills de habilidad con el agente killer", () => {
+  it("identifica la habilidad que causó una baja usando el agente del atacante", () => {
     const source = resolveKillDamageSource(
       { finishingDamage: { damageType: "Ability", damageItem: "Shock Bolt" } },
       { characterId: "sova" },
@@ -54,7 +54,7 @@ describe("resolveKillDamageSource", () => {
     expect(source.icon).toBe("/shock-bolt.png");
   });
 
-  it("resuelve todos los slots genericos dentro del agente killer", () => {
+  it("resuelve todas las ranuras genéricas de habilidades dentro del agente del atacante", () => {
     const slotAgents = new Map<string, AgentContent>(
       ["agent-a", "agent-b"].map((agentId) => [
         agentId,
@@ -96,7 +96,7 @@ describe("resolveKillDamageSource", () => {
     }
   });
 
-  it("no adivina un agente cuando solo recibe un slot generico", () => {
+  it("no inventa un agente cuando solo recibe una ranura genérica de habilidad", () => {
     const source = resolveKillDamageSource(
       { finishingDamage: { damageType: "Ability", damageItem: "Ultimate" } },
       undefined,
@@ -117,7 +117,7 @@ describe("resolveKillDamageSource", () => {
     expect(source.id).toBe("Ultimate");
   });
 
-  it("mantiene fallback estable para fuentes desconocidas", () => {
+  it("mantiene una representación de reserva estable para fuentes de daño desconocidas", () => {
     const source = resolveKillDamageSource(
       { finishingDamage: { damageType: "Weird", damageItem: "odd_source" } },
       undefined,
@@ -130,7 +130,7 @@ describe("resolveKillDamageSource", () => {
     expect(source.name).toBe("Odd Source");
   });
 
-  it("resuelve armas de habilidad de agente como habilidad local", () => {
+  it("identifica las armas de habilidades como habilidades del catálogo local", () => {
     const chamberAgents = new Map([
       [
         "22697a3d-45bf-8dd7-4fec-84a9e28c69d7",
@@ -187,7 +187,7 @@ describe("resolveKillDamageSource", () => {
     }
   });
 
-  it("oculta la linea de union en habilidades de area listadas", () => {
+  it("oculta la línea de unión para las habilidades de área especificadas", () => {
     expect(
       shouldSuppressKillConnectionLine(
         {

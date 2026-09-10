@@ -24,6 +24,7 @@ class EconomyMatchAnalysisCacheTests(unittest.TestCase):
     @patch.object(match_analysis_cache, "_artifact_revision", return_value=(("model", 1, 1),))
     @patch.object(match_analysis_cache, "recommend_match_economy")
     def test_identical_match_and_artifacts_reuse_analysis(self, recommend, _revision):
+        """Reutiliza el análisis cuando la partida y los artefactos no cambian."""
         recommend.return_value = {"available": True, "rounds": []}
 
         first = match_analysis_cache.get_match_economy_analysis(self._match())
@@ -35,6 +36,7 @@ class EconomyMatchAnalysisCacheTests(unittest.TestCase):
     @patch.object(match_analysis_cache, "_artifact_revision", return_value=(("model", 1, 1),))
     @patch.object(match_analysis_cache, "recommend_match_economy")
     def test_replaced_match_document_invalidates_analysis(self, recommend, _revision):
+        """Invalida el análisis cuando se sustituye el documento de la partida."""
         recommend.side_effect = [
             {"available": True, "revision": 1},
             {"available": True, "revision": 2},
@@ -48,6 +50,7 @@ class EconomyMatchAnalysisCacheTests(unittest.TestCase):
         self.assertEqual(recommend.call_count, 2)
 
     def test_deployment_metadata_is_part_of_artifact_revision(self):
+        """Incluye los metadatos de despliegue al detectar cambios en los artefactos."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "global_model.joblib").write_bytes(b"model")

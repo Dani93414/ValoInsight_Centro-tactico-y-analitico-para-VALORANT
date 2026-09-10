@@ -118,11 +118,11 @@ export default function CosmeticosTitulosTarjetas() {
       normalizeText(`${item.displayName} ${item.themeUuid ?? ""}`).includes(needle),
     );
   }, [cards, search]);
-  const progressiveTitles = useProgressiveList(
+  const { visibleItems: progressiveTitlesVisibleItems, visibleCount: progressiveTitlesVisibleCount, hasMore: progressiveTitlesHasMore, sentinelRef: progressiveTitlesSentinelRef, showMore: progressiveTitlesShowMore } = useProgressiveList(
     filteredTitles,
     `titles:${search}:${filteredTitles.length}`,
   );
-  const progressiveCards = useProgressiveList(
+  const { visibleItems: progressiveCardsVisibleItems, visibleCount: progressiveCardsVisibleCount, hasMore: progressiveCardsHasMore, sentinelRef: progressiveCardsSentinelRef, showMore: progressiveCardsShowMore } = useProgressiveList(
     filteredCards,
     `cards:${search}:${filteredCards.length}`,
   );
@@ -294,7 +294,7 @@ export default function CosmeticosTitulosTarjetas() {
           ) : viewMode === "title" ? (
             <>
               <div className="content-grid ctitles-grid">
-              {progressiveTitles.visibleItems.map((item) => (
+              {progressiveTitlesVisibleItems.map((item) => (
                 <article
                   key={item.uuid ?? item.displayName}
                   className="content-card content-card--static ctitles-title-card"
@@ -304,10 +304,10 @@ export default function CosmeticosTitulosTarjetas() {
                 </article>
               ))}
               </div>
-              {progressiveTitles.hasMore && (
-                <div ref={progressiveTitles.sentinelRef} className="content-load-more">
-                  <button type="button" onClick={progressiveTitles.showMore}>
-                    Mostrar más ({filteredTitles.length - progressiveTitles.visibleCount})
+              {progressiveTitlesHasMore && (
+                <div ref={progressiveTitlesSentinelRef} className="content-load-more">
+                  <button type="button" onClick={progressiveTitlesShowMore}>
+                    Mostrar más ({filteredTitles.length - progressiveTitlesVisibleCount})
                   </button>
                 </div>
               )}
@@ -315,7 +315,7 @@ export default function CosmeticosTitulosTarjetas() {
           ) : (
             <>
               <div className="content-grid ctitles-grid" ref={cardGridRef}>
-              {progressiveCards.visibleItems.map((item, index) => {
+              {progressiveCardsVisibleItems.map((item, index) => {
                 const itemKey = item.uuid ?? item.displayName;
                 const active = selectedCardKey === itemKey;
                 const image = getCardPreview(item);
@@ -356,10 +356,10 @@ export default function CosmeticosTitulosTarjetas() {
                 );
               })}
               </div>
-              {progressiveCards.hasMore && (
-                <div ref={progressiveCards.sentinelRef} className="content-load-more">
-                  <button type="button" onClick={progressiveCards.showMore}>
-                    Mostrar más ({filteredCards.length - progressiveCards.visibleCount})
+              {progressiveCardsHasMore && (
+                <div ref={progressiveCardsSentinelRef} className="content-load-more">
+                  <button type="button" onClick={progressiveCardsShowMore}>
+                    Mostrar más ({filteredCards.length - progressiveCardsVisibleCount})
                   </button>
                 </div>
               )}

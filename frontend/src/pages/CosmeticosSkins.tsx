@@ -853,7 +853,7 @@ export default function CosmeticosSkins() {
   const effectiveSelectedGroupKey = selectedGroupKey;
   const selectedGroup = groups.find((group) => group.key === effectiveSelectedGroupKey) ?? null;
   const selectedItems = mode === "skins" ? filteredSkins : selectedGroup?.items ?? [];
-  const progressiveSkins = useProgressiveList(
+  const { visibleItems: progressiveSkinsVisibleItems, visibleCount: progressiveSkinsVisibleCount, hasMore: progressiveSkinsHasMore, sentinelRef: progressiveSkinsSentinelRef, showMore: progressiveSkinsShowMore, revealThrough: progressiveSkinsRevealThrough } = useProgressiveList(
     selectedItems,
     `${mode}:${search}:${tierFilter}:${selectedItems.length}`,
   );
@@ -892,9 +892,9 @@ export default function CosmeticosSkins() {
 
   useEffect(() => {
     if (mode === "skins" && allSkinIndex >= 0) {
-      progressiveSkins.revealThrough(allSkinIndex);
+      progressiveSkinsRevealThrough(allSkinIndex);
     }
-  }, [allSkinIndex, mode, progressiveSkins.revealThrough]);
+  }, [allSkinIndex, mode, progressiveSkinsRevealThrough]);
 
   const setGroupCardRef = (key: string) => (element: HTMLButtonElement | null) => {
     if (element) groupCardRefs.current.set(key, element);
@@ -1223,7 +1223,7 @@ export default function CosmeticosSkins() {
             <section className="content-section cskins-content-section">
               <h2 className="content-section-title">Skins</h2>
               <div className="content-grid cskins-skin-grid" ref={allSkinGridRef}>
-                {progressiveSkins.visibleItems.map((skin, index) => {
+                {progressiveSkinsVisibleItems.map((skin, index) => {
                   const key = getSkinKey(skin);
                   const skinOpen = selectedSkinKey === key;
                   const imageSources = [
@@ -1270,10 +1270,10 @@ export default function CosmeticosSkins() {
                   );
                 })}
               </div>
-              {progressiveSkins.hasMore && (
-                <div ref={progressiveSkins.sentinelRef} className="content-load-more">
-                  <button type="button" onClick={progressiveSkins.showMore}>
-                    Mostrar más ({selectedItems.length - progressiveSkins.visibleCount})
+              {progressiveSkinsHasMore && (
+                <div ref={progressiveSkinsSentinelRef} className="content-load-more">
+                  <button type="button" onClick={progressiveSkinsShowMore}>
+                    Mostrar más ({selectedItems.length - progressiveSkinsVisibleCount})
                   </button>
                 </div>
               )}

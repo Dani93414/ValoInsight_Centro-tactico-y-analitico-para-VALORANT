@@ -7,6 +7,7 @@ from backend.infrastructure import riot_http_client
 
 
 def test_henrik_leaderboard_normalization_keeps_card_and_title():
+    """Conserva tarjeta y título al normalizar la clasificación de Henrik."""
     payload = {
         "status": 1,
         "data": {
@@ -45,6 +46,7 @@ def test_henrik_leaderboard_normalization_keeps_card_and_title():
 
 
 def test_riot_leaderboard_normalization_leaves_card_and_title_empty():
+    """Deja tarjeta y título vacíos si la clasificación de Riot no los aporta."""
     payload = {
         "totalPlayers": 1,
         "players": [
@@ -74,6 +76,7 @@ def test_riot_leaderboard_normalization_leaves_card_and_title_empty():
 
 
 def test_riot_leaderboard_paginates_with_api_page_limit(monkeypatch):
+    """Pagina la clasificación de Riot respetando el límite de la API."""
     calls = []
 
     class Response:

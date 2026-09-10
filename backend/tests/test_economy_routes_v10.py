@@ -14,12 +14,14 @@ MATCH = {"matchInfo": {"matchId": "m"}, "players": [], "roundResults": []}
 
 class EconomyRoutesV10Tests(unittest.TestCase):
     def test_main_match_route_uses_player_first_engine(self):
+        """La ruta principal de economía usa el motor centrado en el jugador."""
         source = inspect.getsource(get_match_economy_ml)
         self.assertIn("get_match_economy_analysis", source)
         self.assertNotIn("predict_match_economy_recommendations", source)
         self.assertNotIn("ACTION_TEMPLATES", source)
 
     def test_both_routes_return_compatible_contract(self):
+        """Las dos rutas económicas devuelven contratos compatibles."""
         with patch("modules.matches.interfaces.routes.mongo_match_repo.find_by_id", return_value=MATCH):
             main = get_match_economy_ml("m")
         with patch("modules.economy_ml.interfaces.routes.mongo_match_repo.find_by_id", return_value=MATCH):
@@ -35,6 +37,7 @@ class EconomyRoutesV10Tests(unittest.TestCase):
         self.assertEqual(set(main), set(direct))
 
     def test_train_route_returns_round_win_result(self):
+        """La ruta de entrenamiento devuelve el resultado del modelo de victoria por ronda."""
         frame = pd.DataFrame({"x": [1]})
         with patch.dict(os.environ, {"ECONOMY_ML_TRAIN_TOKEN": "token"}), \
              patch("modules.economy_ml.interfaces.routes.mongo_match_repo.list_training_matches", return_value=[MATCH]), \
@@ -49,6 +52,7 @@ class EconomyRoutesV10Tests(unittest.TestCase):
         self.assertTrue(result["round_win_loadout"]["available"])
 
     def test_train_route_keeps_main_result_when_round_win_fails(self):
+        """Conserva el resultado principal si falla el entrenamiento del modelo de victoria."""
         frame = pd.DataFrame({"x": [1]})
         with patch.dict(os.environ, {"ECONOMY_ML_TRAIN_TOKEN": "token"}), \
              patch("modules.economy_ml.interfaces.routes.mongo_match_repo.list_training_matches", return_value=[MATCH]), \

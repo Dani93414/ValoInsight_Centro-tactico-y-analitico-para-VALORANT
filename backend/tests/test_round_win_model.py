@@ -35,6 +35,7 @@ class RoundWinModelTests(unittest.TestCase):
         })
 
     def test_dataset_contract_excludes_forbidden_features(self):
+        """Excluye las variables prohibidas del dataset de victoria por ronda."""
         dataset = build_round_win_dataset(self._source())
         validation = validate_round_win_dataset(dataset)
         self.assertTrue(validation["valid"])
@@ -48,6 +49,7 @@ class RoundWinModelTests(unittest.TestCase):
                            eco["enemy_projected_weapon_value"].mean())
 
     def test_training_writes_loadable_artifact_and_predicts(self):
+        """Entrena con datos de prueba, guarda un artefacto cargable y obtiene predicciones."""
         dataset = build_round_win_dataset(self._source())
         with tempfile.TemporaryDirectory() as directory:
             artifact = Path(directory) / "round_win.joblib"
@@ -61,6 +63,7 @@ class RoundWinModelTests(unittest.TestCase):
             self.assertLessEqual(prediction["round_win_probability"], 1)
 
     def test_batch_predictions_match_single_predictions(self):
+        """Las predicciones por lotes coinciden con las individuales."""
         dataset = build_round_win_dataset(self._source())
         with tempfile.TemporaryDirectory() as directory:
             artifact = Path(directory) / "round_win.joblib"
@@ -80,6 +83,7 @@ class RoundWinModelTests(unittest.TestCase):
                 )
 
     def test_insufficient_dataset_does_not_publish(self):
+        """No publica un modelo si el dataset es insuficiente."""
         dataset = build_round_win_dataset(self._source(4))
         with tempfile.TemporaryDirectory() as directory:
             artifact = Path(directory) / "round_win.joblib"
@@ -88,12 +92,14 @@ class RoundWinModelTests(unittest.TestCase):
             self.assertFalse(artifact.exists())
 
     def test_old_enemy_unaware_artifact_is_rejected(self):
+        """Rechaza un artefacto antiguo que no contempla información enemiga."""
         with tempfile.TemporaryDirectory() as directory:
             artifact = Path(directory) / "round_win_v1.joblib"
             joblib.dump({"feature_version": "round-win-loadout-v1", "pipeline": object()}, artifact)
             self.assertFalse(RoundWinLoadoutModel(artifact).available())
 
     def test_split_keeps_matches_disjoint_and_temporal(self):
+        """Separa las partidas temporalmente y sin solaparlas entre conjuntos."""
         dataset = build_round_win_dataset(self._source(100))
         train, calibration, test = _temporal_split(dataset)
         self.assertTrue(set(train.match_id).isdisjoint(calibration.match_id))
@@ -103,6 +109,7 @@ class RoundWinModelTests(unittest.TestCase):
         self.assertLess(calibration.game_start_millis.max(), test.game_start_millis.min())
 
     def test_policy_split_has_four_disjoint_temporal_blocks(self):
+        """Divide la evaluación de política en cuatro bloques temporales sin partidas compartidas."""
         dataset = build_round_win_dataset(self._source(120))
         train, calibration, selection, test = _temporal_policy_split(dataset)
         blocks = [train, calibration, selection, test]
@@ -114,6 +121,7 @@ class RoundWinModelTests(unittest.TestCase):
         self.assertLess(selection.game_start_millis.max(), test.game_start_millis.min())
 
     def test_action_values_do_not_double_count_armor(self):
+        """No cuenta dos veces el valor del escudo al evaluar una acción."""
         source = self._source(2)
         source["action_total_loadout_value"] = 10000
         source["action_armor_value"] = 5000

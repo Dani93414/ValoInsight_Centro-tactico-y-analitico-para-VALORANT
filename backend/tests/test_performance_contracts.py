@@ -18,6 +18,7 @@ class PerformanceContractsTest(unittest.TestCase):
         regions_collection,
         _options,
     ):
+        """Reutiliza el cálculo regional previo para estadísticas de agentes sin filtros."""
         regions_collection.find.return_value = [
             {
                 "region": "EU",
@@ -38,6 +39,7 @@ class PerformanceContractsTest(unittest.TestCase):
 
     @patch.object(player_dashboard_service, "_compute_player_rank_comparison")
     def test_rank_comparison_is_cached_for_identical_filters(self, compute):
+        """Reutiliza la comparación de rangos con filtros idénticos."""
         compute.return_value = {"sampleSize": 20}
 
         first = player_dashboard_service.get_player_rank_comparison(
@@ -53,6 +55,7 @@ class PerformanceContractsTest(unittest.TestCase):
         compute.assert_called_once()
 
     def test_dashboard_analytics_remove_repeated_nested_payloads(self):
+        """Evita repetir datos anidados en el análisis del panel."""
         compact = player_dashboard_service._build_light_analytics_list(
             [
                 {
@@ -89,6 +92,7 @@ class PerformanceContractsTest(unittest.TestCase):
 
     @patch.object(mongo_region_repo, "regions_collection")
     def test_region_summary_projection_excludes_heavy_sections(self, collection):
+        """Excluye secciones pesadas de la consulta del resumen regional."""
         cursor = MagicMock()
         cursor.sort.return_value = []
         collection.find.return_value = cursor

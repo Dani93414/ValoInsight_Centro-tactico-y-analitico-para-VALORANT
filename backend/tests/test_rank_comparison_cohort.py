@@ -14,6 +14,7 @@ from modules.players.application.player_dashboard_service import (
 class RankComparisonCohortTest(unittest.TestCase):
     @patch("modules.players.application.player_dashboard_service.dashboard_queries")
     def test_unranked_current_season_uses_previous_rank_for_cohort(self, queries):
+        """Usa el rango anterior como grupo de comparación si la temporada actual no tiene rango."""
         queries.find_player_latest_rank_reference.return_value = {
             "latestTier": 0,
             "timestamp": 2000,
@@ -63,6 +64,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         self.assertEqual(payload["metricComparisons"]["k"]["rawValue"], 20.0)
 
     def test_rank_comparison_payload_builds_player_percentiles_per_metric(self):
+        """Calcula percentiles del jugador por métrica en la comparación de rangos."""
         cohort_rows = [
             {
                 "puuid": "target",
@@ -168,6 +170,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         self.assertAlmostEqual(wr_metric["percentile"], 66.667, places=3)
 
     def test_rank_metric_values_prioritize_round_based_kast_and_neutralize_small_samples(self):
+        """Prioriza KAST por rondas y modera las muestras pequeñas."""
         target_row = {
             "puuid": "solo-player",
             "latestTier": 21,
@@ -208,6 +211,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         self.assertIn("Algunas metricas usan menos jugadores validos", payload["notes"][1])
 
     def test_rank_comparison_pipeline_includes_extended_kast_fallback_field(self):
+        """Incluye la alternativa de KAST ampliado en la consulta de comparación."""
         pipeline = _build_rank_comparison_player_match_stages()
         pipeline_text = str(pipeline)
 
@@ -219,6 +223,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         )
 
     def test_rank_comparison_pipeline_checks_missing_kast_fields_via_type(self):
+        """Detecta campos KAST ausentes mediante su tipo."""
         pipeline = _build_rank_comparison_player_match_stages()
         pipeline_text = str(pipeline)
 
@@ -232,6 +237,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         )
 
     def test_hs_percentile_uses_adjusted_value_and_can_invert_raw_order(self):
+        """Usa el porcentaje de cabeza ajustado para ordenar, aunque cambie el orden bruto."""
         cohort_rows = [
             {
                 "puuid": "target-low-sample-high-raw",
@@ -334,6 +340,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         self.assertLess(hs_target["percentile"], hs_high_sample["percentile"])
 
     def test_best_adjusted_gets_100_and_worst_gets_0_without_ties(self):
+        """Asigna percentiles 100 y 0 al mejor y al peor valor ajustado sin empates."""
         cohort_rows = [
             {
                 "puuid": "best",
@@ -401,6 +408,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         self.assertEqual(worst_payload["metricComparisons"]["wr"]["percentile"], 0.0)
 
     def test_less_is_better_metric_inverts_ranking_correctly(self):
+        """Invierte correctamente la clasificación cuando un valor menor es mejor."""
         cohort_rows = [
             {
                 "puuid": "few-deaths",
@@ -450,6 +458,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         )
 
     def test_kills_assists_deaths_display_totals_but_rank_per_round(self):
+        """Muestra totales de bajas, asistencias y muertes, pero compara por ronda."""
         cohort_rows = [
             {
                 "puuid": "fast-impact",
@@ -506,6 +515,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         )
 
     def test_wins_losses_display_totals_but_rank_per_match(self):
+        """Muestra victorias y derrotas totales, pero compara por partida."""
         cohort_rows = [
             {
                 "puuid": "efficient-wins",
@@ -572,6 +582,7 @@ class RankComparisonCohortTest(unittest.TestCase):
         )
 
     def test_players_without_hs_denominator_are_excluded_for_hs_metric(self):
+        """Excluye de la métrica de cabeza a jugadores sin denominador de impactos."""
         cohort_rows = [
             {
                 "puuid": "target",
