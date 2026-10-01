@@ -28,7 +28,11 @@ def heatmap_maps_by_uuid() -> dict[str, dict[str, Any]]:
         uuid = str(item.get("uuid") or "").strip()
         if not uuid:
             continue
-        result[uuid] = {"displayName": item.get("displayName") or uuid}
+        metadata = {"displayName": item.get("displayName") or uuid}
+        result[uuid] = metadata
+        map_url = str(item.get("mapUrl") or "").strip()
+        if map_url:
+            result[map_url] = metadata
     return result
 
 

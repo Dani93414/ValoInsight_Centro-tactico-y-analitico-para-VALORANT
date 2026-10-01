@@ -26,6 +26,7 @@ _DASHBOARD_CONTENT_CACHE_TTL_SECONDS = 300.0
 _DASHBOARD_RESPONSE_CACHE_TTL_SECONDS = 120.0
 _RANK_COMPARISON_CACHE_TTL_SECONDS = 600.0
 _CACHE_LOCK = threading.Lock()
+_DASHBOARD_PAYLOAD_SCHEMA_VERSION = "performance-match-average-v1"
 
 
 def _get_dashboard_content() -> dict[str, Any]:
@@ -114,6 +115,7 @@ _RANK_COMPARISON_METRICS: tuple[tuple[str, bool], ...] = (
     ("a", False),
     ("kda", False),
     ("acs", False),
+    ("performanceScore", False),
     ("hsPct", False),
     ("kast", False),
     ("incDamage", False),
@@ -123,6 +125,7 @@ _RANK_COMPARISON_METRICS: tuple[tuple[str, bool], ...] = (
 )
 
 _RANK_METRIC_DEFAULT_PRIOR_WEIGHT = 10.0
+_RANK_COMPARISON_SCHEMA_VERSION = "performance-score-v1"
 _RANK_METRIC_SAMPLE_BASIS_BY_KEY: dict[str, str] = {
     # Totals that scale primarily with exposure per round.
     "k": "rounds",
@@ -133,6 +136,7 @@ _RANK_METRIC_SAMPLE_BASIS_BY_KEY: dict[str, str] = {
     "kda": "rounds",
     # Per-round performance rates.
     "acs": "rounds",
+    "performanceScore": "matches_with_performance",
     "incDamage": "rounds",
     # Match-level outcomes.
     "wr": "matches",
@@ -150,6 +154,7 @@ _RANK_METRIC_PRIOR_WEIGHT_BY_KEY: dict[str, float] = {
     "kd": 120.0,
     "kda": 120.0,
     "acs": 120.0,
+    "performanceScore": 10.0,
     "incDamage": 120.0,
     "wr": 10.0,
     "wins": 10.0,
@@ -1718,6 +1723,11 @@ def _build_light_analytics_list(
                 "team_agents": doc.get("team_agents"),
                 "role": doc.get("role"),
                 "competitive_tier": doc.get("competitive_tier"),
+                "performanceScore": (doc.get("performance") or {}).get("score"),
+                "performanceTier": (doc.get("performance") or {}).get("tier"),
+                "performanceComponents": (doc.get("performance") or {}).get("components") or {},
+                "performanceThresholds": (doc.get("performance") or {}).get("thresholds") or {},
+                "matchPerformanceAverage": doc.get("match_performance_average"),
                 "overview": {
                     "kills": overview.get("kills"),
                     "deaths": overview.get("deaths"),
@@ -1940,6 +1950,11 @@ def _map_analytics_to_match_card(
         "playtimeMillis": playtime_millis,
         "score": score,
         "acs": round(acs, 2),
+        "performanceScore": (doc.get("performance") or {}).get("score"),
+        "performanceTier": (doc.get("performance") or {}).get("tier"),
+        "performanceComponents": (doc.get("performance") or {}).get("components") or {},
+        "performanceThresholds": (doc.get("performance") or {}).get("thresholds") or {},
+        "matchPerformanceAverage": doc.get("match_performance_average"),
         "adr": round(adr, 2),
         "hs": round(float(hs or 0), 2),
         "kd": round(_safe_div(kills, max(deaths, 1)), 3),
@@ -1980,6 +1995,11 @@ def _build_act_summary(matches: list[dict[str, Any]]) -> dict[str, float | int]:
     total_rounds = sum(int(m.get("rounds") or 0) for m in matches)
     total_score = sum(int(m.get("score") or 0) for m in matches)
     total_hs = sum(float(m.get("hs") or 0) for m in matches)
+    performance_matches = [m for m in matches if isinstance(m.get("performanceScore"), (int, float))]
+    performance_scores = [float(m["performanceScore"]) for m in performance_matches]
+    newest_performance = performance_matches[0] if performance_matches else None
+    best_performance = max(performance_matches, key=lambda m: float(m["performanceScore"])) if performance_matches else None
+    worst_performance = min(performance_matches, key=lambda m: float(m["performanceScore"])) if performance_matches else None
 
     return {
         "matches": total_matches,
@@ -1990,6 +2010,14 @@ def _build_act_summary(matches: list[dict[str, Any]]) -> dict[str, float | int]:
         "acs": round(_safe_div(total_score, max(total_rounds, 1)), 2),
         "killsPerMatch": round(_safe_div(total_kills, max(total_matches, 1)), 3),
         "hsAvg": round(_safe_div(total_hs, max(total_matches, 1)), 2),
+        "averagePerformanceScore": round(sum(performance_scores) / len(performance_scores), 2) if performance_scores else None,
+        "performanceMatches": len(performance_scores),
+        "lastPerformanceScore": newest_performance.get("performanceScore") if newest_performance else None,
+        "lastPerformanceTier": newest_performance.get("performanceTier") if newest_performance else None,
+        "bestPerformanceScore": best_performance.get("performanceScore") if best_performance else None,
+        "bestPerformanceMatchId": best_performance.get("id") if best_performance else None,
+        "worstPerformanceScore": worst_performance.get("performanceScore") if worst_performance else None,
+        "worstPerformanceMatchId": worst_performance.get("id") if worst_performance else None,
     }
 
 
@@ -2074,6 +2102,9 @@ def _compute_rank_metric_sample_size(metric_key: str, row: dict[str, Any]) -> fl
     raw_kast_count = float(max(int(row.get("rawKastFallbackCount") or 0), 0))
     basis = _resolve_rank_metric_sample_basis(metric_key)
 
+    if basis == "matches_with_performance":
+        return float(max(int(row.get("performanceMatchCount") or 0), 0))
+
     if basis == "impacts":
         return total_shots if total_shots > 0 else match_count
     if basis == "kast_rounds_or_fallback":
@@ -2140,6 +2171,8 @@ def _build_rank_metric_values(row: dict[str, Any]) -> dict[str, float | None]:
     raw_kast_sum = float(row.get("rawKastFallbackSum") or 0)
     raw_kast_count = int(row.get("rawKastFallbackCount") or 0)
     damage_delta = float(row.get("damageDelta") or 0)
+    performance_score_sum = float(row.get("performanceScoreSum") or 0)
+    performance_match_count = int(row.get("performanceMatchCount") or 0)
 
     total_shots = headshots + bodyshots + legshots
 
@@ -2161,6 +2194,7 @@ def _build_rank_metric_values(row: dict[str, Any]) -> dict[str, float | None]:
         "a": assists,
         "kda": _safe_div(kills + assists, max(deaths, 1.0)),
         "acs": _safe_div(score, max(rounds, 1.0)) if rounds > 0 else None,
+        "performanceScore": _safe_div(performance_score_sum, performance_match_count) if performance_match_count > 0 else None,
         "hsPct": _safe_div(headshots * 100.0, total_shots) if total_shots > 0 else None,
         "kast": kast,
         "incDamage": _safe_div(damage_delta, max(rounds, 1.0)) if rounds > 0 else None,
@@ -2641,6 +2675,7 @@ def get_player_rank_comparison(
     cache_key = "|".join(
         str(value or "")
         for value in (
+            _RANK_COMPARISON_SCHEMA_VERSION,
             puuid,
             queue_id,
             agent_id,
@@ -3138,6 +3173,16 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
     docs: list[dict[str, Any]] = []
     for match_obj in matches_cursor:
         match_info = match_obj.get("matchInfo") or {}
+        match_performance_scores = [
+            float((match_player.get("performance") or {}).get("score"))
+            for match_player in (match_obj.get("players") or [])
+            if isinstance((match_player.get("performance") or {}).get("score"), (int, float))
+        ]
+        match_performance_average = (
+            round(sum(match_performance_scores) / 10, 3)
+            if len(match_performance_scores) == 10
+            else None
+        )
         for player in match_obj.get("players", []) or []:
             if player.get("puuid") != puuid:
                 continue
@@ -3220,6 +3265,12 @@ def _extract_flat_analytics_docs(puuid: str, matches_cursor) -> list[dict[str, A
                 "role": analytics.get("role"),
                 "competitive_tier": player.get("competitiveTier"),
                 "account_level": player.get("accountLevel"),
+                # This is the canonical per-match Riot Performance payload.
+                # Keep it alongside derived analytics so the dashboard's
+                # match cards and act aggregates can consume it without
+                # recomputing or conflating it with ACS.
+                "performance": player.get("performance") or {},
+                "match_performance_average": match_performance_average,
                 "player_totals_from_match": {
                     "kills": int(overview.get("kills", 0) or 0),
                     "deaths": int(overview.get("deaths", 0) or 0),
@@ -3245,7 +3296,7 @@ def get_player_dashboard(
 ) -> dict[str, Any]:
     total_matches_in_db = dashboard_queries.count_player_matches(puuid)
 
-    cache_key = f"{puuid}:{total_matches_in_db}"
+    cache_key = f"{_DASHBOARD_PAYLOAD_SCHEMA_VERSION}:{puuid}:{total_matches_in_db}"
     now = time.monotonic()
 
     with _CACHE_LOCK:

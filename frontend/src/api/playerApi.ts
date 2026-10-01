@@ -27,19 +27,21 @@ export async function searchPlayers(gameName: string, tagLine: string) {
   if (!res.ok) return [];
 
   const players = (await res.json()) as PlayerSummary[];
-  return players.map((p) => ({
-    id: p.puuid,
-    gameName: p.gameName ?? "Unknown",
-    tagLine: p.tagLine ?? "",
-    accountLevel: p.accountLevel ?? null,
-    lastMatchStartMillis: p.lastMatchStartMillis ?? null,
-    lastMatchDurationMillis: p.lastMatchDurationMillis ?? null,
-    lastCompetitiveTier: p.lastCompetitiveTier ?? null,
-    lastCompetitiveTierImage: p.lastCompetitiveTierImage ?? null,
-    displayName: p.tagLine
-      ? `${p.gameName ?? "Unknown"}#${p.tagLine}`
-      : (p.gameName ?? "Unknown"),
-  }));
+  return players.map((p) => {
+    const gameName = p.gameName?.trim() || "Jugador desconocido";
+    const tagLine = p.tagLine?.trim() || "";
+    return {
+      id: p.puuid,
+      gameName,
+      tagLine,
+      accountLevel: p.accountLevel ?? null,
+      lastMatchStartMillis: p.lastMatchStartMillis ?? null,
+      lastMatchDurationMillis: p.lastMatchDurationMillis ?? null,
+      lastCompetitiveTier: p.lastCompetitiveTier ?? null,
+      lastCompetitiveTierImage: p.lastCompetitiveTierImage ?? null,
+      displayName: tagLine ? `${gameName}#${tagLine}` : gameName,
+    };
+  });
 }
 
 export type DashboardFilters = {

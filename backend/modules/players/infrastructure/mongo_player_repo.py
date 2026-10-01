@@ -204,6 +204,7 @@ def find_ranked_matches_for_player(puuid: str) -> list[dict[str, Any]]:
                 "role": analytics.get("role"),
                 "competitive_tier": p.get("competitiveTier"),
                 "account_level": p.get("accountLevel"),
+                "performance": p.get("performance") or {},
                 "player_totals_from_match": {
                     "kills": int((p.get("stats") or {}).get("kills", 0) or 0),
                     "deaths": int((p.get("stats") or {}).get("deaths", 0) or 0),

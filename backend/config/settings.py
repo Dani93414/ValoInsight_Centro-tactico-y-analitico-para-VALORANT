@@ -21,6 +21,11 @@ DB_NAME: str = os.getenv("DB_NAME", "")
 # ── Riot API ─────────────────────────────────────────────────────────
 RIOT_API_KEY: str = os.getenv("RIOT_API_KEY", "")
 HENRY_API_KEY: str = os.getenv("HENRY_API_KEY", "")
+MATCH_SOURCE: str = os.getenv("MATCH_SOURCE", "riot_raw").strip().lower()
+VALORANT_RAW_REGION: str = os.getenv("VALORANT_RAW_REGION", "eu").strip().lower()
+VALORANT_RAW_PLATFORM: str = os.getenv("VALORANT_RAW_PLATFORM", "pc").strip().lower()
+SAVE_RIOT_RAW_MATCHES: bool = os.getenv("SAVE_RIOT_RAW_MATCHES", "false").strip().lower() in {"1", "true", "yes", "on"}
+ALLOW_LEGACY_MATCH_FALLBACK: bool = os.getenv("ALLOW_LEGACY_MATCH_FALLBACK", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 # ── Server ───────────────────────────────────────────────────────────
 API_HOST: str = os.getenv("API_HOST", "0.0.0.0")

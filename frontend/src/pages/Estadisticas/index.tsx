@@ -15,6 +15,7 @@ import {
   ComposedChart,
   Bar,
   Line,
+  LineChart,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -284,6 +285,10 @@ function MatchHistoryCard({
           <strong>{formatNumber(match.acs, 1)}</strong>
         </div>
         <div className="match-stat">
+          <span>PS</span>
+          <strong>{match.performanceScore == null ? "—" : formatNumber(match.performanceScore, 0)}</strong>
+        </div>
+        <div className="match-stat">
           <span>ADR</span>
           <strong>{formatNumber(match.adr, 1)}</strong>
         </div>
@@ -455,6 +460,7 @@ export default function Estadisticas() {
     filteredMatches,
     sortedFilteredMatches,
     filteredAnalyticsList,
+    performanceInsights,
     globalTacticalStats,
     globalRadarData,
     globalMultikillData,
@@ -1535,7 +1541,7 @@ export default function Estadisticas() {
                     </div>
                     <div className="profile-performance-meter">
                       <small className="profile-performance-fill-text">
-                        {formatPercent(metric.fillPercent, 0)}
+                        {formatPercent(metric.fillPercent, 1)}
                       </small>
                       <div className="profile-performance-bar-track">
                         <div
@@ -1653,6 +1659,44 @@ export default function Estadisticas() {
           </section>
 
           {/* ── INLINE MATCH HISTORY ── */}
+          <section className="performance-score-section" aria-label="Performance Score de Riot">
+            <div className="stats-panel performance-score-summary">
+              <div className="panel-header"><div><h3 className="panel-title">Performance Score</h3><p className="panel-subtitle">Métrica oficial de Riot, independiente de ACS. Solo incluye partidas con PS disponible.</p></div></div>
+              {performanceInsights.count ? <>
+                <div className="performance-score-kpis">
+                  <div><span>Media</span><strong>{formatNumber(performanceInsights.average ?? undefined, 1)}</strong></div><div><span>Últimas 5</span><strong>{formatNumber(performanceInsights.last5 ?? undefined, 1)}</strong></div><div><span>Últimas 20</span><strong>{formatNumber(performanceInsights.last20 ?? undefined, 1)}</strong></div>
+                  <div><span>Última</span><strong>{formatNumber(performanceInsights.latest?.performanceScore ?? undefined, 0)}</strong><small>{performanceInsights.latest?.performanceTier || "Sin tier"}</small></div><div><span>Mejor / peor</span><strong>{formatNumber(performanceInsights.best?.performanceScore ?? undefined, 0)} / {formatNumber(performanceInsights.worst?.performanceScore ?? undefined, 0)}</strong></div>
+                </div>
+                <div className="performance-score-explanation">Tu PS agrega señales de daño, trades, asistencias, utilidad, objetivos e impacto de kills/muertes. No es una equivalencia de ACS. En tu cohorte: PS <strong>p{formatNumber(profilePerformanceMetrics.find((metric) => metric.key === "performanceScore")?.fillPercent, 0)}</strong> frente a ACS <strong>p{formatNumber(profilePerformanceMetrics.find((metric) => metric.key === "acs")?.fillPercent, 0)}</strong>. Mejor señal: <strong>{performanceInsights.strongest?.label || "sin datos"}</strong>; a mejorar: <strong>{performanceInsights.weakest?.label || "sin datos"}</strong>.</div>
+              </> : <div className="empty-panel">No hay Performance Score disponible en las partidas seleccionadas.</div>}
+            </div>
+            {performanceInsights.count > 0 && <>
+              <div className="stats-panel performance-score-history"><div className="panel-header"><div><h3 className="panel-title">Evolución del Performance Score</h3><p className="panel-subtitle">PS por partida y media móvil de cinco partidas.</p></div></div><ResponsiveContainer width="100%" height={235}><LineChart data={performanceInsights.history} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}><CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false}/><XAxis dataKey="index" tick={{fill:"#9da6b3",fontSize:11}}/><YAxis tick={{fill:"#9da6b3",fontSize:11}}/><Tooltip contentStyle={TACTICAL_TOOLTIP_CONTENT_STYLE} labelFormatter={(value) => `Partida ${value}`} formatter={(value, name) => [formatNumber(Number(value), 1), name === "rolling5" ? "Media móvil" : "PS"]}/><Line type="monotone" dataKey="score" stroke="#ff4655" strokeWidth={2} dot={false}/><Line type="monotone" dataKey="rolling5" stroke="#60d394" strokeWidth={2} dot={false}/></LineChart></ResponsiveContainer></div>
+              <div className="stats-panel performance-score-breakdown"><div className="panel-header"><div><h3 className="panel-title">PS por agente, mapa y rol</h3><p className="panel-subtitle">Solo se muestran grupos con al menos cinco partidas.</p></div></div><div className="performance-breakdown-columns">{[["Agentes", performanceInsights.byAgent], ["Mapas", performanceInsights.byMap], ["Roles", performanceInsights.byRole]].map(([title, items]) => <div key={String(title)}><strong>{String(title)}</strong>{(items as Array<{label:string; score:number | null; matches:number}>).length ? (items as Array<{label:string; score:number | null; matches:number}>).slice(0,5).map(item => <p key={item.label}>{item.label}<span>{formatNumber(item.score ?? undefined,1)} · {item.matches}p</span></p>) : <small>Sin muestra suficiente</small>}</div>)}</div></div>
+            </>}
+          </section>
+
+          {performanceInsights.count > 0 && (
+            <section className="stats-panel performance-score-chart" aria-label="Evolución de PS">
+              <div className="panel-header">
+                <div>
+                  <h3 className="panel-title">Evolución de PS</h3>
+                  <p className="panel-subtitle">Últimas 20 partidas con PS según los filtros: tu PS y la media de los diez jugadores.</p>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={235}>
+                <LineChart data={performanceInsights.history} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                  <XAxis dataKey="index" interval="preserveStartEnd" minTickGap={26} tick={{ fill: "#9da6b3", fontSize: 11 }} />
+                  <YAxis domain={[0, 500]} ticks={[0, 100, 200, 300, 400, 500]} tick={{ fill: "#9da6b3", fontSize: 11 }} />
+                  <Tooltip contentStyle={TACTICAL_TOOLTIP_CONTENT_STYLE} labelFormatter={(value) => `Partida ${value}`} formatter={(value, name) => [formatNumber(Number(value), 1), name === "matchAverage" ? "Media de la partida" : "Tu PS"]} />
+                  <Line type="monotone" dataKey="score" stroke="#ff4655" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="matchAverage" name="Media de la partida" stroke="#60d394" strokeWidth={3} dot={{ r: 2, fill: "#60d394" }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </section>
+          )}
+
           <section className="match-history-inline">
             <div className="match-history-inline-header">
               <div>
@@ -2938,6 +2982,9 @@ export default function Estadisticas() {
                               {agentsSortMode === "winrate"
                                 ? `${formatPercent(agent.winRate, 1)} · ${formatNumber(agent.matches)} pj`
                                 : `${formatNumber(agent.matches)} partidas`}
+                              {performanceInsights.byAgent.find((item) => item.label === agent.name)?.score != null
+                                ? ` · PS ${formatNumber(performanceInsights.byAgent.find((item) => item.label === agent.name)?.score ?? undefined, 1)}`
+                                : ""}
                             </span>
                           </button>
                         ))
@@ -2964,6 +3011,9 @@ export default function Estadisticas() {
                               {rolesSortMode === "winrate"
                                 ? `${formatPercent(role.winRate, 1)} · ${formatNumber(role.matches)} pj`
                                 : `${formatNumber(role.matches)} partidas`}
+                              {performanceInsights.byRole.find((item) => item.label === role.name)?.score != null
+                                ? ` · PS ${formatNumber(performanceInsights.byRole.find((item) => item.label === role.name)?.score ?? undefined, 1)}`
+                                : ""}
                             </span>
                           </div>
                         ))}
@@ -3096,6 +3146,9 @@ export default function Estadisticas() {
                               </span>
                               <span className="side-panel-mini-stat side-panel-mini-stat-secondary">
                                 {getMapSecondaryMetric(mapItem)}
+                                {performanceInsights.byMap.find((item) => item.label === mapItem.map)?.score != null
+                                  ? ` · PS ${formatNumber(performanceInsights.byMap.find((item) => item.label === mapItem.map)?.score ?? undefined, 1)}`
+                                  : ""}
                               </span>
                             </div>
                           </div>

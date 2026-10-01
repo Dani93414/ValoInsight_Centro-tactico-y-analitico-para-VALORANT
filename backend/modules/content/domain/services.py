@@ -133,8 +133,8 @@ def classify_maps(raw_maps: list[dict]) -> dict[str, list[dict]]:
         uuid = mp.get("uuid") or mp.get("mapUrl", "").rsplit("/", 1)[-1]
         mapa_data = {
             "uuid": uuid,
-            "name": mp.get("name"),
             "mapUrl": mp.get("mapUrl"),
+            "name": mp.get("name"),
             "assetPath": mp.get("assetPath"),
             "displayName": mp.get("displayName", "—"),
             "coordinates": mp.get("coordinates", "—"),
@@ -186,6 +186,7 @@ def filter_geo_maps(raw_maps: list[dict]) -> list[dict]:
 
         result.append({
             "uuid": uuid,
+            "mapUrl": mp.get("mapUrl"),
             "displayName": mp.get("displayName", "—"),
             "displayIcon": mp.get("displayIcon"),
             "xMultiplier": x_mult,

@@ -90,6 +90,44 @@ class PerformanceContractsTest(unittest.TestCase):
         self.assertNotIn("unused_large_payload", weapon)
         self.assertEqual(compact[0]["sides"]["attack"], {"rounds": 10, "kills": 6})
 
+    def test_flat_dashboard_document_preserves_riot_performance(self):
+        """PS must survive Mongo match -> dashboard document transformation."""
+        match = {
+            "matchInfo": {"matchId": "match-1", "isRanked": True},
+            "players": [{
+                "puuid": "player-1",
+                "stats": {},
+                "performance": {
+                    "available": True, "score": 472.49, "tier": "merit",
+                    "components": {"damage": {"rating": "up"}},
+                    "thresholds": {"merit": 330},
+                },
+                "analytics": {"overview": {"rounds": 1, "rounds_with_kill": 0, "rounds_with_direct_participation": 0}},
+            }],
+        }
+        docs = player_dashboard_service._extract_flat_analytics_docs("player-1", [match])
+        self.assertEqual(docs[0]["performance"]["score"], 472.49)
+        cards = player_dashboard_service._build_light_analytics_list(docs)
+        self.assertEqual(cards[0]["performanceScore"], 472.49)
+        self.assertEqual(cards[0]["performanceComponents"]["damage"]["rating"], "up")
+        self.assertEqual(cards[0]["performanceThresholds"]["merit"], 330)
+
+    def test_act_summary_keeps_zero_performance_score_as_available(self):
+        summary = player_dashboard_service._build_act_summary([
+            {"performanceScore": 0, "result": "Derrota"},
+            {"performanceScore": None, "result": "Victoria"},
+        ])
+        self.assertEqual(summary["performanceMatches"], 1)
+        self.assertEqual(summary["averagePerformanceScore"], 0)
+
+    def test_rank_comparison_performance_score_uses_only_available_matches(self):
+        values = player_dashboard_service._build_rank_metric_values({
+            "matchCount": 3,
+            "performanceScoreSum": 600,
+            "performanceMatchCount": 2,
+        })
+        self.assertEqual(values["performanceScore"], 300)
+
     @patch.object(mongo_region_repo, "regions_collection")
     def test_region_summary_projection_excludes_heavy_sections(self, collection):
         """Excluye secciones pesadas de la consulta del resumen regional."""

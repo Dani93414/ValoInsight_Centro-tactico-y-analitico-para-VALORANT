@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import patch
 
 from modules.analytics.domain.heatmap_transformer import build_transform_meta, transform_coords
+from modules.analytics.infrastructure import heatmap_extractor
 
 
 class HeatmapTransformTest(unittest.TestCase):
@@ -54,6 +56,27 @@ class HeatmapTransformTest(unittest.TestCase):
         self.assertEqual(meta["axis_swap"]["y_from"], "game_x")
         self.assertEqual(meta["origin"], "top-left")
         self.assertFalse(meta["invert_y"])
+
+    @patch.object(heatmap_extractor, "content_collection")
+    def test_raw_map_url_resolves_to_the_same_transform_as_uuid(self, collection):
+        collection.find_one.return_value = {
+            "maps": [{
+                "uuid": "map-uuid",
+                "mapUrl": "/Game/Maps/Infinity/Infinity",
+                "xMultiplier": 0.1,
+                "xScalarToAdd": 0.2,
+                "yMultiplier": -0.3,
+                "yScalarToAdd": 0.4,
+            }]
+        }
+        heatmap_extractor._map_transforms_by_uuid.cache_clear()
+        try:
+            self.assertEqual(
+                heatmap_extractor._get_map_transform("map-uuid"),
+                heatmap_extractor._get_map_transform("/Game/Maps/Infinity/Infinity"),
+            )
+        finally:
+            heatmap_extractor._map_transforms_by_uuid.cache_clear()
 
 
 if __name__ == "__main__":

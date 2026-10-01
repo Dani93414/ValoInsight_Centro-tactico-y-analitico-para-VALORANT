@@ -1,5 +1,51 @@
 # TFG - Backend y Frontend Separados
 
+## Ingesta de partidas: esquema v2 (Riot RAW)
+
+Las partidas nuevas usan por defecto `MATCH_SOURCE=riot_raw`. El historial de
+HenrikDev sigue proporcionando IDs, pero cada detalle se solicita mediante su
+proxy RAW y se adapta antes de persistirse; ningún lector de Mongo depende del
+JSON RAW. El endpoint legacy anterior era `GET /valorant/v4/match/{region}/{id}`.
+
+```text
+Henrik history → classify IDs → Riot RAW via Henrik → riot_raw_adapter
+→ ValoInsight schema v2 → Mongo → rebuild analytics / players / regions
+```
+
+Schema v1 (`henrik_legacy`) y v2 (`riot_raw`) coexisten. Al pedir un jugador,
+los legacy del historial se auditan y se actualizan in situ si Riot entrega un
+RAW reconocible; se conservan `matchInfo.matchId`, nombres válidos y analytics
+embebidas hasta el rebuild. Los intentos no disponibles se marcan en
+`rawRefresh` para que no se reintenten indefinidamente.
+
+Para el detalle de una partida, el body RAW es:
+
+```json
+{"platform":"pc","queries":"","region":"eu","type":"matchdetails","value":"MATCH_ID"}
+```
+
+`type=matchdetails` selecciona el recurso interno equivalente a
+`GET https://pd.eu.a.pvp.net/match-details/v1/matches/{MATCH_ID}`; `value` es el
+ID, `region` el shard, `platform` la plataforma y `queries` queda vacío al no
+necesitar parámetros de query. Ejemplo:
+
+```bash
+curl -X POST "https://api.henrikdev.xyz/valorant/v1/raw" \
+  -H "Authorization: HENRIK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"pc","queries":"","region":"eu","type":"matchdetails","value":"MATCH_ID"}'
+```
+
+Comandos útiles:
+
+```bash
+python scripts/pipeline_partidas.py --players "Name#Tag" --matches-per-player 30
+python scripts/pipeline_partidas.py --players "Name#Tag" --refresh-all-legacy
+python scripts/refresh_match_from_riot_raw.py MATCH_ID --dry-run
+python scripts/backfill_riot_raw.py --all --limit 100 --dry-run
+python scripts/compare_legacy_vs_raw_match.py MATCH_ID
+```
+
 Este repositorio usa dos capas:
 
 - Backend: FastAPI en `backend/main.py` (puerto `8000`)

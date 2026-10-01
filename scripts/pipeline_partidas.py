@@ -208,6 +208,11 @@ def main() -> None:
         action="store_true",
         help="No borra JSON residuales en backend/ingestion.",
     )
+    parser.add_argument("--refresh-legacy", action="store_true", help="Audita legacy presentes en el historial (modo RAW).")
+    parser.add_argument("--refresh-all-legacy", action="store_true", help="Audita todos los legacy asociados a los jugadores (modo RAW).")
+    parser.add_argument("--refresh-missing-performance", action="store_true", help="Reintenta schema v2 sin Performance Score.")
+    parser.add_argument("--force-refresh", action="store_true", help="Ignora el estado previo de refresh.")
+    parser.add_argument("--dry-run", action="store_true", help="Muestra presupuesto RAW sin modificar Mongo.")
     args = parser.parse_args()
 
     matches_per_player = (
@@ -239,6 +244,34 @@ def main() -> None:
         raise RuntimeError("--rate-limit-safety-factor debe ser mayor o igual que 1.0")
     if args.legacy_upload and args.skip_rebuild_derived:
         raise RuntimeError("--skip-rebuild-derived solo aplica al uploader paralelo")
+
+    # v2 is direct-to-Mongo: no legacy formatter, intermediary JSON or blind
+    # duplicate uploader participates in the normal path.
+    if os.getenv("MATCH_SOURCE", "riot_raw").strip().lower() == "riot_raw" and not args.legacy_upload:
+        raw_players = args.players or [
+            "No Screams#GFS", "No Baiting#NNG", "No Smoking#Camel", "No Enemies#11111",
+            "No Filling#GFS", "No AFK#zzz", "No Я#GFS", "TA JLodbrok#8674",
+        ]
+        raw_cmd = [sys.executable, str(Path(__file__).resolve().parent / "ingest_riot_raw_matches.py"),
+                   "--players", *raw_players, "--matches-per-player", str(matches_per_player),
+                   "--download-workers", str(args.download_workers),
+                   "--requests-per-minute", str(args.requests_per_minute),
+                   "--rate-limit-safety-factor", str(args.rate_limit_safety_factor)]
+        if args.backfill_from_history or args.fill_requested:
+            raw_cmd.append("--backfill-from-history")
+        if args.max_history_scan is not None:
+            raw_cmd.extend(["--max-history-scan", str(args.max_history_scan)])
+        if args.no_max_history_scan:
+            raw_cmd.append("--no-max-history-scan")
+        for flag in ("refresh_legacy", "refresh_all_legacy", "refresh_missing_performance", "force_refresh", "dry_run", "skip_rebuild_derived"):
+            if getattr(args, flag):
+                raw_cmd.append("--" + flag.replace("_", "-"))
+        # RAW writes directly to Mongo; retain the historical --skip-upload
+        # promise by making this direct path read-only as well.
+        if args.skip_upload and not args.dry_run:
+            raw_cmd.append("--dry-run")
+        run_step(raw_cmd, Path(__file__).resolve().parents[1], "Ingesta Riot RAW")
+        return
 
     project_root = Path(__file__).resolve().parents[1]
     staging_dir = project_root / "backend" / "ingestion"

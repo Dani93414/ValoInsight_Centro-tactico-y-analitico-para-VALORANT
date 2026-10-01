@@ -32,6 +32,7 @@ import { useNavigate } from "react-router-dom";
 import { useCompetitiveTiers, useRegionSummaries } from "../api/hooks";
 import { searchPlayers } from "../api/stats.ts";
 import { useAuth } from "../context/AuthContext";
+import { formatLastRecordedMatch } from "../utils/lastSeen";
 import LoadingModal from "../components/ui/LoadingModal";
 import PageLoadingScreen from "../components/ui/PageLoadingScreen";
 import { canSearchPlayer, PLAYER_SEARCH_DEBOUNCE_MS } from "../utils/playerSearch";
@@ -231,7 +232,7 @@ function formatDate(value?: string) {
   return dateFormatter.format(date);
 }
 
-function formatLastSeen(
+export function formatLastSeen(
   startMillis?: number | null,
   durationMillis?: number | null,
 ) {
@@ -243,7 +244,8 @@ function formatLastSeen(
     typeof durationMillis === "number" && Number.isFinite(durationMillis)
       ? durationMillis
       : 0;
-  const elapsedMillis = Math.max(0, Date.now() - (startMillis + safeDuration));
+  const normalizedStart = startMillis < 100_000_000_000 ? startMillis * 1000 : startMillis;
+  const elapsedMillis = Math.max(0, Date.now() - (normalizedStart + safeDuration));
   const elapsedHours = Math.floor(elapsedMillis / (60 * 60 * 1000));
 
   if (elapsedHours < 1) return "Hace menos de 1 hora";
@@ -659,7 +661,7 @@ export default function Home() {
 
                 <span className="home-search-result__last-seen">
                   Ultima conexion ·{" "}
-                  {formatLastSeen(
+                  {formatLastRecordedMatch(
                     player.lastMatchStartMillis,
                     player.lastMatchDurationMillis,
                   )}
@@ -865,7 +867,7 @@ export default function Home() {
 
                           <span className="home-search-result__last-seen">
                             Última conexión ·{" "}
-                            {formatLastSeen(
+                            {formatLastRecordedMatch(
                               result.lastMatchStartMillis,
                               result.lastMatchDurationMillis,
                             )}

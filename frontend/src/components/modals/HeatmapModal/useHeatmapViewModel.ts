@@ -11,6 +11,7 @@ export type { HeatmapEvent, HeatmapMeta };
 
 export interface MapGeo {
   uuid: string;
+  mapUrl?: string | null;
   displayName: string;
   displayIcon?: string | null;
 }
@@ -177,21 +178,31 @@ export function useHeatmapViewModel(props: {
   const filterOptions =
     (filterOptionsRaw as HeatmapFilterOptionsPayload | undefined) ?? {};
 
+  const mapByIdentifier = useMemo(() => {
+    const result = new Map<string, MapGeo>();
+    for (const mapItem of mapsGeo) {
+      for (const identifier of [mapItem.uuid, mapItem.mapUrl]) {
+        const normalized = identifier?.trim();
+        if (normalized) result.set(normalized, mapItem);
+      }
+    }
+    return result;
+  }, [mapsGeo]);
+
   const mapNameById = useMemo(
-    () =>
-      new Map(mapsGeo.map((mapItem) => [mapItem.uuid, mapItem.displayName])),
-    [mapsGeo],
+    () => new Map([...mapByIdentifier].map(([id, mapItem]) => [id, mapItem.displayName])),
+    [mapByIdentifier],
   );
 
   const mapImageById = useMemo(() => {
     return new Map(
-      mapsGeo.map((mapItem) => [
-        mapItem.uuid,
+      [...mapByIdentifier].map(([id, mapItem]) => [
+        id,
         mapItem.displayIcon?.trim() ||
           `/content/maps/${mapItem.uuid}/displayIcon.png`,
       ]),
     );
-  }, [mapsGeo]);
+  }, [mapByIdentifier]);
 
   const availableMaps = useMemo(() => {
     const apiMaps = filterOptions.maps ?? [];

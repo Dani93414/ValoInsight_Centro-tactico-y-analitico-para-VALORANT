@@ -117,6 +117,37 @@ class HeatmapExtractorTest(unittest.TestCase):
 
         self.assertEqual(events, [])
 
+    def test_raw_first_blood_marker_overrides_chronological_fallback(self):
+        """Schema v2 must honour Riot's explicit opening-killer marker."""
+        puuid = "marked-killer"
+        match = {
+            "matchInfo": {"matchId": "m-raw-fb"},
+            "players": [
+                {"puuid": puuid, "teamId": "Red", "characterId": "agent-1"},
+                {"puuid": "early-killer", "teamId": "Blue", "characterId": "agent-2"},
+            ],
+            "roundResults": [{
+                "roundNum": 0,
+                "firstBloodPlayer": puuid,
+                "playerStats": [{"kills": [
+                    {
+                        "killer": "early-killer", "victim": "v1", "timeSinceRoundStartMillis": 100,
+                        "playerLocations": [{"puuid": "early-killer", "location": {"x": 100, "y": 100}}],
+                    },
+                    {
+                        "killer": puuid, "victim": "v2", "timeSinceRoundStartMillis": 500,
+                        "playerLocations": [{"puuid": puuid, "location": {"x": 300, "y": 400}}],
+                    },
+                ]}],
+            }],
+        }
+        events = extract_spatial_events(
+            [match], puuid, map_transform=self.map_transform, event_types={EVENT_FIRST_BLOOD},
+        )
+        self.assertEqual(len(events), 1)
+        self.assertAlmostEqual(events[0]["x"], 0.4, places=6)
+        self.assertAlmostEqual(events[0]["y"], 0.3, places=6)
+
     def test_kill_enemy_position_uses_victim_location(self):
         """Usa la posición de la víctima para representar al enemigo abatido."""
         puuid = "killer-1"

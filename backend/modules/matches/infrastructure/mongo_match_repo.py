@@ -87,6 +87,26 @@ def insert(match_obj: dict[str, Any]) -> bool:
         raise
 
 
+def replace(match_obj: dict[str, Any]) -> bool:
+    """Atomically replace an existing match by its stable matchId (never upsert)."""
+    match_id = ((match_obj.get("matchInfo") or {}).get("matchId"))
+    if not match_id:
+        raise ValueError("matchInfo.matchId is required")
+    result = matches_collection.replace_one({"matchInfo.matchId": match_id}, copy.deepcopy(match_obj), upsert=False)
+    return bool(result.matched_count)
+
+
+def set_raw_refresh(match_id: str, refresh: dict[str, Any]) -> None:
+    matches_collection.update_one({"matchInfo.matchId": match_id}, {"$set": {"rawRefresh": copy.deepcopy(refresh)}})
+
+
+def find_legacy_by_player(puuid: str | None = None):
+    query: dict[str, Any] = {"$or": [{"dataSchema.version": {"$lt": 2}}, {"dataSchema": {"$exists": False}}, {"dataSchema.source": {"$ne": "riot_raw"}}]}
+    if puuid:
+        query = {"$and": [query, {"players.puuid": puuid}]}
+    return matches_collection.find(query)
+
+
 def set_player_analytics(match_id: str, puuid: str, analytics: dict[str, Any]) -> None:
     """Embed analytics for a single player in the match document."""
     matches_collection.update_one(

@@ -5,12 +5,19 @@ import json
 import os
 import re
 import time
-from threading import Lock
 from pathlib import Path
 from urllib.parse import quote
 
 import requests
 from dotenv import load_dotenv
+try:
+    from infrastructure.henrik_rate_limit import ThreadSafeRateLimiter
+except ModuleNotFoundError:  # direct legacy-script invocation from ingestion/
+    import sys
+    _ROOT = Path(__file__).resolve().parents[2]
+    if str(_ROOT) not in sys.path:
+        sys.path.append(str(_ROOT))
+    from backend.infrastructure.henrik_rate_limit import ThreadSafeRateLimiter
 
 # =======================
 # CONFIG
@@ -63,29 +70,6 @@ def safe_name(s: str) -> str:
 def progress_label(done: int, total: int) -> str:
     pct = (done / total * 100.0) if total else 100.0
     return f"[{pct:5.1f}%] [{done}/{total}]"
-
-
-class ThreadSafeRateLimiter:
-    """
-    Rate limiter global para una sola API key.
-    Todos los workers comparten este limitador.
-    """
-    def __init__(self, rpm: int, safety_factor: float = 1.10):
-        if rpm <= 0:
-            raise ValueError("rpm must be > 0")
-
-        self.min_interval = (60.0 / float(rpm)) * float(safety_factor)
-        self._next_time = 0.0
-        self._lock = Lock()
-
-    def wait(self):
-        with self._lock:
-            now = time.monotonic()
-
-            if now < self._next_time:
-                time.sleep(self._next_time - now)
-
-            self._next_time = time.monotonic() + self.min_interval
 
 
 limiter = ThreadSafeRateLimiter(DEFAULT_REQUESTS_PER_MINUTE, DEFAULT_SAFETY_FACTOR)
@@ -440,6 +424,11 @@ def parse_players_arg(players_arg: list[str] | None) -> list[tuple[str, str]]:
 
 
 def main():
+    if os.getenv("MATCH_SOURCE", "riot_raw").strip().lower() == "riot_raw":
+        raise SystemExit(
+            "download_matches.py es el downloader legacy de Henrik v4. "
+            "Usa scripts/pipeline_partidas.py (MATCH_SOURCE=riot_raw) para partidas nuevas."
+        )
     parser = argparse.ArgumentParser(
         description="Descarga partidas competitivas desde Henrik API para una lista de jugadores."
     )

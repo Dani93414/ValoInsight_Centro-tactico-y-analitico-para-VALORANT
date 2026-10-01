@@ -3,6 +3,10 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  ChevronsDown,
+  ChevronsUp,
   Circle,
   Clock3,
   Crosshair,
@@ -12,12 +16,15 @@ import {
   RotateCcw,
   SkipForward,
   StepForward,
+  Minus,
   Wrench,
   X,
 } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -37,8 +44,10 @@ import {
   useArmas,
   useMapasGeo,
   useCompetitiveTiers,
+  usePlayerDashboard,
 } from "../../api/hooks";
 import LoadingModal from "../ui/LoadingModal";
+import { lockPageScroll } from "../../utils/lockPageScroll";
 import MatchScoreProgressChart from "./MatchScoreProgressChart";
 import EconomyRoundTable from "./EconomyRoundTable";
 import {
@@ -85,6 +94,7 @@ import type {
 } from "../../utils/analytics/advancedMomentum";
 import type { AgentContent } from "../../types/agents";
 import type { Arma } from "../../types/weapons";
+import type { AnalyticsMatch } from "../../types/dashboard";
 import type {
   RawLocation,
   RawMatchDetail,
@@ -118,6 +128,7 @@ type Props = {
 
 type MapGeoContent = {
   uuid?: string;
+  mapUrl?: string | null;
   displayName?: string;
   displayIcon?: string | null;
   xMultiplier?: number;
@@ -211,6 +222,8 @@ type RoundSummary = {
   buyType: EconomyBuyType;
   playerDamage: number;
   playerWasTraded: boolean;
+  playerAfk: boolean;
+  playerStayedInSpawn: boolean;
   hadPlant: boolean;
   hadDefuse: boolean;
   events: RoundEvent[];
@@ -317,6 +330,8 @@ type PlayerScoreboardStats = {
   firstKills: number;
   firstDeaths: number;
   multikillRounds: number;
+  performanceScore: number | null;
+  performanceTier: string | null;
 };
 
 type RoundTeamLoadout = {
@@ -334,6 +349,179 @@ type RoundTeamLoadout = {
 };
 
 type EconomyBuyType = "eco" | "semiEco" | "fullBuy";
+
+const RIOT_PERFORMANCE_COMPONENT_LABELS: Record<string, string> = {
+  damage: "Damage",
+  killImpact: "Kill Impact",
+  deathImpact: "Death Impact",
+  trades: "Trades",
+  assists: "Assists",
+  utilityUsage: "Utility Usage",
+  plants: "Plants",
+  defuses: "Defuses",
+};
+const RIOT_PERFORMANCE_RATING_VALUE: Record<string, number> = {
+  double_up: 2,
+  up: 1,
+  neutral: 0,
+  down: -1,
+  double_down: -2,
+};
+const RIOT_PERFORMANCE_RATING_ICON: Record<string, LucideIcon> = {
+  double_up: ChevronsUp,
+  up: ChevronUp,
+  neutral: Minus,
+  down: ChevronDown,
+  double_down: ChevronsDown,
+};
+
+function RiotPerformanceRatingIcon({ rating }: { rating: string }) {
+  const Icon = RIOT_PERFORMANCE_RATING_ICON[rating] ?? Minus;
+  return <Icon className="riot-performance-rating-icon" aria-label={`Valoración Riot: ${rating}`} />;
+}
+
+function normalizeRiotPerformanceRating(value: unknown): string {
+  const normalized = String(value ?? "").trim().toLowerCase().replace(/[-\s]/g, "_");
+  if (normalized === "doubleup") return "double_up";
+  if (normalized === "doubledown") return "double_down";
+  return RIOT_PERFORMANCE_RATING_VALUE[normalized] === undefined ? "neutral" : normalized;
+}
+
+function getRawComponentRating(player: RawPlayer | null, componentName: string): string | null {
+  const rawRatings = player?.performance?.rawUnknownValues?.TempValueL;
+  if (!rawRatings || typeof rawRatings !== "object") return null;
+  for (const group of Object.values(rawRatings as Record<string, unknown>)) {
+    if (!group || typeof group !== "object") continue;
+    const rating = (group as Record<string, unknown>)[componentName];
+    if (typeof rating === "string") return normalizeRiotPerformanceRating(rating);
+  }
+  return null;
+}
+
+function buildPerformanceExplanation(player: RawPlayer | null) {
+  const performance = player?.performance;
+  if (!performance?.available || typeof performance.score !== "number") return null;
+  const entries = Object.entries(performance.components ?? {})
+    .map(([key, component]) => {
+      const storedRating = normalizeRiotPerformanceRating(component?.rating);
+      // Older v2 rows stored a neutral fallback even though their preserved
+      // TempValueL still contains Riot's actual component direction.
+      const rating = storedRating === "neutral"
+        ? (getRawComponentRating(player, key) ?? storedRating)
+        : storedRating;
+      const value = RIOT_PERFORMANCE_RATING_VALUE[rating];
+      return Number.isFinite(value)
+        ? {
+          key,
+          label: RIOT_PERFORMANCE_COMPONENT_LABELS[key] ?? key,
+          rating,
+          value,
+          rawValue: typeof component?.value === "number" && Number.isFinite(component.value)
+            ? component.value
+            : null,
+        }
+        : null;
+    })
+    .filter((entry): entry is { key: string; label: string; rating: string; value: number; rawValue: number | null } => entry !== null);
+  const bestValue = entries.length ? Math.max(...entries.map((entry) => entry.value)) : 0;
+  const worstValue = entries.length ? Math.min(...entries.map((entry) => entry.value)) : 0;
+  const best = entries.filter((entry) => entry.value === bestValue && entry.value > 0);
+  const worst = entries.filter((entry) => entry.value === worstValue && entry.value < 0);
+  const thresholds = Object.fromEntries(
+    Object.entries(performance.thresholds ?? {}).filter(([, value]) => typeof value === "number" && Number.isFinite(value)),
+  );
+  return { score: performance.score, tier: performance.tier, entries, best, worst, thresholds };
+}
+
+type PerformanceDistributionPoint = {
+  score: number;
+  lower: number;
+  upper: number;
+  frequency: number;
+};
+
+const PERFORMANCE_DISTRIBUTION_BIN_SIZE = 25;
+
+function buildPerformanceDistribution(
+  matches: AnalyticsMatch[] | undefined,
+  currentMatchId: string,
+  currentScore: number,
+): PerformanceDistributionPoint[] {
+  const scoresByMatch = new Map<string, number>();
+  for (const match of matches ?? []) {
+    const id = match.match_id ?? match.id;
+    const score = match.performanceScore;
+    if (id && typeof score === "number" && Number.isFinite(score) && score >= 0 && score <= 500) {
+      scoresByMatch.set(id, score);
+    }
+  }
+  scoresByMatch.set(currentMatchId, Math.max(0, Math.min(500, currentScore)));
+
+  const binCount = Math.ceil(500 / PERFORMANCE_DISTRIBUTION_BIN_SIZE);
+  const frequencies = Array.from({ length: binCount }, () => 0);
+  for (const score of scoresByMatch.values()) {
+    const index = Math.min(binCount - 1, Math.floor(score / PERFORMANCE_DISTRIBUTION_BIN_SIZE));
+    frequencies[index] += 1;
+  }
+  return frequencies.map((frequency, index) => {
+    const lower = index * PERFORMANCE_DISTRIBUTION_BIN_SIZE;
+    const upper = Math.min(500, lower + PERFORMANCE_DISTRIBUTION_BIN_SIZE);
+    return { score: lower + (upper - lower) / 2, lower, upper, frequency };
+  });
+}
+
+function getPerformanceScaleTicks(thresholds: Record<string, number>) {
+  return [0, 250, thresholds.merit, thresholds.distinction, 500]
+    .filter((value): value is number => typeof value === "number" && value >= 0 && value <= 500)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .sort((a, b) => a - b);
+}
+
+function getRawMatchIncidents(player: RawPlayer | null) {
+  const factors = player?.behaviorFactors ?? {};
+  const periods = player?.participationPeriods ?? [];
+  return {
+    afk: factors.wasAfk === true || factors.afk === true,
+    penalty: factors.wasPenalized === true,
+    spawnIdle: factors.stayedInSpawn === true,
+    disconnect: periods.length > 1,
+  };
+}
+
+function normalizeAbilitySlot(value: string | undefined): string {
+  return String(value ?? "").replace(/[\s_-]/g, "").toLowerCase();
+}
+
+function getUtilitySnapshot(player: RawPlayer | null, rounds: number, agent?: AgentContent) {
+  const casts = player?.stats?.abilityCasts;
+  if (!casts) return null;
+  const abilitiesBySlot = new Map(
+    (agent?.abilities ?? []).map((ability) => [normalizeAbilitySlot(ability.slot), ability]),
+  );
+  const entries = [
+    ["Grenade", "Grenade", casts.grenadeCasts], ["Ability1", "Ability 1", casts.ability1Casts],
+    ["Ability2", "Ability 2", casts.ability2Casts], ["Ultimate", "Ultimate", casts.ultimateCasts],
+  ].map(([slot, fallbackLabel, value]) => {
+    const ability = abilitiesBySlot.get(normalizeAbilitySlot(String(slot)));
+    return {
+      label: ability?.displayName?.trim() || String(fallbackLabel),
+      icon: ability?.displayIcon?.trim() || null,
+      value: typeof value === "number" ? value : null,
+    };
+  })
+    .filter((entry) => entry.value !== null);
+  if (!entries.length) return null;
+  const total = entries.reduce((sum, entry) => sum + Number(entry.value), 0);
+  const storedRating = normalizeRiotPerformanceRating(player?.performance?.components?.utilityUsage?.rating);
+  return {
+    entries,
+    total,
+    perRound: rounds > 0 ? total / rounds : null,
+    rating: storedRating === "neutral"
+      ? (getRawComponentRating(player, "utilityUsage") ?? storedRating)
+      : storedRating,
+  };
+}
 type RoundWinCondition = "elimination" | "defuse" | "time" | "fallback";
 
 type PlayerDuelCell = {
@@ -444,6 +632,13 @@ function cleanId(value?: string | null): string {
   return text;
 }
 
+function normalizeMapLabel(value?: string | null): string {
+  return cleanId(value)
+    .toLocaleLowerCase("en")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function buildPartyMarkerMap(players: RawPlayer[]): Map<string, PartyMarker> {
   const playersByParty = new Map<string, Set<string>>();
 
@@ -549,10 +744,12 @@ function getMvp(currentMatch: RawMatchDetail) {
 
 function getPlayerDisplay(player?: RawPlayer | null) {
   if (!player) return "Unknown";
-  if (player.gameName && player.tagLine) {
-    return `${player.gameName}#${player.tagLine}`;
+  const gameName = player.gameName?.trim();
+  const tagLine = player.tagLine?.trim();
+  if (gameName && tagLine) {
+    return `${gameName}#${tagLine}`;
   }
-  return player.gameName ?? "Unknown";
+  return gameName || "Jugador desconocido";
 }
 
 function getPlayerShortDisplay(player?: RawPlayer | null) {
@@ -4509,6 +4706,8 @@ function buildPlayerScoreboardStats({
     firstKills,
     firstDeaths,
     multikillRounds,
+    performanceScore: typeof player.performance?.score === "number" ? player.performance.score : null,
+    performanceTier: player.performance?.tier ?? null,
   };
 }
 
@@ -5251,6 +5450,7 @@ export default function MatchDetailModal({
     selectedPlayerState.playerId === playerId
       ? selectedPlayerState.selectedPlayerId
       : playerId;
+  const { data: performanceDashboard } = usePlayerDashboard(selectedPlayerId);
   const [selectedRoundNum, setSelectedRoundNum] = useState<number | null>(
     initialRoundNum ?? null,
   );
@@ -5288,20 +5488,7 @@ export default function MatchDetailModal({
     useState(false);
   const initialRoundOpenedRef = useRef(false);
 
-  useEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-    const previousHtmlOverflow = html.style.overflow;
-    const previousBodyOverflow = body.style.overflow;
-
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-
-    return () => {
-      html.style.overflow = previousHtmlOverflow;
-      body.style.overflow = previousBodyOverflow;
-    };
-  }, []);
+  useEffect(lockPageScroll, []);
 
   const loading =
     matchLoading ||
@@ -5371,8 +5558,10 @@ export default function MatchDetailModal({
   const mapById = useMemo(() => {
     const map = new Map<string, MapGeoContent>();
     for (const mapEntry of mapsGeo) {
-      const id = cleanId(mapEntry.uuid);
-      if (id) map.set(id, mapEntry);
+      for (const identifier of [mapEntry.uuid, mapEntry.mapUrl]) {
+        const id = cleanId(identifier);
+        if (id) map.set(id, mapEntry);
+      }
     }
     return map;
   }, [mapsGeo]);
@@ -5417,6 +5606,28 @@ export default function MatchDetailModal({
   const effectiveSelectedPlayerId =
     perspective?.selectedPlayerId || selectedPlayerId;
   const playerInfo = perspective?.selectedPlayer ?? null;
+  const selectedAgent = cleanId(playerInfo?.characterId)
+    ? agentById.get(cleanId(playerInfo?.characterId))
+    : undefined;
+  const performanceExplanation = useMemo(
+    () => buildPerformanceExplanation(playerInfo),
+    [playerInfo],
+  );
+  const performanceDistribution = useMemo(
+    () => performanceExplanation
+      ? buildPerformanceDistribution(
+        performanceDashboard?.analyticsList,
+        matchId,
+        performanceExplanation.score,
+      )
+      : [],
+    [matchId, performanceDashboard?.analyticsList, performanceExplanation],
+  );
+  const matchIncidents = useMemo(() => getRawMatchIncidents(playerInfo), [playerInfo]);
+  const utilitySnapshot = useMemo(
+    () => getUtilitySnapshot(playerInfo, currentMatch?.roundResults?.length ?? 0, selectedAgent),
+    [playerInfo, currentMatch?.roundResults?.length, selectedAgent],
+  );
 
   const playerTeam = perspective?.selectedTeamId ?? cleanId(playerInfo?.teamId);
   const {
@@ -5425,11 +5636,27 @@ export default function MatchDetailModal({
   } = getAgentMeta(playerInfo, agentById, agentNameMap);
 
   const mapId = cleanId(currentMatch?.matchInfo?.mapId);
-  const mapMeta = mapId ? (mapById.get(mapId) ?? null) : null;
-  const mapName = (mapMeta?.displayName ?? mapId) || "Mapa desconocido";
+  const analyticsMapName = currentMatch?.players
+    ?.map((player) => player.analytics?.map_name?.trim())
+    .find(Boolean) ?? "";
+  // v2 RAW uses /Game/Maps/... while older content responses may have been
+  // cached without mapUrl.  Analytics already resolves that path to a name,
+  // so use it as a second lookup key for both title and image.
+  const mapMeta =
+    (mapId ? mapById.get(mapId) : undefined) ??
+    mapsGeo.find(
+      (entry) => normalizeMapLabel(entry.displayName) === normalizeMapLabel(analyticsMapName),
+    ) ??
+    null;
+  const mapName =
+    mapMeta?.displayName ||
+    analyticsMapName ||
+    currentMatch?.matchInfo?.legacyMapName ||
+    mapId ||
+    "Mapa desconocido";
   const mapImageUrl =
     mapMeta?.displayIcon?.trim() ||
-    (mapId ? `/content/maps/${mapId}/displayIcon.png` : "");
+    (mapMeta?.uuid ? `/content/maps/${mapMeta.uuid}/displayIcon.png` : "");
   const mapTransform = useMemo(() => toMapTransform(mapMeta), [mapMeta]);
   const queueLabel = formatQueueLabel(currentMatch?.matchInfo?.queueId);
   const gameModeLabel = formatQueueLabel(currentMatch?.matchInfo?.gameMode);
@@ -5475,6 +5702,8 @@ export default function MatchDetailModal({
       );
 
       const playerScore = toNumber(playerRoundStats?.score);
+      const playerAfk = playerRoundStats?.isAfk === true;
+      const playerStayedInSpawn = playerRoundStats?.stayedInSpawn === true;
       const playerSpent = toNumber(playerRoundStats?.economy?.spent);
       const playerLoadout = toNumber(playerRoundStats?.economy?.loadoutValue);
       let teamSpent = 0;
@@ -5722,6 +5951,8 @@ export default function MatchDetailModal({
         buyType,
         playerDamage: playerRoundDamage,
         playerWasTraded,
+        playerAfk,
+        playerStayedInSpawn,
         hadPlant: Boolean(planterId),
         hadDefuse: Boolean(defuserId),
         events: roundEvents,
@@ -7267,6 +7498,7 @@ export default function MatchDetailModal({
         <div className="match-scoreboard-table-head">
           <span>Jugador</span>
           <span>Match Rank</span>
+          <span>PS</span>
           <span>ACS</span>
           <span>K</span>
           <span>D</span>
@@ -7336,6 +7568,9 @@ export default function MatchDetailModal({
                 ) : (
                   "-"
                 )}
+              </span>
+              <span title={row.performanceTier ?? "Performance Score no disponible"}>
+                {row.performanceScore == null ? "—" : formatNumber(row.performanceScore, 0)}
               </span>
               <span className="match-scoreboard-acs">{formatNumber(row.acs)}</span>
               <span>{formatNumber(row.kills)}</span>
@@ -7722,15 +7957,16 @@ export default function MatchDetailModal({
                         <button
                           key={`sticky-strip-${round.roundNum}`}
                           type="button"
-                          className={`match-round-chip ${round.didWin ? "is-win" : "is-loss"} ${isOpen ? "is-open" : ""} ${isKeyRound ? "is-key-round" : ""}`}
+                          className={`match-round-chip ${round.didWin ? "is-win" : "is-loss"} ${isOpen ? "is-open" : ""} ${isKeyRound ? "is-key-round" : ""} ${round.playerAfk ? "has-afk" : ""}`}
                           onClick={() => handleRoundSelect(round)}
-                          aria-label={`Abrir ronda ${round.roundNum + 1}, ${round.didWin ? "ganada" : "perdida"}, ${round.playerKills} kills`}
+                          aria-label={`Abrir ronda ${round.roundNum + 1}, ${round.didWin ? "ganada" : "perdida"}, ${round.playerKills} kills${round.playerAfk ? ", AFK indicado por Riot" : ""}`}
                           aria-current={isOpen ? "true" : undefined}
                           aria-pressed={isOpen}
                         >
                           <span className="match-round-chip-number">
                             {round.roundNum + 1}
                           </span>
+                          {round.playerAfk && <small className="match-round-chip-afk">AFK</small>}
                         </button>
                       );
                     })}
@@ -7813,6 +8049,75 @@ export default function MatchDetailModal({
                     </article>
                   </div>
 
+                  {(matchIncidents.afk || matchIncidents.disconnect || matchIncidents.penalty || matchIncidents.spawnIdle) && (
+                    <section className="match-raw-incidents" aria-label="Incidencias detectadas">
+                      <strong>⚠ Incidencias detectadas</strong>
+                      {matchIncidents.afk && <span>AFK indicado por Riot</span>}
+                      {matchIncidents.disconnect && <span>Posible desconexión temporal (varios periodos de participación)</span>}
+                      {matchIncidents.penalty && <span>Penalización indicada por Riot</span>}
+                      {matchIncidents.spawnIdle && <span>Inactividad en spawn indicada por Riot</span>}
+                    </section>
+                  )}
+
+                  {utilitySnapshot && (
+                    <section className="match-utility-summary" aria-label="Análisis de utilidad">
+                      <header><div><span>Utility</span><h3>Uso de habilidades</h3></div><strong>{formatNumber(utilitySnapshot.total)}<small>casts totales</small></strong></header>
+                      <p>{utilitySnapshot.perRound === null ? "Sin rondas válidas para calcular casts por ronda." : `${formatNumber(utilitySnapshot.perRound, 2)} casts por ronda`}{utilitySnapshot.rating ? <> · Valoración Riot: <RiotPerformanceRatingIcon rating={utilitySnapshot.rating} /></> : ""}</p>
+                      <div>{utilitySnapshot.entries.map((entry) => <span key={entry.label} className="match-utility-ability">{entry.icon ? <img src={entry.icon} alt="" /> : null}<span>{entry.label}</span><b>{formatNumber(entry.value ?? 0)}</b></span>)}</div>
+                    </section>
+                  )}
+
+                  {performanceExplanation && (
+                    <section className="match-performance-explanation" aria-label="Por qué este Performance Score">
+                      <header>
+                        <div><span>Performance Score</span><h3>¿Por qué este Performance Score?</h3></div>
+                        <strong>{formatNumber(performanceExplanation.score, 0)}<small>{performanceExplanation.tier ?? ""}</small></strong>
+                      </header>
+                      <div className="match-performance-scale" aria-label={`Escala del Performance Score: ${formatNumber(performanceExplanation.score, 0)} de 500`}>
+                        <ResponsiveContainer width="100%" height={148}>
+                          <AreaChart data={performanceDistribution} margin={{ top: 13, right: 12, bottom: 0, left: -20 }}>
+                            <defs>
+                              <linearGradient id="match-performance-distribution-fill" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#ec5b71" stopOpacity={0.36} />
+                                <stop offset="100%" stopColor="#ec5b71" stopOpacity={0.02} />
+                              </linearGradient>
+                            </defs>
+                            {typeof performanceExplanation.thresholds.merit === "number" && (
+                              <ReferenceArea x1={performanceExplanation.thresholds.merit} x2={performanceExplanation.thresholds.distinction ?? 500} fill="#9d65ee" fillOpacity={0.1} />
+                            )}
+                            {typeof performanceExplanation.thresholds.distinction === "number" && (
+                              <ReferenceArea x1={performanceExplanation.thresholds.distinction} x2={500} fill="#f1c75b" fillOpacity={0.1} />
+                            )}
+                            <CartesianGrid vertical={false} stroke="rgba(203, 213, 225, 0.12)" />
+                            <XAxis dataKey="score" type="number" domain={[0, 500]} ticks={getPerformanceScaleTicks(performanceExplanation.thresholds)} tickLine={false} axisLine={false} tick={{ fill: "#9da9bb", fontSize: 10 }} />
+                            <YAxis hide allowDecimals={false} />
+                            <ReTooltip cursor={false} formatter={(value) => [formatNumber(Number(value), 0), "Partidas"]} labelFormatter={(_, payload) => {
+                              const point = payload?.[0]?.payload as PerformanceDistributionPoint | undefined;
+                              return point ? `PS ${formatNumber(point.lower, 0)}–${formatNumber(point.upper, 0)}` : "";
+                            }} contentStyle={{ background: "#121b28", border: "1px solid rgba(255,255,255,.14)", borderRadius: 8 }} />
+                            <ReferenceLine x={performanceExplanation.score} stroke="#f8fafc" strokeWidth={2} label={{ value: formatNumber(performanceExplanation.score, 0), position: "top", fill: "#f8fafc", fontSize: 11, fontWeight: 800 }} />
+                            <Area type="monotone" dataKey="frequency" stroke="#ed7184" strokeWidth={2} fill="url(#match-performance-distribution-fill)" isAnimationActive={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                        <small>Distribución de todas las partidas del jugador con PS disponible. El pico indica el tramo de PS más habitual; la línea blanca es esta partida.</small>
+                      </div>
+                      <div className="match-performance-explanation-grid">
+                        {performanceExplanation.entries.map((entry) => (
+                          <div key={entry.key} className={`is-${entry.rating}`}>
+                            <span>{entry.label}</span><strong>{entry.rawValue === null ? "—" : formatNumber(entry.rawValue, 2)} <RiotPerformanceRatingIcon rating={entry.rating} /></strong>
+                          </div>
+                        ))}
+                      </div>
+                      {(performanceExplanation.best.length > 0 || performanceExplanation.worst.length > 0) && (
+                        <p>
+                          {performanceExplanation.best.length > 0 && <>Componentes mejor valorados: <b>{performanceExplanation.best.map((entry) => entry.label).join(", ")}</b>.</>}
+                          {performanceExplanation.best.length > 0 && performanceExplanation.worst.length > 0 ? " " : ""}
+                          {performanceExplanation.worst.length > 0 && <>Componentes con valoración más baja: <b>{performanceExplanation.worst.map((entry) => entry.label).join(", ")}</b>.</>}
+                        </p>
+                      )}
+                    </section>
+                  )}
+
                   <MatchMomentumPanel
                     momentum={momentumAnalysis}
                     advancedMomentum={advancedMomentumAnalysis}
@@ -7854,6 +8159,8 @@ export default function MatchDetailModal({
                       <span>{selectedRound.playerKills}K</span>
                       <span>{selectedRound.playerDeaths}D</span>
                       <span>{selectedRound.playerAssists}A</span>
+                      {selectedRound.playerAfk && <em className="round-afk-badge">AFK indicado por Riot</em>}
+                      {!selectedRound.playerAfk && selectedRound.playerStayedInSpawn && <em className="round-afk-badge is-spawn">Inactivo en spawn</em>}
                       {selectedRound.hadPlant && <em>Plant</em>}
                       {selectedRound.hadDefuse && <em>Defuse</em>}
                       <button

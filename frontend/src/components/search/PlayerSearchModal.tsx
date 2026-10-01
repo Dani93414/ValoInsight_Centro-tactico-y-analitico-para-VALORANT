@@ -20,6 +20,7 @@ import {
   resolveCompetitiveTierIcon,
 } from "../../utils/rankUtils";
 import { canSearchPlayer, PLAYER_SEARCH_DEBOUNCE_MS } from "../../utils/playerSearch";
+import { formatLastRecordedMatch } from "../../utils/lastSeen";
 import "../auth/AuthModal.css";
 import "./PlayerSearchModal.css";
 
@@ -62,7 +63,7 @@ const authenticatedSectionMessages: Record<Exclude<SearchSectionId, "search">, s
   premier: "Todavía no has configurado tu equipo premier",
 };
 
-function formatLastSeen(
+export function formatLastSeen(
   startMillis?: number | null,
   durationMillis?: number | null,
 ) {
@@ -73,7 +74,8 @@ function formatLastSeen(
     typeof durationMillis === "number" && Number.isFinite(durationMillis)
       ? durationMillis
       : 0;
-  const elapsedMillis = Math.max(0, Date.now() - (startMillis + safeDuration));
+  const normalizedStart = startMillis < 100_000_000_000 ? startMillis * 1000 : startMillis;
+  const elapsedMillis = Math.max(0, Date.now() - (normalizedStart + safeDuration));
   const elapsedHours = Math.floor(elapsedMillis / (60 * 60 * 1000));
   if (elapsedHours < 1) return "Hace menos de 1 hora";
   if (elapsedHours < 24) return elapsedHours === 1 ? "Hace 1 hora" : `Hace ${elapsedHours} horas`;
@@ -289,7 +291,7 @@ export function PlayerSearchModal({ isOpen, onClose }: Props) {
                 </span>
                 <span className="home-search-result__last-seen">
                   Última conexión ·{" "}
-                  {formatLastSeen(player.lastMatchStartMillis, player.lastMatchDurationMillis)}
+                  {formatLastRecordedMatch(player.lastMatchStartMillis, player.lastMatchDurationMillis)}
                 </span>
                 <span className="home-search-result__level-wrap">
                   <img

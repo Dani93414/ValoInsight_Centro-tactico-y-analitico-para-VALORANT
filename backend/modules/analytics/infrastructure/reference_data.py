@@ -52,6 +52,20 @@ def maps_by_uuid() -> Dict[str, Dict[str, Any]]:
 
 
 @lru_cache(maxsize=1)
+def maps_by_identifier() -> Dict[str, Dict[str, Any]]:
+    """Index maps by Riot UUID and RAW match-details path/URL when present."""
+    indexed: Dict[str, Dict[str, Any]] = {}
+    for item in _latest_content_doc().get("maps", []) or []:
+        if not isinstance(item, dict):
+            continue
+        for key in ("uuid", "mapUrl", "map_id", "id"):
+            value = item.get(key)
+            if value:
+                indexed[str(value)] = item
+    return indexed
+
+
+@lru_cache(maxsize=1)
 def weapons_by_uuid() -> Dict[str, Dict[str, Any]]:
     raw = _latest_content_doc().get("weapons", []) or []
     return {str(item.get("uuid")): item for item in raw if isinstance(item, dict) and item.get("uuid")}
@@ -67,6 +81,7 @@ def clear_reference_cache() -> None:
     _latest_content_doc.cache_clear()
     agents_by_uuid.cache_clear()
     maps_by_uuid.cache_clear()
+    maps_by_identifier.cache_clear()
     weapons_by_uuid.cache_clear()
     gear_by_uuid.cache_clear()
     abilities_by_uuid.cache_clear()
@@ -84,7 +99,7 @@ def resolve_agent_role(agent_id: str) -> str:
 
 
 def resolve_map_name(map_id: str) -> str:
-    item = maps_by_uuid().get(str(map_id))
+    item = maps_by_identifier().get(str(map_id)) or maps_by_uuid().get(str(map_id))
     return item.get("displayName", UNKNOWN_NAME) if item else UNKNOWN_NAME
 
 

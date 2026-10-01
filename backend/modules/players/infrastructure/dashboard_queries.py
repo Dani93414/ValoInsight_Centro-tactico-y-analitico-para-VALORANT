@@ -20,6 +20,7 @@ _DASHBOARD_CONTENT_PROJECTION = {
     "agents.role.displayName": 1,
     "maps.uuid": 1,
     "maps.id": 1,
+    "maps.mapUrl": 1,
     "maps.displayName": 1,
     "maps.name": 1,
     "maps.splash": 1,
@@ -373,6 +374,14 @@ def _build_rank_comparison_player_match_stages(
                         "to": "double",
                         "onError": 0,
                         "onNull": 0,
+                    }
+                },
+                "performanceScore": {
+                    "$convert": {
+                        "input": "$players.performance.score",
+                        "to": "double",
+                        "onError": None,
+                        "onNull": None,
                     }
                 },
                 "headshots": {
@@ -837,6 +846,8 @@ def aggregate_rank_cohort_players(
                     "assists": {"$sum": "$assists"},
                     "rounds": {"$sum": "$rounds"},
                     "score": {"$sum": "$score"},
+                    "performanceScoreSum": {"$sum": {"$ifNull": ["$performanceScore", 0]}},
+                    "performanceMatchCount": {"$sum": {"$cond": [{"$ne": ["$performanceScore", None]}, 1, 0]}},
                     "headshots": {"$sum": "$headshots"},
                     "bodyshots": {"$sum": "$bodyshots"},
                     "legshots": {"$sum": "$legshots"},
@@ -861,6 +872,8 @@ def aggregate_rank_cohort_players(
                     "assists": 1,
                     "rounds": 1,
                     "score": 1,
+                    "performanceScoreSum": 1,
+                    "performanceMatchCount": 1,
                     "headshots": 1,
                     "bodyshots": 1,
                     "legshots": 1,
@@ -913,6 +926,8 @@ def aggregate_rank_cohort_metric_players(
                     "assists": {"$sum": "$assists"},
                     "rounds": {"$sum": "$rounds"},
                     "score": {"$sum": "$score"},
+                    "performanceScoreSum": {"$sum": {"$ifNull": ["$performanceScore", 0]}},
+                    "performanceMatchCount": {"$sum": {"$cond": [{"$ne": ["$performanceScore", None]}, 1, 0]}},
                     "headshots": {"$sum": "$headshots"},
                     "bodyshots": {"$sum": "$bodyshots"},
                     "legshots": {"$sum": "$legshots"},
@@ -936,6 +951,8 @@ def aggregate_rank_cohort_metric_players(
                     "assists": 1,
                     "rounds": 1,
                     "score": 1,
+                    "performanceScoreSum": 1,
+                    "performanceMatchCount": 1,
                     "headshots": 1,
                     "bodyshots": 1,
                     "legshots": 1,

@@ -67,7 +67,10 @@ export function useMapasGeo() {
   return useQuery({
     queryKey: ["content", "mapas-geo"],
     queryFn: getMapasGeo,
-    staleTime: CONTENT_STALE,
+    // Match details and heatmaps must translate RAW /Game/Maps/... paths.
+    // Do not keep an earlier catalogue for 24 hours after content updates.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }
 

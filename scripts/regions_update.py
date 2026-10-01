@@ -605,7 +605,9 @@ def rebuild_regions(*, force: bool = False):
     logger.info("Processed %d analytics documents.", doc_count)
 
     # ── 2. Build and save documents ──
-    regions_collection.delete_many({})
+    # Keep existing documents visible while the new aggregates are written.
+    # Stale regions are removed only after every replacement succeeds.
+    built_regions = set()
 
     for region, rd in regions.items():
         totals = dict(rd["totals"])
@@ -754,12 +756,15 @@ def rebuild_regions(*, force: bool = False):
             "updatedAt": datetime.now(UTC),
         }
 
-        regions_collection.insert_one(region_doc)
+        regions_collection.replace_one({"region": region}, region_doc, upsert=True)
+        built_regions.add(region)
         logger.info(
             "Region %s: %d matches, %d players, %d rounds",
             region, len(rd["match_ids"]), len(rd["puuids"]), totals.get("rounds", 0),
         )
 
+    if built_regions:
+        regions_collection.delete_many({"region": {"$nin": sorted(built_regions)}})
     logger.info("Regions rebuild complete.")
 
 

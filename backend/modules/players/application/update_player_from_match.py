@@ -17,6 +17,14 @@ from shared.weapon_attribution import compute_precise_weapon_stats_core
 logger = logging.getLogger(__name__)
 
 
+def _nonempty_text(value: Any) -> str | None:
+    """Return a usable identity field without turning blanks into data."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value or None
+
+
 def _extract_player_combat_stats(
     match_obj: dict,
     puuid: str,
@@ -205,14 +213,22 @@ def update_players_from_match(match_obj: dict) -> None:
         agent_stats_delta = {character_id: 1}
 
         player = mongo_player_repo.find_raw_by_puuid(puuid)
+        # Riot RAW legitimately omits gameName/tagLine for some opponents.
+        # Never erase a profile identity already learned from another match.
+        game_name = _nonempty_text(p.get("gameName")) or _nonempty_text(
+            (player or {}).get("gameName")
+        )
+        tag_line = _nonempty_text(p.get("tagLine")) or _nonempty_text(
+            (player or {}).get("tagLine")
+        )
 
         if not player:
             merged_weapon_stats = _merge_nested_weapon_stats({}, weapon_stats_delta)
             best_weapon = _compute_best_weapon_by_kd(merged_weapon_stats)
             mongo_player_repo.insert_player({
                 "puuid": puuid,
-                "gameName": p.get("gameName"),
-                "tagLine": p.get("tagLine"),
+                "gameName": game_name,
+                "tagLine": tag_line,
                 "region": match_region,
                 "accountLevel": account_level,
                 "totalMatches": 1,
@@ -286,8 +302,8 @@ def update_players_from_match(match_obj: dict) -> None:
         matches.append(match_id)
 
         mongo_player_repo.update_player(puuid, {
-            "gameName": p.get("gameName"),
-            "tagLine": p.get("tagLine"),
+            "gameName": game_name,
+            "tagLine": tag_line,
             "accountLevel": account_level,
             "region": match_region,
             "totalMatches": new_matches,

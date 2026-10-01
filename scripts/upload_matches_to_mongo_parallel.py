@@ -21,7 +21,7 @@ from backend.modules.matches.application.ingest_match import (
 from backend.modules.players.application.rebuild_players import rebuild_players_from_matches
 
 
-VALID_STATUSES = {"inserted", "already_exists", "failed"}
+VALID_STATUSES = {"inserted", "updated", "already_exists", "failed"}
 DEFAULT_SAFE_INPUT_ROOT = project_root / "data" / "BaseDatos_Partidas"
 DEFAULT_UPLOAD_WORKERS = int(os.getenv("MONGO_UPLOAD_WORKERS", "6"))
 
@@ -66,7 +66,7 @@ def upload_one_file(
     if status not in VALID_STATUSES:
         status = "failed"
 
-    should_delete = status == "inserted" or (
+    should_delete = status in {"inserted", "updated"} or (
         status == "already_exists" and delete_duplicates
     )
 
@@ -128,6 +128,7 @@ def main() -> None:
     stats = {
         "processed": 0,
         "inserted": 0,
+        "updated": 0,
         "already_exists": 0,
         "failed": 0,
         "deleted": 0,
@@ -176,6 +177,8 @@ def main() -> None:
 
                 if status == "inserted":
                     label = "INSERTED"
+                elif status == "updated":
+                    label = "UPDATED"
                 elif status == "already_exists":
                     label = "DUPLICATE"
                 else:
@@ -196,6 +199,7 @@ def main() -> None:
     print("\n[SUMMARY]")
     print(f"processed: {stats['processed']}")
     print(f"inserted: {stats['inserted']}")
+    print(f"updated: {stats['updated']}")
     print(f"already_exists: {stats['already_exists']}")
     print(f"failed: {stats['failed']}")
     print(f"deleted: {stats['deleted']}")

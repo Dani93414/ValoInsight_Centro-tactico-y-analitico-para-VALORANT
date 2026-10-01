@@ -7,6 +7,7 @@ from modules.matches.infrastructure import mongo_match_repo
 from modules.analytics.domain.extractor import build_player_analytics_embedded
 from modules.players.application.update_player_from_match import update_players_from_match
 from scripts.regions_update import update_region_from_match, update_regions
+from modules.matches.domain.schema import get_schema_version
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,16 @@ def process_single_match_with_status(match_obj: dict) -> str:
         existing_match = mongo_match_repo.find_raw_by_match_id(match_id)
 
         if existing_match:
+            # A v2 RAW document may deliberately replace a v1 legacy document;
+            # ordinary duplicate uploads retain the historic behaviour.
+            incoming_version = get_schema_version(match_obj)
+            existing_version = get_schema_version(existing_match)
+            if incoming_version > existing_version:
+                if not mongo_match_repo.replace(match_obj):
+                    return "failed"
+                logger.info("Match %s upgraded in place from schema v%s to v%s.", match_id, existing_version, incoming_version)
+                failures = _sync_derived_state(match_obj)
+                return "failed" if failures else "updated"
             logger.info("Match %s already present. Repairing derived state.", match_id)
             failures = _sync_derived_state(existing_match)
             return "failed" if failures else "already_exists"
@@ -125,7 +136,7 @@ def insert_match_only_with_status(match_obj: dict) -> str:
 def process_single_match(match_obj: dict) -> bool:
     """Backward-compatible wrapper kept for existing callers."""
     status = process_single_match_with_status(match_obj)
-    return status in {"inserted", "already_exists"}
+    return status in {"inserted", "updated", "already_exists"}
 
 
 def recalculate_global_stats() -> None:

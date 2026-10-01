@@ -82,6 +82,24 @@ type ProfilePerformanceMetric = {
   isNeutral: boolean;
 };
 
+const RIOT_PERFORMANCE_COMPONENTS = [
+  ["damage", "Daño"], ["trades", "Trades"], ["assists", "Asistencias"],
+  ["utilityUsage", "Uso de utilidad"], ["plants", "Plantar"],
+  ["defuses", "Desactivar"], ["killImpact", "Impacto de kills"], ["deathImpact", "Impacto de muertes"],
+] as const;
+const PERFORMANCE_RATING_VALUE: Record<string, number> = {
+  double_down: 0, down: 1, neutral: 2, up: 3, double_up: 4,
+};
+const PERFORMANCE_CHART_MATCH_LIMIT = 20;
+
+function validPerformanceScore(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function average(values: number[]) {
+  return values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
+}
+
 type RoundImpactSummary = {
   totalRounds: number;
   attackRounds: number;
@@ -576,6 +594,60 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
       ),
     [filteredMatches],
   );
+
+  const performanceInsights = useMemo(() => {
+    const chronological = [...filteredMatches].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    const scored = chronological.filter((match) => validPerformanceScore(match.performanceScore));
+    // PS evolution: only the most recent matches in the active filters that
+    // actually contain a Riot Performance Score.
+    const chartMatches = scored.slice(-PERFORMANCE_CHART_MATCH_LIMIT);
+    const scores = scored.map((match) => match.performanceScore as number);
+    const latest = scored.at(-1) ?? null;
+    const byComponent = RIOT_PERFORMANCE_COMPONENTS.map(([key, label]) => {
+      const values = scored
+        .map((match) => PERFORMANCE_RATING_VALUE[match.performanceComponents?.[key]?.rating || ""])
+        .filter((value): value is number => value !== undefined);
+      const rating = average(values);
+      const history = scored.map((match) => {
+        const component = match.performanceComponents?.[key];
+        const rawValue = component?.value;
+        const ratingValue = PERFORMANCE_RATING_VALUE[component?.rating || ""];
+        return {
+          value: typeof rawValue === "number" && Number.isFinite(rawValue) ? rawValue : ratingValue ?? null,
+        };
+      }).filter((point) => point.value !== null).slice(-PERFORMANCE_CHART_MATCH_LIMIT).map((point, index) => ({
+        ...point,
+        index: index + 1,
+      }));
+      return { key, label, rating, count: values.length, percent: rating === null ? null : (rating / 4) * 100, history };
+    });
+    const breakdown = (field: "agent" | "map" | "role") => Object.values(
+      scored.reduce<Record<string, { label: string; scores: number[] }>>((groups, match) => {
+        const label = String(match[field] || "Sin datos");
+        (groups[label] ??= { label, scores: [] }).scores.push(match.performanceScore as number);
+        return groups;
+      }, {}),
+    ).map((group) => ({ ...group, matches: group.scores.length, score: average(group.scores) }))
+      .filter((group) => group.matches >= 5)
+      .sort((left, right) => (right.score || 0) - (left.score || 0));
+    return {
+      count: scores.length,
+      average: average(scores),
+      last5: average(scores.slice(-5)),
+      last20: average(scores.slice(-20)),
+      latest,
+      best: scored.length ? scored.reduce((best, match) => (match.performanceScore as number) > (best.performanceScore as number) ? match : best) : null,
+      worst: scored.length ? scored.reduce((worst, match) => (match.performanceScore as number) < (worst.performanceScore as number) ? match : worst) : null,
+      history: chartMatches.map((match, index) => ({
+        index: index + 1, score: match.performanceScore, acs: match.acs, date: match.dateLabel, map: match.map, agent: match.agent,
+        matchAverage: match.matchPerformanceAverage,
+      })),
+      components: byComponent,
+      strongest: [...byComponent].filter((item) => item.rating !== null).sort((a, b) => (b.rating || 0) - (a.rating || 0))[0] ?? null,
+      weakest: [...byComponent].filter((item) => item.rating !== null).sort((a, b) => (a.rating || 0) - (b.rating || 0))[0] ?? null,
+      byAgent: breakdown("agent"), byMap: breakdown("map"), byRole: breakdown("role"),
+    };
+  }, [filteredMatches]);
 
   const filteredAnalyticsList = useMemo(() => {
     if (!dashboard) return [];
@@ -1111,6 +1183,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
       a: cohortDerivedSummary.assists,
       kda: cohortDerivedMetrics.kdaOverall,
       acs: cohortDerivedMetrics.globalAcs,
+      performanceScore: performanceInsights.average ?? 0,
       hsPct: cohortDerivedMetrics.globalHeadshotPct,
       kast: advancedRoundStats.kastPct,
       incDamage: advancedRoundStats.damageDeltaPerRound,
@@ -1182,6 +1255,14 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
           "ACS: impacto medio por ronda del jugador en las partidas del cohorte, comparado por posicion relativa dentro de la cohorte.",
       },
       {
+        key: "performanceScore",
+        source: "performanceScore",
+        label: "PS",
+        isPercent: false,
+        decimals: 1,
+        description: "Performance Score oficial de Riot, comparado con jugadores del mismo rango y los mismos filtros. No se reemplaza por ACS cuando falta.",
+      },
+      {
         key: "hsPct",
         source: "hsPct",
         label: "HS%",
@@ -1225,15 +1306,6 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
         decimals: 0,
         description:
           "Wins: victorias totales del jugador dentro de los filtros del cohorte, comparadas por ranking relativo dentro de la cohorte.",
-      },
-      {
-        key: "losses",
-        source: "losses",
-        label: "Loses",
-        isPercent: false,
-        decimals: 0,
-        description:
-          "Loses: partidas no ganadas dentro de los filtros del cohorte. Menos derrotas implican mejor posicion relativa.",
       },
     ];
 
@@ -1804,6 +1876,7 @@ export function useEstadisticasViewModel(playerId: string | undefined) {
     filteredMatches,
     sortedFilteredMatches,
     filteredAnalyticsList,
+    performanceInsights,
 
     // tactical stats
     globalTacticalStats,

@@ -59,6 +59,7 @@ def _map_transforms_by_uuid() -> Dict[str, Dict[str, float]]:
         projection={
             "_id": 0,
             "maps.uuid": 1,
+            "maps.mapUrl": 1,
             "maps.xMultiplier": 1,
             "maps.xScalarToAdd": 1,
             "maps.yMultiplier": 1,
@@ -83,12 +84,19 @@ def _map_transforms_by_uuid() -> Dict[str, Dict[str, float]]:
         if x_mult is None or x_add is None or y_mult is None or y_add is None:
             continue
 
-        result[map_uuid] = {
+        transform = {
             "x_mult": float(x_mult),
             "x_add": float(x_add),
             "y_mult": float(y_mult),
             "y_add": float(y_add),
         }
+        result[map_uuid] = transform
+        # Riot RAW match-details uses mapUrl (/Game/Maps/...) rather than the
+        # public content UUID. Both identifiers must resolve to the same map
+        # transform while Mongo continues to filter by the stored identifier.
+        map_url = str(item.get("mapUrl") or "").strip()
+        if map_url:
+            result[map_url] = transform
 
     return result
 
@@ -298,6 +306,17 @@ def extract_spatial_events(
                         first_blood_kill = kill
 
             # ── Process only kills involving the target player ──
+            # Prefer Riot RAW's explicit first-blood marker; fall back to the
+            # chronological candidate collected above for legacy documents.
+            raw_first_blood = rnd.get("firstBloodPlayer")
+            if raw_first_blood:
+                marked_kills = [kill for kill in round_kills if kill.get("killer") == raw_first_blood]
+                if marked_kills:
+                    first_blood_kill = min(
+                        marked_kills,
+                        key=lambda kill: int(kill.get("timeSinceRoundStartMillis") or 0),
+                    )
+
             for kill in round_kills:
                 killer = kill.get("killer", "")
                 victim = kill.get("victim", "")

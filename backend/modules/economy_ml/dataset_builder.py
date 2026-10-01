@@ -126,6 +126,9 @@ def build_player_economy_dataset_from_matches(matches: list[dict]) -> pd.DataFra
                     0.0,
                     reconstructed_prebuy - _number(economy.get("remaining")),
                 )
+                observed_spent = economy.get("spent")
+                spent_is_observed = observed_spent is not None and economy.get("spentSource") == "riot_raw"
+                selected_spent = _number(observed_spent) if spent_is_observed else reconstructed_outlay
                 agent_id = str(player.get("characterId") or "UNKNOWN")
                 rows.append({
                     "match_id": state["match_id"],
@@ -147,9 +150,11 @@ def build_player_economy_dataset_from_matches(matches: list[dict]) -> pd.DataFra
                     "enemy_score_before": state.get("enemy_score_before"),
                     "score_diff": state.get("score_diff"),
                     "player_remaining": _number(economy.get("remaining")),
-                    "player_spent": reconstructed_outlay,
-                    "player_spent_source": "derived_prebuy_minus_remaining",
+                    "player_spent": selected_spent,
+                    "player_spent_source": economy.get("spentSource") if spent_is_observed else "derived_prebuy_minus_remaining",
                     "player_loadout": _number(economy.get("loadoutValue")),
+                    "player_economy_data_quality": economy.get("economyDataQuality") or "legacy_estimated",
+                    "schema_version": ((match.get("dataSchema") or {}).get("version") or 1),
                     "player_estimated_credits_before_buy": (
                         fixed_credits if fixed_credits is not None else reconstructed_prebuy
                     ),

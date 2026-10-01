@@ -2430,6 +2430,35 @@ body {
    PERFORMANCE
    ===================================================== */
 
+.performance-score-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+.performance-score-summary, .performance-score-breakdown, .performance-score-history, .performance-score-profile { display: none; }
+.performance-score-kpis, .performance-components-grid, .performance-breakdown-columns { display: grid; gap: .7rem; }
+.performance-score-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.performance-score-kpis > div, .performance-component { padding: .7rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--surface-04); }
+.performance-score-kpis span, .performance-component span { display:block; color: var(--text-secondary); font-size: .73rem; font-weight: 700; }
+.performance-score-kpis strong, .performance-component strong { display:block; font-size: 1.15rem; margin-top: .25rem; }
+.performance-score-kpis small, .performance-component small { color: var(--text-secondary); font-size: .7rem; }
+.performance-score-explanation { margin-top: .75rem; color: var(--text-secondary); font-size: .82rem; line-height: 1.45; }
+.performance-components-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.performance-component > div { height: 7px; margin: .5rem 0 .28rem; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.09); }
+.performance-component i { display:block; height:100%; border-radius:inherit; background: linear-gradient(90deg, #ff4655, #f6c85f, #60d394); }
+.performance-breakdown-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.performance-breakdown-columns > div { padding: .7rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--surface-04); }
+.performance-breakdown-columns p { display:flex; justify-content:space-between; gap:.5rem; margin:.6rem 0 0; font-size:.84rem; }
+.performance-breakdown-columns p span, .performance-breakdown-columns small { color:var(--text-secondary); white-space:nowrap; }
+.performance-component-trends { margin: 1.25rem 0; }
+.performance-component-trends-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:.7rem; }
+.performance-component-trend { min-width:0; padding:.7rem; border:1px solid var(--border-color); border-radius:10px; background:var(--surface-04); }
+.performance-component-trend strong { display:block; font-size:.82rem; }
+.performance-component-trend small { color:var(--text-secondary); font-size:.68rem; }
+@media (max-width: 900px) { .performance-score-section { grid-template-columns: 1fr; } .performance-score-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .performance-components-grid, .performance-component-trends-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .performance-breakdown-columns { grid-template-columns: 1fr; } }
+
 .performance-list {
   display: flex;
   flex-direction: column;
@@ -3342,12 +3371,13 @@ body {
 
 .match-stats-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 0.62rem;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.42rem;
 }
 
 .match-stat {
-  padding: 0.72rem 0.78rem;
+  min-width: 0;
+  padding: 0.52rem 0.38rem;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   background: var(--surface-04);
@@ -3359,13 +3389,13 @@ body {
     display: block;
     margin-bottom: 0.28rem;
     color: var(--text-muted);
-    font-size: 0.72rem;
+    font-size: 0.64rem;
     font-weight: 800;
     text-transform: uppercase;
   }
 
   strong {
-    font-size: 0.94rem;
+    font-size: 0.82rem;
     font-weight: 900;
   }
 }

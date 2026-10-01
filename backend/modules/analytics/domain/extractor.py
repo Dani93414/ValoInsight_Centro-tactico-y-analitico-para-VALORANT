@@ -1036,18 +1036,40 @@ def build_player_analytics_embedded(match_obj: dict) -> Dict[str, dict]:
                 if round_obj.get("roundNum") == round_index
                 else int(round_obj.get("roundNum") or round_index + 1)
             )
-            spent = int(derived_spend.get((display_round_number, str(puuid)), 0))
+            observed_spent = economy.get("spent")
+            spent = (
+                int(observed_spent)
+                if observed_spent is not None and economy.get("spentSource") == "riot_raw"
+                else int(derived_spend.get((display_round_number, str(puuid)), 0))
+            )
             loadout_value = int(economy.get("loadoutValue", 0) or 0)
             equipped_weapon_id = str(economy.get("weapon") or "UNKNOWN")
             equipped_armor_id = str(economy.get("armor") or "UNKNOWN")
 
+            # Riot RAW's explicit marker takes precedence.  Legacy documents
+            # retain the chronological kill inference below.
+            raw_first_blood = round_obj.get("firstBloodPlayer")
             first_kill = _find_first_kill(competitive_kills)
             first_kills = 0
             first_deaths = 0
             opening_duel_wins = 0
             opening_duel_losses = 0
 
-            if first_kill:
+            if raw_first_blood:
+                if raw_first_blood == puuid:
+                    first_kills = 1
+                    opening_duel_wins = 1
+                else:
+                    # A RAW marker identifies the opening killer; select that
+                    # killer's earliest event rather than trusting the stored
+                    # list order (which can differ across schema versions).
+                    raw_first_event = _find_first_kill(
+                        [kill for kill in competitive_kills if kill.get("killer") == raw_first_blood]
+                    )
+                    if raw_first_event and raw_first_event.get("victim") == puuid:
+                        first_deaths = 1
+                        opening_duel_losses = 1
+            elif first_kill:
                 if first_kill.get("killer") == puuid:
                     first_kills = 1
                     opening_duel_wins = 1

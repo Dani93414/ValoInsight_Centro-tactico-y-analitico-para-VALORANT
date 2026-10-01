@@ -5,6 +5,7 @@ import { getMatchById } from "../../api/playerApi";
 import type { MatchCard, SideFilter } from "../../types/dashboard";
 import type { RawMatchDetail } from "../../types/matches";
 import { normalizeLabel } from "../../utils/formatters";
+import { lockPageScroll } from "../../utils/lockPageScroll";
 import {
   extractRoundHistoryEvents,
   type RoundEventKind,
@@ -156,20 +157,7 @@ export default function RoundEventHistoryModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [obscured, onClose]);
 
-  React.useEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-    const previousHtmlOverflow = html.style.overflow;
-    const previousBodyOverflow = body.style.overflow;
-
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-
-    return () => {
-      html.style.overflow = previousHtmlOverflow;
-      body.style.overflow = previousBodyOverflow;
-    };
-  }, []);
+  React.useEffect(lockPageScroll, []);
 
   return (
     <div

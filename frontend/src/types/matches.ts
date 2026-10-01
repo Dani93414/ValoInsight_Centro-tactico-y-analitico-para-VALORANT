@@ -60,6 +60,8 @@ export type RawRoundPlayerAbility = {
 
 export type RawRoundPlayerStat = {
   puuid?: string;
+  isAfk?: boolean;
+  stayedInSpawn?: boolean;
   kills?: RawKillEvent[];
   damage?: RawRoundDamage[];
   score?: number;
@@ -116,6 +118,30 @@ export type RawPlayer = {
   playerTitle?: string;
   accountLevel?: number;
   isObserver?: boolean;
+  participationPeriods?: Array<{
+    sessionStartTime?: number;
+    sessionEndTime?: number;
+    startTime?: number;
+    endTime?: number;
+  }>;
+  behaviorFactors?: {
+    wasAfk?: boolean;
+    wasPenalized?: boolean;
+    stayedInSpawn?: boolean;
+    afk?: boolean;
+    [key: string]: unknown;
+  } | null;
+  performance?: {
+    available?: boolean;
+    score?: number | null;
+    tier?: string | null;
+    components?: Record<string, { value?: number | null; rating?: string }>;
+    thresholds?: Record<string, number>;
+    rawUnknownValues?: Record<string, unknown>;
+  };
+  analytics?: {
+    map_name?: string;
+  };
   stats?: RawPlayerMatchStats;
 };
 
@@ -130,6 +156,7 @@ export type RawMatchDetail = {
   matchInfo?: {
     matchId?: string;
     mapId?: string;
+    legacyMapName?: string;
     gameLengthMillis?: number;
     gameStartMillis?: number;
     queueId?: string;

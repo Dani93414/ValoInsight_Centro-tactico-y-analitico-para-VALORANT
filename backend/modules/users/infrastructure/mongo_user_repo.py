@@ -27,6 +27,13 @@ def _display_name(player: dict[str, Any]) -> str:
     return f"{game_name}#{tag_line}" if tag_line else game_name
 
 
+def _nonempty_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value or None
+
+
 def _project_player(player: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
     puuid = player.get("puuid") or player.get("_id") or ""
     payload = {
@@ -111,26 +118,37 @@ def enrich_players(
         if row.get("puuid")
     }
 
-    missing = [puuid for puuid in ordered_puuids if puuid not in latest_players]
-    if missing:
-        cursor = players_collection.find(
-            {"puuid": {"$in": missing}},
+    # A RAW match can omit a player's Riot ID.  Consult the profile for every
+    # requested player (not just players absent from matches) and use it only
+    # to fill blanks; the latest match still owns date/rank information.
+    profile_cursor = players_collection.find(
+            {"puuid": {"$in": ordered_puuids}},
             {"_id": 0, "puuid": 1, "gameName": 1, "tagLine": 1, "accountLevel": 1},
             max_time_ms=QUERY_MAX_TIME_MS,
         )
-        for player in cursor:
-            puuid = player.get("puuid")
-            if puuid:
-                latest_players[puuid] = {
-                    "puuid": puuid,
-                    "gameName": player.get("gameName") or "Unknown",
-                    "tagLine": player.get("tagLine") or "",
-                    "accountLevel": player.get("accountLevel"),
-                    "lastMatchStartMillis": None,
-                    "lastMatchDurationMillis": None,
-                    "lastCompetitiveTier": None,
-                    "lastCompetitiveTierImage": None,
-                }
+    for player in profile_cursor:
+        puuid = player.get("puuid")
+        if not puuid:
+            continue
+        current = latest_players.get(puuid)
+        if current is None:
+            latest_players[puuid] = {
+                "puuid": puuid,
+                "gameName": _nonempty_text(player.get("gameName")) or "Unknown",
+                "tagLine": _nonempty_text(player.get("tagLine")) or "",
+                "accountLevel": player.get("accountLevel"),
+                "lastMatchStartMillis": None,
+                "lastMatchDurationMillis": None,
+                "lastCompetitiveTier": None,
+                "lastCompetitiveTierImage": None,
+            }
+            continue
+        if not _nonempty_text(current.get("gameName")):
+            current["gameName"] = _nonempty_text(player.get("gameName")) or "Unknown"
+        if not _nonempty_text(current.get("tagLine")):
+            current["tagLine"] = _nonempty_text(player.get("tagLine")) or ""
+        if current.get("accountLevel") is None:
+            current["accountLevel"] = player.get("accountLevel")
 
     extras_by_puuid = extras_by_puuid or {}
     return [

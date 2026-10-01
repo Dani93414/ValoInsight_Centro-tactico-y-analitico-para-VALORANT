@@ -52,6 +52,11 @@ export type AnalyticsMatch = {
   }>;
   role?: string;
   competitive_tier?: number;
+  performanceScore?: number | null;
+  performanceTier?: string | null;
+  performanceComponents?: Record<string, { value?: number | null; rating?: string; mappingConfidence?: string }>;
+  performanceThresholds?: Record<string, number>;
+  matchPerformanceAverage?: number | null;
   overview?: {
     kills?: number;
     deaths?: number;
@@ -229,6 +234,11 @@ export type MatchCard = {
   acs: number;
   adr: number;
   hs: number;
+  performanceScore?: number | null;
+  performanceTier?: string | null;
+  performanceComponents?: Record<string, { value?: number | null; rating?: string; mappingConfidence?: string }>;
+  performanceThresholds?: Record<string, number>;
+  matchPerformanceAverage?: number | null;
   kd: number;
   headshots: number;
   bodyshots: number;
@@ -250,6 +260,14 @@ export type ActSummary = {
   acs: number;
   killsPerMatch: number;
   hsAvg: number;
+  averagePerformanceScore?: number | null;
+  performanceMatches?: number;
+  lastPerformanceScore?: number | null;
+  lastPerformanceTier?: string | null;
+  bestPerformanceScore?: number | null;
+  bestPerformanceMatchId?: string | null;
+  worstPerformanceScore?: number | null;
+  worstPerformanceMatchId?: string | null;
 };
 
 export type RankInfo = {
@@ -284,6 +302,7 @@ export type RankComparisonMetricKey =
   | "a"
   | "kda"
   | "acs"
+  | "performanceScore"
   | "hsPct"
   | "kast"
   | "incDamage"
